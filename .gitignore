@@ -41,9 +41,6 @@ test-results/
 prometheus-data/
 grafana-data/
 
-# Personal notes
-docs/notes/
-
 # Noir
 Prover.toml
 **/Prover.toml
