@@ -1,0 +1,55 @@
+# Rust
+target/
+**/target/
+Cargo.lock.bak
+
+# Node
+node_modules/
+**/node_modules/
+.pnpm-store/
+*.log
+npm-debug.log*
+
+# Vue/Vite
+dist/
+.vite/
+*.local
+
+# Anchor
+.anchor/
+test-ledger/
+
+# Env
+.env
+.env.local
+!.env.example
+
+# Solana keys
+solana/*.json
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Tests
+coverage/
+playwright-report/
+test-results/
+
+# Monitoring
+prometheus-data/
+grafana-data/
+
+# Personal notes
+docs/notes/
+
+# Noir
+Prover.toml
+**/Prover.toml
+
+# Secrets
+.secrets/
+
+# Checkpoints (см. ниже)
+.checkpoints/
