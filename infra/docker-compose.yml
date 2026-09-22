@@ -1,0 +1,20 @@
+services:
+  solana:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.solana
+    container_name: solana-zkpool-solana
+    stdin_open: true
+    tty: true
+    user: "1000:1000"
+    working_dir: /home/ubuntu
+    volumes:
+      - ../onchain:/home/ubuntu/onchain
+      - ../circuits:/home/ubuntu/circuits
+      - ../services:/home/ubuntu/services
+      - ../web:/home/ubuntu/web
+      - ../scripts:/home/ubuntu/scripts
+      - ../solana:/home/ubuntu/.config/solana
+    environment:
+      - CARGO_TERM_COLOR=always
+    restart: unless-stopped
