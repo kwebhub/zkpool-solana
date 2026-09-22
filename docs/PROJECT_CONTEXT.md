@@ -153,7 +153,8 @@ See `docs/notes/00-checkpoints.md` for full details.
 - `docs/notes/00-checkpoints.md` — checkpoint methodology (RU).
 - `docs/PROJECT_CONTEXT.md` — this file (EN).
 - `docs/notes/` removed from `.gitignore` — notes are committed now.
-- Commit: `e1fec4c`.
+- Commit `e1fec4c`: un-ignore `docs/notes/`.
+- Commit `951f79d`: add `docs/PROJECT_CONTEXT.md`.
 
 ---
 
