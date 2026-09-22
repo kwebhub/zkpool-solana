@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-22 (after checkpoint 1 — Docker environment verified)
+> **Last updated:** 2026-09-22 (after stage 1 completion + docs)
 
 ---
 
@@ -20,7 +20,7 @@
 **License:** MIT
 **Network:** Solana Devnet
 
-**⚠️ This is a rewrite.** The goal of v3 is to reproduce every stage of v2 **with byte-level checkpoints after each stage** to catch the `withdraw` bug at the moment it is introduced.
+**This is a rewrite.** The goal of v3 is to reproduce every stage of v2 **with byte-level checkpoints after each stage** to catch the `withdraw` bug at the moment it is introduced.
 
 ---
 
@@ -128,6 +128,7 @@ See `docs/notes/00-checkpoints.md` for full details.
 ## 6. What has been done
 
 ### ✅ Stage 0. Repository skeleton (2026-09-22)
+
 - Repo created, cloned to `~/Projects/Solana/zkpool-solana`.
 - Folder structure: `onchain/`, `circuits/`, `services/{backend,merkle,prover}`, `web/`, `infra/docker/`, `infra/grafana/`, `scripts/sync-circuits/`, `docs/notes/`, `.secrets/`, `.checkpoints/`.
 - `.gitignore` — Rust, Node, Vue, Anchor, Env, keys, IDE, tests, monitoring, Noir, secrets, checkpoints.
@@ -135,26 +136,41 @@ See `docs/notes/00-checkpoints.md` for full details.
 - Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 ### ✅ Stage 1. Docker environment (2026-09-22)
-- `infra/docker-compose.yml` — service `solana-zkpool-solana`, `network_mode` **not** host (uses explicit ports), 6 volumes.
+
+- `infra/docker-compose.yml` — service `solana-zkpool-solana`, explicit ports, 6 volumes.
 - `infra/docker/Dockerfile.solana` — Ubuntu 24.04, Sunspot `.deb` + **git clone** of Sunspot (persistent), Solana CLI, noirup + nargo 1.0.0-rc.2, nvm + Node 24, pnpm 12.5.1.
 - Commit: `94c18fe522e39822692fff9b9b22b2fe0f8e00d0`.
-- **Verified versions** inside container:
-  - rustc 1.98.1
-  - cargo 1.98.1
-  - solana-cli 3.1.10
-  - anchor-cli 1.1.2
-  - nargo 1.0.0-rc.2
-  - sunspot 1.0.0 (no `--version`, only `--help`)
-  - node v24.21.0
-  - pnpm 12.5.1
-- **Verified** Sunspot clone present: `~/sunspot/gnark-solana/crates/verifier-bin`.
+
+**Verified versions inside container:**
+- rustc 1.98.1
+- cargo 1.98.1
+- solana-cli 3.1.10
+- anchor-cli 1.1.2
+- nargo 1.0.0-rc.2
+- sunspot 1.0.0 (no `--version`, only `--help`)
+- node v24.21.0
+- pnpm 12.5.1
+
+**Verified** Sunspot clone present: `~/sunspot/gnark-solana/crates/verifier-bin`.
 
 ### ✅ Docs (2026-09-22)
+
 - `docs/notes/00-checkpoints.md` — checkpoint methodology (RU).
 - `docs/PROJECT_CONTEXT.md` — this file (EN).
+- `docs/notes/01-setup.md` — stage 1 notes (RU).
 - `docs/notes/` removed from `.gitignore` — notes are committed now.
-- Commit `e1fec4c`: un-ignore `docs/notes/`.
-- Commit `951f79d`: add `docs/PROJECT_CONTEXT.md`.
+
+**Commits in order:**
+- `e1fec4c` — un-ignore `docs/notes/`, add checkpoint methodology.
+- `951f79d` — add `docs/PROJECT_CONTEXT.md`.
+- `e55dcc6` — record `PROJECT_CONTEXT` commit hash.
+- `d0f0f34` — add `docs/notes/01-setup.md`.
+
+**Checkpoint 1 artifacts:**
+- `.checkpoints/01-setup/versions.txt` — tool versions.
+- `.checkpoints/01-setup/sunspot-clone.txt` — Sunspot clone listing.
+- `.checkpoints/01-setup/commit.txt` — `d0f0f34b593a8a0e32bdc5dfded7f30b243ec660`.
+- `.checkpoints/01-setup/manifest.txt` — 7 tracked files + hashes.
 
 ---
 
