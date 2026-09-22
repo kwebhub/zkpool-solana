@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-22 (after stage 1; architecture v3 approved)
+> **Last updated:** 2026-09-22 (after stage 2.0 — spec.json)
 
 ---
 
@@ -163,11 +163,21 @@ See `docs/notes/00-checkpoints.md` for full details.
 
 **Verified** Sunspot clone present: `~/sunspot/gnark-solana/crates/verifier-bin`.
 
+### ✅ Stage 2.0. `spec.json` — single source of truth (2026-09-22)
+
+- `circuits/withdrawal/spec.json` — full specification of public inputs, private inputs, constraints, hash functions, witness byte layout, artifact consumers, contract obligations.
+- **Public inputs (5):** `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `amount`.
+- **Private inputs (5):** `nullifier`, `secret`, `note_secret`, `merkle_proof[20]`, `is_even[20]`.
+- **Constraints:** C1 (`hash_1(nullifier) == nullifier_hash`), C2 (`hash_2(note_secret, recipient) == recipient_binding`), C3 (Merkle root check).
+- **Witness layout:** 12-byte header + 5×32 bytes = **172 bytes**.
+- Commit: `6df5fa5`.
+
 ### ✅ Docs (2026-09-22)
 
 - `docs/notes/00-checkpoints.md` — checkpoint methodology (RU).
 - `docs/PROJECT_CONTEXT.md` — this file (EN).
 - `docs/notes/01-setup.md` — stage 1 notes (RU).
+- `docs/notes/02-circuits.md` — stage 2 notes, part 2.0 (RU).
 - `docs/notes/` removed from `.gitignore` — notes are committed now.
 
 **Commits in order:**
@@ -176,11 +186,14 @@ See `docs/notes/00-checkpoints.md` for full details.
 - `e55dcc6` — record `PROJECT_CONTEXT` commit hash.
 - `d0f0f34` — add `docs/notes/01-setup.md`.
 - `a92c3e3` — record stage 1 completion in `PROJECT_CONTEXT`.
+- `0bfc5a4` — update `PROJECT_CONTEXT` with v3 architecture decisions.
+- `6df5fa5` — add `circuits/withdrawal/spec.json`.
+- `b61a20a` — add `docs/notes/02-circuits.md`.
 
 **Checkpoint 1 artifacts:**
 - `.checkpoints/01-setup/versions.txt` — tool versions.
 - `.checkpoints/01-setup/sunspot-clone.txt` — Sunspot clone listing.
-- `.checkpoints/01-setup/commit.txt` — `a92c3e34de520a7781fee0f592b72ac0ec9986b6`.
+- `.checkpoints/01-setup/commit.txt` — `0bfc5a4716092d986865af66c09a70cd38200d86`.
 - `.checkpoints/01-setup/manifest.txt` — 7 tracked files + hashes.
 
 ---
@@ -274,7 +287,7 @@ Known issues in v2 Makefile to avoid:
 
 - Stage 0 — Repository skeleton ✅
 - Stage 1 — Docker environment ✅
-- **Stage 2.0 — `spec.json` (single source of truth)**
+- **Stage 2.0 — `spec.json` (single source of truth)** ✅
 - **Stage 2.1 — generators/validators from spec (`.nr`, Rust, TS)**
 - **Stage 2.2 — circuits (poseidon, hash2, hashes, withdrawal with binding)**
 - **Stage 2.3 — `sync-circuits` with SHA-256 verification**
@@ -304,6 +317,7 @@ Known issues in v2 Makefile to avoid:
 - `Prover.toml` is gitignored; regenerate via `nargo test test_generate_valid_inputs --show-output`.
 - `bash -ic` is required for commands inside the container (`.bashrc` is not read by `bash -c`).
 - `pnpm install` may bump `@solana/kit` to 8.x if versions use `^` — pin exact.
+- `jsonls` warns about `$schema: "internal://..."` — remove `$schema` from `spec.json`.
 
 ---
 
@@ -329,7 +343,7 @@ zkpool-solana/
 │   ├── notes/               ← Russian, committed
 │   │   ├── 00-checkpoints.md
 │   │   ├── 01-setup.md
-│   │   ├── 02-circuits.md   (TBD)
+│   │   ├── 02-circuits.md
 │   │   └── ...
 │   ├── ru/README.md         ← Russian
 │   ├── PROJECT_CONTEXT.md   ← English (this file)
@@ -344,7 +358,7 @@ zkpool-solana/
 │   ├── hash2/               ← circuit for external Poseidon2
 │   ├── hashes/              ← commitment + nullifier_hash
 │   └── withdrawal/          ← main circuit
-│       ├── spec.json        ← single source of truth (Stage 2.0)
+│       ├── spec.json        ← single source of truth
 │       └── src/main.nr
 ├── onchain/
 │   ├── Anchor.toml
@@ -396,12 +410,19 @@ Full Makefile will arrive at Stage 9.
 
 ## 12. Current state
 
-**Last completed stage:** Stage 1 (Docker environment verified).
-**Next stage:** Stage 2.0 — create `circuits/withdrawal/spec.json`.
+**Last completed stage:** Stage 2.0 (`spec.json`).
+**Next stage:** Stage 2.1 — generators/validators from spec (`.nr`, Rust, TS).
 
 **Checkpoint 1:**
 - Commit: `a92c3e34de520a7781fee0f592b72ac0ec9986b6`.
 - Artifacts: `.checkpoints/01-setup/`.
+
+**Stage 2 progress:**
+- Stage 2.0 — `spec.json` ✅ — commit `6df5fa5`.
+- Stage 2.1 — generators/validators — pending.
+- Stage 2.2 — circuits — pending.
+- Stage 2.3 — `sync-circuits` with SHA-256 — pending.
+- Stage 2.4 — checkpoint 2 — pending.
 
 ---
 
@@ -412,14 +433,15 @@ Full Makefile will arrive at Stage 9.
 1. Read this file completely.
 2. Read `docs/notes/00-checkpoints.md` for checkpoint rules.
 3. Read `docs/notes/01-setup.md` for Stage 1 details.
-4. The last completed stage is **Stage 1**.
-5. The next task is **Stage 2.0 — create `circuits/withdrawal/spec.json`**.
-6. **One task at a time.** After each task:
+4. Read `docs/notes/02-circuits.md` for Stage 2 details.
+5. The last completed stage is **Stage 2.0**.
+6. The next task is **Stage 2.1 — generators/validators from spec**.
+7. **One task at a time.** After each task:
    - Update `docs/PROJECT_CONTEXT.md` (this file).
    - Add or update `docs/notes/NN-name.md` (Russian).
    - Save artifacts to `.checkpoints/NN-name/` with SHA-256.
    - Commit and push.
-7. **Do not jump ahead.** Do not implement Stage 3 before Stage 2 is complete and checkpointed.
-8. **Do not skip checkpoint verification.** If hashes do not match — stop and investigate.
-9. User's language: Russian. Reply in Russian. Files: English (except `docs/notes/*.md`, `docs/ru/README.md`).
-10. **Never guess.** If something is ambiguous — ask the user before proceeding.
+8. **Do not jump ahead.** Do not implement Stage 3 before Stage 2 is complete and checkpointed.
+9. **Do not skip checkpoint verification.** If hashes do not match — stop and investigate.
+10. User's language: Russian. Reply in Russian. Files: English (except `docs/notes/*.md`, `docs/ru/README.md`).
+11. **Never guess.** If something is ambiguous — ask the user before proceeding.
