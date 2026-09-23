@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-23 (after stage 2.2.3 — withdrawal circuit)
+> **Last updated:** 2026-09-23 (after stage 2 completion — all circuits done)
 
 ---
 
@@ -154,8 +154,8 @@ See `docs/notes/00-checkpoints.md` for details.
 | Prover | Rust + axum | 1.98.1 + 0.7 |
 | Frontend | Vue 3 + Vite + Pinia | 3.5+ / 8.x / 4.x |
 | Solana CLI | Agave | 3.1.10 |
-| Spec validator | Rust CLI | in-repo (`scripts/validate-spec`) |
-| Circuit sync | Rust CLI | in-repo (`scripts/sync-circuits`) — stage 2.3 |
+| Spec validator | Rust CLI | `scripts/validate-spec` |
+| Circuit sync | Rust CLI | `scripts/sync-circuits` |
 | DB | PostgreSQL | 16 |
 | Cache | Redis | 7 |
 | Container | Docker | latest |
@@ -175,7 +175,7 @@ See `docs/notes/00-checkpoints.md` for full details.
 | Artifact | Created in stage | Compared in stage |
 |---|---|---|
 | `hash2.json`, `hashes.json`, `withdrawal.json` | 2 | 3, 6, 7, 8 |
-| `Prover.toml` (reference witness) | 2 | 3, 4, 7, 8 |
+| `Prover.toml` (reference witness) | 3 | 4, 7, 8 |
 | `withdrawal.ccs`, `.pk`, `.vk`, `.so` | 3 | 4, 7 |
 | `proof`, `public_witness` (local) | 3 | 7 |
 | `encode_public_inputs` (172 bytes) | 4 | 7, 8 |
@@ -191,7 +191,7 @@ See `docs/notes/00-checkpoints.md` for full details.
 
 - Repo created, cloned to `~/Projects/Solana/zkpool-solana`.
 - Folder structure: `onchain/`, `circuits/`, `services/{backend,merkle,prover}`, `web/`, `infra/docker/`, `infra/grafana/`, `scripts/{sync-circuits,validate-spec}/`, `docs/notes/`, `.secrets/`, `.checkpoints/`.
-- `.gitignore` — Rust, Node, Vue, Anchor, Env, keys, IDE, tests, monitoring, Noir, secrets, checkpoints.
+- `.gitignore` — Rust, Node, Vue, Anchor, Env, keys, IDE, tests, monitoring, Noir, secrets, checkpoints, **circuit consumers** (`services/merkle/circuits/`, `web/public/circuits/`).
 - `.env.example` — placeholders.
 - Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
@@ -224,23 +224,23 @@ See `docs/notes/00-checkpoints.md` for full details.
 
 ### ✅ Stage 2.1. `validate-spec` — Rust CLI (2026-09-23)
 
-- **2.1.1 — skeleton:** `scripts/validate-spec/` — `Cargo.toml`, `Cargo.lock`, `src/{main,project,spec,rules}.rs`. Loads `spec.json`, prints summary. Commit: `e479137`.
-- **2.1.2 — 15 rules for spec:** `rules::validate_all` covering version, circuit name, tree depth, nr_public_inputs, unique names, bytes sums (raw 136 / witness slot 160), bytes-vs-type, witness total, header, public section, constraints, hash functions, artifacts, consumers, checkpoints. First run caught its own bug (`rule_public_inputs_bytes_sum` compared raw bytes to witness slot expectation). Fixed: rule now checks both sums. Commit: `dbb4365`.
+- **2.1.1 — skeleton:** `scripts/validate-spec/` — `Cargo.toml`, `Cargo.lock`, `src/{main,project,spec,rules}.rs`. Commit: `e479137`.
+- **2.1.2 — 15 rules for spec:** covering version, circuit name, tree depth, nr_public_inputs, unique names, bytes sums (raw 136 / witness slot 160), bytes-vs-type, witness total, header, public section, constraints, hash functions, artifacts, consumers, checkpoints. First run caught its own bug (`rule_public_inputs_bytes_sum`). Fixed. Commit: `dbb4365`.
 
 ### ✅ Stage 2.2.1. `poseidon` library (2026-09-23)
 
-- `circuits/poseidon/` — Noir library (`type = "lib"`).
-- `src/lib.nr` — 151 lines: `hash_1`, `hash_2`, `hash_3` + 11 tests.
-- `poseidon2_permutation` signature in nargo 1.0.0-rc.2 is **single-argument** — `poseidon2_permutation(state)`, not `(state, 4)`.
+- `circuits/poseidon/` — Noir library (`type = "lib"`), `src/lib.nr` — 151 lines.
+- `hash_1`, `hash_2`, `hash_3` + 11 tests.
+- `poseidon2_permutation` signature in nargo 1.0.0-rc.2 is **single-argument**.
 - **Zero-padding** for t=4, r=3, c=1: 1, 2, or 3 zeros depending on arity.
-- **Domain separation — NOT present.** Zero-padding causes `hash_1(x) == hash_2(x, 0)` and `hash_2(x, y) == hash_3(x, y, 0)`. Documented as safe for zkpool-solana (we never hash the same value with two different arities in the same context). Two tests **assert** the collision as documented property; one test asserts non-zero extra input differs.
+- **Domain separation — NOT present.** `hash_1(x) == hash_2(x, 0)` and `hash_2(x, y) == hash_3(x, y, 0)`. Documented. Safe for zkpool-solana.
 - Commit: `baade07`.
 
 ### ✅ Stage 2.2.2. `hash2` and `hashes` circuits (2026-09-23)
 
-- `circuits/hash2/` — 5 tests. ACIR: `hash2.json`, SHA-256 `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`.
-- `circuits/hashes/` — 9 tests. ACIR: `hashes.json`, SHA-256 `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`.
-- `hashes` `main()` must use `-> pub (Field, Field)` — Noir requires `pub` on entry-point return type.
+- `circuits/hash2/` — 5 tests. ACIR: 30 208 bytes, SHA-256 `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`.
+- `circuits/hashes/` — 9 tests. ACIR: 31 403 bytes, SHA-256 `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`.
+- `hashes` `main()` uses `-> pub (Field, Field)` — Noir requires `pub` on entry-point return type.
 - Commit: `8354921`.
 
 ### ✅ Stage 2.2.3. `withdrawal` circuit (2026-09-23)
@@ -249,15 +249,31 @@ See `docs/notes/00-checkpoints.md` for full details.
 - `circuits/withdrawal/src/merkle_tree.nr` — `compute_merkle_root<let DEPTH: u32>(leaf, path, is_even) -> Field` + 8 tests.
 - `circuits/withdrawal/src/main.nr` — full circuit with `global TREE_DEPTH: u32 = 20`, 5 public inputs, 5 private inputs, constraints C1, C2, C3 + 8 tests.
 - **16 tests total** (8 in `merkle_tree`, 8 in `main`).
-- ACIR: `withdrawal.json`, **42 808 bytes**, SHA-256 `f154aca08c9a5872aec5cdd230036652bf7a87af1847fe4ff299e2b4bd932050`.
+- ACIR: 42 808 bytes, SHA-256 `f154aca08c9a5872aec5cdd230036652bf7a87af1847fe4ff299e2b4bd932050`.
 - Commit: `90afe4c`.
+
+### ✅ Stage 2.3. `sync-circuits` — Rust CLI (2026-09-23)
+
+- `scripts/sync-circuits/` — 198 lines, deps: `anyhow`, `sha2`, `hex`.
+- **Two modes:** `check` (CI, mismatch = error, exit 1, no copy) and `apply` (local, mismatch = warn + copy, exit 0).
+- **Hard-coded circuits list** (`hash2`, `hashes`, `withdrawal`).
+- **Two destinations:** `services/merkle/circuits/`, `web/public/circuits/`.
+- **First run:** `copied: 6`. **Second run:** `copied: 0, mismatches: 0`. **Corrupted test:** `--check` → `EXIT_CODE=1`, `--apply` → `copied: 1, EXIT_CODE=0`. **After apply:** in sync.
+- Consumers added to `.gitignore`.
+- Commit: `aa5d8d9`.
+
+### ✅ Stage 2.4. Final checkpoint (2026-09-23)
+
+- `.checkpoints/02.4-stage-2-final/sources/` — copies of three ACIR files.
+- `.checkpoints/02.4-stage-2-final/manifest.txt` — SHA-256 of sources, consumers, and commit.
+- **All 6 consumer copies match sources.**
 
 ### ✅ Docs (2026-09-22 — 2026-09-23)
 
 - `docs/notes/00-checkpoints.md` — checkpoint methodology (RU).
 - `docs/PROJECT_CONTEXT.md` — this file (EN).
 - `docs/notes/01-setup.md` — stage 1 notes (RU).
-- `docs/notes/02-circuits.md` — stage 2 notes (RU).
+- `docs/notes/02-circuits.md` — stage 2 notes (RU, 301 lines).
 - `docs/notes/` removed from `.gitignore` — notes are committed.
 
 **Commits in order:**
@@ -278,13 +294,18 @@ See `docs/notes/00-checkpoints.md` for full details.
 - `a508a46` — update `PROJECT_CONTEXT` with rules and domain separation notes.
 - `8354921` — add hash2 and hashes circuits (14 tests).
 - `90afe4c` — add withdrawal circuit with merkle_tree module (16 tests).
+- `4b938f2` — update `PROJECT_CONTEXT` with stage 2.2 completion and sync-circuits design.
+- `aa5d8d9` — add sync-circuits with SHA-256 check/apply modes.
+- `404b5f4` — complete stage 2 notes with all circuits and sync-circuits.
 
 **Checkpoint artifacts:**
-- `.checkpoints/01-setup/` — versions, sunspot-clone, commit, manifest.
-- `.checkpoints/02.1-validate-spec/` — commit, validate-output.
-- `.checkpoints/02.2.1-poseidon/` — commit, nargo-test-output.
-- `.checkpoints/02.2.2-hash2-hashes/` — commit, hash2/hash2.json (+sha256, tests), hashes/hashes.json (+sha256, tests).
-- `.checkpoints/02.2.3-withdrawal/` — commit-before, commit, nargo-test-output, withdrawal.json (+sha256).
+- `.checkpoints/01-setup/`
+- `.checkpoints/02.1-validate-spec/`
+- `.checkpoints/02.2.1-poseidon/`
+- `.checkpoints/02.2.2-hash2-hashes/`
+- `.checkpoints/02.2.3-withdrawal/`
+- `.checkpoints/02.3-sync-circuits/`
+- `.checkpoints/02.4-stage-2-final/`
 
 ---
 
@@ -292,9 +313,7 @@ See `docs/notes/00-checkpoints.md` for full details.
 
 ### 7.1. Spec validation — YES (not generation)
 
-`spec.json` is the source of truth. Instead of generating `.nr`, Rust, TS from it, we **validate** existing files against it via `scripts/validate-spec`.
-
-**Rationale:** generation of `.nr` and Rust is fragile; validation is simpler and catches the same class of bugs. Runs manually, from Makefile (Stage 9), from CI (Stage 10).
+`spec.json` is the source of truth. Files are **validated against** it via `scripts/validate-spec`. Generation of `.nr` and Rust is fragile; validation is simpler and catches the same class of bugs.
 
 ### 7.2. LiteSVM E2E test — YES
 
@@ -316,46 +335,26 @@ Follows v2. Documented in `circuits/poseidon/src/lib.nr` and in `spec.json` (`ha
 5. Re-sync `web/.env` via `sync-program-id`.
 6. Recompute all checkpoints.
 
-This is large-scale work — do only when explicitly needed.
-
 ### 7.5. `sync-circuits` — with SHA-256 verification and check/apply modes
 
-Unlike v2 (which silently copied JSON files), v3 `scripts/sync-circuits` has **two modes**:
+**`--check` (default, CI):** compile, hash, compare. Match → no-op. Missing → copy. Mismatch → **error, exit 1, no copy**.
 
-**`--check` (default, used in CI):**
-1. Run `nargo compile` for each circuit.
-2. Compute SHA-256 of source JSON (`circuits/*/target/*.json`).
-3. Compute SHA-256 of each consumer copy (`services/merkle/circuits/`, `web/public/circuits/`) if present.
-4. Compare per file:
-   - **Match** → no-op.
-   - **Missing consumer** → copy (first run — safe).
-   - **Mismatch** → **error**, exit non-zero, do NOT copy.
-5. Write all hashes to `.checkpoints/02.3-sync-circuits/manifest.txt`.
+**`--apply` (local):** same, but mismatch → **copy + warning, exit 0**.
 
-**`--apply` (used locally after editing circuits):**
-Same, but on mismatch: **copy** from source to consumer, print warning, exit 0.
+**Rationale:** silent overwriting is dangerous. `check` detects drift, `apply` fixes it deliberately.
 
-**Rationale:**
-- In CI, `--check` catches drift between source and consumers — the exact class of bug that caused v2's three-day hunt.
-- Silent overwriting on mismatch is dangerous: it can hide a real problem (e.g. someone reverted `circuits/` but consumers remained newer).
-- On first run (consumer missing), copying is always safe.
-
-**Hard-coded circuits list (no reading from spec.json):**
-
+**Hard-coded list:**
 ```rust
 const CIRCUITS: &[(&str, &str, &str)] = &[
     ("hash2",      "circuits/hash2",      "hash2.json"),
     ("hashes",     "circuits/hashes",     "hashes.json"),
     ("withdrawal", "circuits/withdrawal", "withdrawal.json"),
 ];
-
 const DESTINATIONS: &[&str] = &[
     "services/merkle/circuits",
     "web/public/circuits",
 ];
 ```
-
-**Why hard-coded:** the list changes once a year; extending `spec.json` for `hash2` and `hashes` (which have no public inputs or constraints) would be artificial.
 
 ### 7.6. Split deposit — DEFERRED to Stage 12
 
@@ -384,20 +383,19 @@ Known issues in v2 Makefile to avoid:
 
 - Stage 0 — Repository skeleton ✅
 - Stage 1 — Docker environment ✅
-- Stage 2.0 — `spec.json` ✅
-- Stage 2.1 — `validate-spec` ✅
-  - 2.1.1 — skeleton ✅
-  - 2.1.2 — spec-only rules ✅
-  - 2.1.3 — `.nr` rules (after 2.2.3)
-  - 2.1.4 — Rust rules (after 4.1)
-  - 2.1.5 — TS rules (after 8)
-- Stage 2.2 — circuits ✅
-  - 2.2.1 — `poseidon` library ✅
-  - 2.2.2 — `hash2` and `hashes` circuits ✅
-  - 2.2.3 — `withdrawal` circuit ✅
-- **Stage 2.3 — `sync-circuits` with SHA-256 (next)**
-- Stage 2.4 — checkpoint 2
-- Stage 3 — Sunspot verifier
+- Stage 2 — Circuits on Noir ✅
+  - 2.0 — `spec.json` ✅
+  - 2.1.1 — `validate-spec` skeleton ✅
+  - 2.1.2 — spec validation rules ✅
+  - 2.1.3 — `.nr` rules (after full circuit) ⏳
+  - 2.1.4 — Rust rules (after 4.1) ⏳
+  - 2.1.5 — TS rules (after 8) ⏳
+  - 2.2.1 — `poseidon` ✅
+  - 2.2.2 — `hash2` + `hashes` ✅
+  - 2.2.3 — `withdrawal` + `merkle_tree` ✅
+  - 2.3 — `sync-circuits` ✅
+  - 2.4 — final checkpoint ✅
+- **Stage 3 — Sunspot verifier (next)**
 - Stage 4.1 — Anchor program
 - Stage 4.5 — LiteSVM E2E test
 - Stage 5 — Backend
@@ -423,10 +421,11 @@ Known issues in v2 Makefile to avoid:
 - `bash -ic` is required for commands inside the container.
 - `pnpm install` may bump `@solana/kit` to 8.x if versions use `^` — pin exact.
 - `jsonls` warns about `$schema: "internal://..."` — do not add `$schema` to `spec.json`.
-- **`poseidon2_permutation` in nargo 1.0.0-rc.2 takes ONE argument** (the state array), not two.
+- **`poseidon2_permutation` in nargo 1.0.0-rc.2 takes ONE argument** (the state array).
 - **Zero-padding causes arity collisions** (`hash_1(x) == hash_2(x, 0)`) — documented, safe for our use.
-- **`main()` in `type = "bin"` circuits must have `pub` on the return type.** Noir requires this for verifier access.
-- **Field values must be < 2^254** (BN254 prime). A 256-bit literal (e.g. arbitrary Solana Pubkey) will fail to compile. Reduce modulo BN254 before use.
+- **`main()` in `type = "bin"` circuits must have `pub` on the return type.**
+- **Field values must be < 2^254** (BN254 prime). 256-bit literals fail to compile.
+- **Noir does not support float literals** (`0.001 as Field` fails). Use lamports (`1_000_000`).
 
 ---
 
@@ -448,16 +447,22 @@ zkpool-solana/
 │   ├── hash2/               ← circuit ✅
 │   ├── hashes/              ← circuit ✅
 │   └── withdrawal/
-│       ├── spec.json        ← single source of truth ✅
+│       ├── spec.json        ✅
 │       └── src/
-│           ├── main.nr      ← circuit ✅
-│           └── merkle_tree.nr ← library ✅
+│           ├── main.nr      ✅
+│           └── merkle_tree.nr ✅
 ├── onchain/
-├── services/{backend,merkle,prover}/
+├── services/
+│   ├── backend/
+│   ├── merkle/
+│   │   └── circuits/        ← gitignored (sync-circuits)
+│   └── prover/
 ├── web/
+│   └── public/
+│       └── circuits/        ← gitignored (sync-circuits)
 ├── scripts/
 │   ├── validate-spec/       ✅
-│   └── sync-circuits/       ← (stage 2.3, next)
+│   └── sync-circuits/       ✅
 ├── .env.example
 ├── .gitignore
 ├── LICENSE
@@ -472,6 +477,7 @@ zkpool-solana/
 - **All committed files in English**, except `docs/notes/*.md` and `docs/ru/README.md` (Russian).
 - `.secrets/` and `.checkpoints/` — gitignored.
 - `docs/notes/` — committed.
+- `services/merkle/circuits/`, `web/public/circuits/` — gitignored (sync-circuits).
 - After each stage: update `PROJECT_CONTEXT.md`, add `docs/notes/NN-name.md`.
 - `git commit ... && git push` — one task. `git add -A` — separate task.
 
@@ -487,6 +493,14 @@ docker compose -f infra/docker-compose.yml exec solana bash
 # Run validate-spec
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu && cargo run --manifest-path scripts/validate-spec/Cargo.toml --release'
+
+# Run sync-circuits --check
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- check'
+
+# Run sync-circuits --apply
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- apply'
 
 # Run poseidon tests
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
@@ -511,15 +525,17 @@ Full Makefile will arrive at Stage 9.
 
 ## 12. Current state
 
-**Last completed stage:** Stage 2.2.3 (withdrawal circuit).
-**Next stage:** Stage 2.3 — `sync-circuits` with SHA-256 (check/apply modes).
+**Last completed stage:** Stage 2.4 (final checkpoint for stage 2).
+**Next stage:** Stage 3 — Sunspot verifier.
 
-**Checkpoints saved:**
-- `.checkpoints/01-setup/`
-- `.checkpoints/02.1-validate-spec/`
-- `.checkpoints/02.2.1-poseidon/`
-- `.checkpoints/02.2.2-hash2-hashes/`
-- `.checkpoints/02.2.3-withdrawal/`
+**Circuit ACIRs (all in sync with consumers):**
+- `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
+- `hashes.json` — `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`
+- `withdrawal.json` — `f154aca08c9a5872aec5cdd230036652bf7a87af1847fe4ff299e2b4bd932050`
+
+**Tests:** 41 total (11 poseidon + 5 hash2 + 9 hashes + 16 withdrawal).
+
+**Checkpoints saved:** 01-setup, 02.1-validate-spec, 02.2.1-poseidon, 02.2.2-hash2-hashes, 02.2.3-withdrawal, 02.3-sync-circuits, 02.4-stage-2-final.
 
 ---
 
@@ -530,8 +546,8 @@ Full Makefile will arrive at Stage 9.
 1. Read **section 0** first — those are the hard rules.
 2. Read this file completely.
 3. Read `docs/notes/00-checkpoints.md`, `docs/notes/01-setup.md`, `docs/notes/02-circuits.md`.
-4. Last completed stage: **Stage 2.2.3**.
-5. Next task: **Stage 2.3 — `sync-circuits`**.
+4. Last completed stage: **Stage 2.4**.
+5. Next task: **Stage 3 — Sunspot verifier** (compile, setup, deploy, local `verify`).
 6. **One task at a time. Do not chain commands.** Only exception: `git commit ... && git push`.
 7. **Give files in full.** Never fragments, never "replace line N".
 8. **Never guess.** If ambiguous — ask the user before proceeding.
