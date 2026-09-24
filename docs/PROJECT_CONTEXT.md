@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-24 (after stage 4.1.9 — zk_pool deployed; starting stage 4.5)
+> **Last updated:** 2026-09-24 (after stage 4.5.1 — tests/ reorganization)
 
 ---
 
@@ -54,17 +54,25 @@ After each completed stage:
 
 ### 0.9. Non-obvious project actions must be documented
 
-Any **non-obvious** action required to complete a stage (unusual `cargo` behavior, workspace configuration, manual API checking) must be:
-1. Recorded in `PROJECT_CONTEXT.md`, section 8 "Known pitfalls", under the appropriate stage.
+Any **non-obvious** action required to complete a stage must be:
+1. Recorded in `PROJECT_CONTEXT.md`, section 8 "Known pitfalls".
 2. Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, and fix.
 
 The user explicitly requested this (2026-09-24): "все эти неочевидные для проекта действия нужно фиксировать".
 
-Examples of non-obvious actions:
-- Manual reading of crate sources (`~/.cargo/registry/src/...`) to check exact API.
-- Adding packages to `workspace.exclude` instead of `members`.
-- Running `cargo fetch` in a sub-crate to trigger dependency resolution.
+Examples:
+- Manual reading of crate sources to check exact API.
+- Adding packages to `workspace.exclude`.
+- Running `cargo fetch` in a sub-crate.
 - Any unusual CLI flag or environment variable.
+
+### 0.10. Test in small steps — do not write 200 lines at once
+
+When working with a **new** library (like LiteSVM), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches. Only then expand.
+
+**Rationale:** LiteSVM (and other Solana crates) change API between minor versions. A 200-line file may produce 50 compile errors, all mixed. A 20-line file produces 1–2 errors, easy to isolate.
+
+**How to check exact API:** read the crate sources in `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
 
 ---
 
@@ -82,23 +90,23 @@ Examples of non-obvious actions:
 **License:** MIT
 **Network:** Solana Devnet
 
-**Demo notice:** this is a demo / educational project. See `docs/DEMO-NOTICE.md` for the list of missing production features.
+**Demo notice:** this is a demo / educational project. See `docs/DEMO-NOTICE.md`.
 
 ---
 
 ## 2. Why v3 exists
 
-In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Proof verification failed!`. Root cause not found in three days. The class of bug: **mismatch between public inputs at one of the three layers** (circuit, Anchor, frontend).
+In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in three days. The class of bug: **mismatch between public inputs** (circuit, Anchor, frontend).
 
 **v3 goal:** build the project such that this class of bug cannot exist by construction.
 
 ### Five principles
 
-1. **Single source of truth** — `spec.json` defines layout; layers **validated against** it.
+1. **Single source of truth** — `spec.json`; layers validated via `scripts/validate-spec`.
 2. **Contract checks at every boundary** — byte-level.
 3. **No magic numbers** — all constants in one place.
-4. **LiteSVM E2E test before devnet** — from Stage 4.5 onwards.
-5. **Checkpoints with artifacts** — SHA-256, `.checkpoints/NN-name/`.
+4. **LiteSVM E2E test before devnet.**
+5. **Checkpoints with artifacts** — SHA-256.
 
 ---
 
@@ -111,7 +119,6 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
               ↓ HTTP                    ↑ HTTP
 ┌──────────────────────────────────────────────────────────────────┐
 │ BACKEND (Rust + axum) — port 4001                                │
-│ • /api/commitments  • /api/root  • /api/proof  • /api/withdraw   │
 └──────────────────────────────────────────────────────────────────┘
        ↓                    ↓                    ↓
 ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐
@@ -124,8 +131,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
-│ MONITORING                                                       │
-│ • Prometheus :9090  • Grafana :3000                              │
+│ MONITORING — Prometheus :9090, Grafana :3000                     │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
@@ -149,15 +155,15 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 | Backend | Rust + axum | 1.98.1 + 0.7 |
 | Merkle service | Node.js + Fastify | 24.21.0 + 5.12.5 |
 | Noir JS | @noir-lang/noir_js | 1.0.0-rc.2 |
-| Prover | Rust + axum | 1.98.1 + 0.7 |
 | Frontend | Vue 3 + Vite + Pinia | 3.5+ / 8.x / 4.x |
 | Solana CLI | Agave | 3.1.10 |
 | LiteSVM | litesvm | 0.16 |
+| Tests Rust toolchain | Rust | 1.98.1 |
+| On-chain Rust toolchain | Rust | 1.89.0 |
 | Spec validator | Rust CLI | `scripts/validate-spec` |
 | Circuit sync | Rust CLI | `scripts/sync-circuits` |
 | DB | PostgreSQL | 16 |
 | Cache | Redis | 7 |
-| Container | Docker | latest |
 | Node.js | Node.js | 24.21.0 |
 | pnpm | pnpm | 12.5.1 |
 
@@ -195,21 +201,21 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 ### ✅ Stage 3. Sunspot verifier (2026-09-23 — 2026-09-24)
 
-- **3.0 — Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`, 5 SOL. Commit: `e9ddbe5`.
-- **3.1 — `sunspot compile`:** `.ccs` (642 177 B).
-- **3.2 — `sunspot setup`:** `.pk` (2 145 109 B) + `.vk` (972 B).
-- **3.3 — `sunspot deploy`:** `.so` (87 312 B), verifier Program ID `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
-- **3.4 — `solana program deploy`:** on devnet, balance 0.444 SOL.
-- **3.5 — Local verification:** `sunspot verify` → `✅ Verification successful!`.
-- **3.6 — Final checkpoint.** Commit: `441b9d2`.
+- **3.0** — Wallet. Commit: `e9ddbe5`.
+- **3.1** — `.ccs` (642 177 B).
+- **3.2** — `.pk` (2 145 109 B) + `.vk` (972 B).
+- **3.3** — `.so` (87 312 B), verifier `5t51iu6a...`.
+- **3.4** — deployed to devnet, balance 0.444 SOL.
+- **3.5** — local verification: `✅ Verification successful!`.
+- **3.6** — final checkpoint. Commit: `441b9d2`.
 
 ### ✅ Stage 3.7. Documentation enrichment (2026-09-24)
 
-- `docs/notes/00-glossary.md` — 545 lines.
-- `docs/notes/00-zk-primer.md` — 317 lines.
-- `docs/notes/01-setup.md` — 762 lines.
-- `docs/notes/02-circuits.md` — 957 lines.
-- `docs/notes/03-sunspot.md` — 996 lines.
+- `00-glossary.md` — 545 lines.
+- `00-zk-primer.md` — 317 lines.
+- `01-setup.md` — 762 lines.
+- `02-circuits.md` — 957 lines.
+- `03-sunspot.md` — 996 lines.
 
 ### ✅ Stage 4.1. Anchor program (2026-09-24)
 
@@ -227,29 +233,24 @@ All 9 sub-stages complete:
 | 4.1.8 | Tests (37 unit) | `8261530` |
 | 4.1.9 | Deploy to devnet | `3f6dcd6` |
 
-**Deployed program:**
-- Program Id: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
-- ProgramData: `FaLqLdL1FVLcwZPpJTw2ugG67KKnEbZRuUJmqvyNtCeA`.
-- Authority: `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`.
-- Data Length: 210 000 bytes.
-- Rent: 1.068 SOL.
-- IDL metadata: `C931NVVbVKu4mjh1wjgh7bmFx6j6TfML89ut1GsRQHXk`.
+**Deployed program:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
 ### 🚧 Stage 4.5. LiteSVM E2E test (in progress)
 
-Sub-stages:
-- 4.5.1 — workspace config (in progress)
-- 4.5.2 — helpers
-- 4.5.3 — test_pool
-- 4.5.4 — test_deposit
-- 4.5.5 — test_withdraw
-- 4.5.6 — test_double_spend
-- 4.5.7 — final checkpoint
+| # | Sub-stage | Status |
+|---|---|---|
+| 4.5.1 | Tests reorganization | ✅ commit `050e58f` |
+| 4.5.2 | `helpers.rs` | ← next |
+| 4.5.3 | `test_pool.rs` | ⏳ |
+| 4.5.4 | `test_deposit.rs` | ⏳ |
+| 4.5.5 | `test_withdraw.rs` | ⏳ |
+| 4.5.6 | `test_double_spend.rs` | ⏳ |
+| 4.5.7 | Final checkpoint | ⏳ |
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
-- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (813 lines).
+- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (874 lines).
 - `docs/DEMO-NOTICE.md`.
 - `docs/PROJECT_CONTEXT.md` — this file.
 - `docs/notes/assets/` — folders for screenshots.
@@ -262,8 +263,6 @@ Sub-stages:
 
 ### 7.2. LiteSVM E2E test — YES
 
-Runs after Stage 4.5.
-
 ### 7.3. One circuit with `recipient_binding` — YES
 
 ### 7.4. Zero-padding (no domain separation) — CONFIRMED
@@ -274,7 +273,19 @@ Runs after Stage 4.5.
 
 ### 7.7. Makefile — clean design (Stage 9)
 
-### 7.8. Stages list
+### 7.8. Tests/ directory — separate crate at root
+
+**Decision (2026-09-24):** `tests/` is **outside** `onchain/`, at the project root.
+
+**Reason:** `litesvm 0.16` requires **Agave 4.2**, which requires **Rust ≥ 1.90**. `onchain/rust-toolchain.toml` pins **1.89.0** (needed for SBF). Keeping tests inside `onchain/` means they **inherit** the 1.89 toolchain and fail with `E0658`.
+
+**Solution:** separate crate at root with its own `rust-toolchain.toml` (`channel = "1.98.1"`).
+
+**Connection to program:** via `zk_pool = { path = "../onchain/programs/zk_pool" }`.
+
+**Not in workspace:** `onchain/Cargo.toml` does **not** include `tests`. It is a standalone crate.
+
+### 7.9. Stages list
 
 - Stage 0 — Repository skeleton ✅
 - Stage 1 — Docker environment ✅
@@ -337,24 +348,49 @@ Runs after Stage 4.5.
 - **`E0432: unresolved import crate`** — keep glob re-exports.
 - **`E0277: #[instruction] type mismatch`** — list **all** handler args in order.
 - **CPI to Sunspot verifier: `[proof || public_witness]`** — proof FIRST.
-- **Vault PDA has no private key.**
+- **Vault PDA has no private key** — direct lamport manipulation.
 - **`anchor deploy` is deprecated** — use `anchor program deploy`.
 - **`zk_pool.so` grows to 210 KB** with 3 instructions.
 
 ### From Stage 4.5 (LiteSVM) — IN PROGRESS
 
 - **`cargo fetch` fails in `onchain/tests/`**: "current package believes it's in a workspace when it's not".
-  - **Cause:** `onchain/Cargo.toml` is a workspace root, but `tests` is not in `workspace.members`.
-  - **Fix:** add `tests` to `workspace.exclude` in `onchain/Cargo.toml` (better) or add `tests` to `members` (slower `anchor build`), or add empty `[workspace]` to `tests/Cargo.toml`.
-  - **Why exclude:** we don't want `anchor build` to compile LiteSVM tests (slow, extra dependencies).
-- **Check exact LiteSVM API** by reading `~/.cargo/registry/src/index.crates.io-*/litesvm-0.16.0/src/` after `cargo fetch`. Do not write from memory — the API changes between minor versions.
-- **`tests/Cargo.toml` updated with LiteSVM 0.16 and `solana-*` versions.** Confirm compatibility via `cargo tree`.
+  - **Cause:** `onchain/Cargo.toml` is a workspace root, `members = ["programs/*"]` doesn't cover `tests/`.
+  - **First fix:** add `tests` to `workspace.exclude`. This **helped** `cargo fetch`, but did not fix the Rust version problem (see next).
+  - **Final fix:** move `tests/` to project root (see 4.5.1).
+- **`E0658: use of unstable library feature maybe_uninit_write_slice`** in `solana-syscalls 4.2.2`.
+  - **Cause:** `litesvm 0.16` pulls Agave 4.2 which uses an unstable Rust feature. Needs Rust ≥ 1.90.
+  - **Why it failed:** `onchain/rust-toolchain.toml` pins 1.89.0, and `tests/` inherited it.
+  - **Fix:** move `tests/` out of `onchain/`; use `tests/rust-toolchain.toml` with `channel = "1.98.1"`.
+- **`failed to select a version for solana-hash`** — version conflict between `litesvm 0.16` (needs `solana-hash ~4.5.0`) and `solana-message 5` (needs `solana-hash >= 4.6.0`).
+  - **Fix:** use exact versions from litesvm's `Cargo.toml`:
+    - `solana-account = "4.3.0"`
+    - `solana-hash = "4.5.0"`
+    - `solana-instruction = "3.4.0"`
+    - `solana-keypair = "3.1.2"`
+    - `solana-message = "4.2.4"`
+    - `solana-sdk-ids = "3.1.0"`
+    - `solana-signer = "3.0.1"`
+    - `solana-transaction = "4.1.5"`
+    - `solana-transaction-error = "3.3.1"`
+- **`/home/ubuntu/tests: No such file or directory`** — volume not mounted.
+  - **Fix:** add `- ../tests:/home/ubuntu/tests` to `infra/docker-compose.yml`; recreate container with `docker compose up -d --force-recreate solana`.
+- **`E0583: file not found for module`** for 5 modules — expected, files not written yet.
 
 ### How to find exact signatures for the installed crate version
 
 - Rust crate sources: `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`.
 - Anchor: `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anchor-lang-1.2.0/src/`.
+- LiteSVM: `~/.cargo/registry/src/index.crates.io-*/litesvm-0.16.0/src/`.
 - Always check your **own** version, not v2 examples.
+
+### How to resolve solana-* version conflicts
+
+1. Find the "main" crate (e.g. `litesvm`) and its exact `solana-*` versions in its `Cargo.toml`.
+2. Use **exactly** those versions in your `Cargo.toml`.
+3. Do NOT guess or use semver ranges (`"4"`, `"5"`) — they pull incompatible versions.
+4. Run `cargo tree -p <main-crate>` to verify resolution.
+5. If a newer toolchain is required, isolate the crate (see 4.5.1).
 
 ---
 
@@ -378,32 +414,21 @@ zkpool-solana/
 │   ├── DEMO-NOTICE.md
 │   ├── PROJECT_CONTEXT.md   ← this file
 │   └── threat-model.md
-├── infra/{docker-compose.yml,docker/Dockerfile.solana}
+├── infra/
+│   ├── docker-compose.yml
+│   └── docker/Dockerfile.solana
 ├── circuits/{poseidon,hash2,hashes,withdrawal}/
 ├── onchain/
 │   ├── Anchor.toml
-│   ├── Cargo.toml           ← workspace root (excludes tests)
+│   ├── Cargo.toml           ← workspace root (Rust 1.89.0)
 │   ├── rust-toolchain.toml
-│   ├── programs/zk_pool/
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── constants.rs
-│   │       ├── encoding.rs
-│   │       ├── error.rs
-│   │       ├── events.rs
-│   │       ├── instructions.rs
-│   │       ├── instructions/{deposit,pool,withdraw}.rs
-│   │       ├── lib.rs
-│   │       └── state.rs
-│   └── tests/               ← LiteSVM tests (excluded from workspace)
-│       ├── Cargo.toml
-│       └── src/
-│           ├── lib.rs
-│           ├── helpers.rs
-│           ├── test_pool.rs
-│           ├── test_deposit.rs
-│           ├── test_withdraw.rs
-│           └── test_double_spend.rs
+│   └── programs/zk_pool/
+├── tests/                   ← standalone crate (Rust 1.98.1)
+│   ├── Cargo.toml
+│   ├── rust-toolchain.toml
+│   └── src/
+│       ├── lib.rs
+│       └── (helpers.rs, test_pool.rs, etc. — next)
 ├── services/{backend,merkle,prover}/
 ├── web/
 ├── scripts/{validate-spec,sync-circuits}/
@@ -455,11 +480,11 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu/onchain && anchor program deploy --provider.cluster devnet'
 ```
 
-### LiteSVM tests (from `onchain/tests/`)
+### LiteSVM tests (from project root `tests/`)
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
-  'cd /home/ubuntu/onchain/tests && cargo test'
+  'cd /home/ubuntu/tests && cargo test'
 ```
 
 ### Full Sunspot pipeline (from `circuits/withdrawal/`)
@@ -479,8 +504,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 4.1.9 (zk_pool deployed to devnet).
-**Next stage:** Stage 4.5.1 — workspace config for LiteSVM tests.
+**Last completed stage:** Stage 4.5.1 (tests reorganization).
+**Next stage:** Stage 4.5.2 — `helpers.rs`.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -488,7 +513,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) = **78**.
+**Tests:** 41 (circuits) + 37 (on-chain unit) = **78**. LiteSVM tests not yet written.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -501,22 +526,23 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `01-setup.md` — 762 lines.
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
-- `04-anchor.md` — 813 lines.
+- `04-anchor.md` — 874 lines.
 
 ---
 
 ## 13. Instructions for a new assistant
 
-1. Read **section 0** first — especially **0.9** (document non-obvious actions).
+1. Read **section 0** first — especially **0.9** (document non-obvious) and **0.10** (test in small steps).
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 4.1.9**.
-6. Next task: **Stage 4.5.1 — workspace config**.
+5. Last completed stage: **Stage 4.5.1**.
+6. Next task: **Stage 4.5.2 — `helpers.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
-10. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
+10. **Test in small steps.** 20 lines, not 200.
+11. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
 
 ---
 
@@ -527,10 +553,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 ### 14.1. Context
 
 `docs/notes/*.md` is:
-
 1. **Raw material** for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
 2. **Part of the GitHub portfolio.**
-3. **Teaching material** for readers from beginners to professional engineers.
+3. **Teaching material.**
 
 ### 14.2. Structure requirements for every note
 
@@ -571,5 +596,5 @@ After each stage: write technical note → enrich → capture screenshots → up
 ### 14.9. Ongoing
 
 - Screenshots captured as we go.
-- `04-anchor.md` — 813 lines.
+- `04-anchor.md` — 874 lines.
 - Glossary updated when new terms appear.
