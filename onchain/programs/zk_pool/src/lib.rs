@@ -1,6 +1,6 @@
 //! zk_pool — private SOL transfers on Solana using ZK proofs.
 //!
-//! Stage 4.1.3: modules for constants, errors, events, instructions, state.
+//! Stage 4.1.4: public inputs encoding.
 //! Real instructions are added in stages 4.1.5 – 4.1.7.
 
 use anchor_lang::prelude::*;
@@ -8,6 +8,7 @@ use anchor_lang::prelude::*;
 declare_id!("8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm");
 
 pub mod constants;
+pub mod encoding;
 pub mod error;
 pub mod events;
 pub mod instructions;
