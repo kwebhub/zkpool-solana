@@ -38,9 +38,9 @@
 |---|---|---|
 | 4.1.1 | Anchor-workspace | ✅ |
 | 4.1.2 | `constants.rs` | ✅ |
-| 4.1.3 | `error.rs`, `events.rs`, `state.rs` | ← следующий |
-| 4.1.4 | `encode_public_inputs` | ⏳ |
-| 4.1.5 | Инструкция `pool` | ⏳ |
+| 4.1.3 | `error.rs`, `events.rs`, `state.rs` | ✅ |
+| 4.1.4 | `encode_public_inputs` | ✅ |
+| 4.1.5 | Инструкция `pool` | ← следующий |
 | 4.1.6 | Инструкция `deposit` | ⏳ |
 | 4.1.7 | Инструкция `withdraw` | ⏳ |
 | 4.1.8 | Тесты | ⏳ |
@@ -52,18 +52,11 @@
 
 ### Зачем
 
-Создать **каркас** Anchor-программы. На этом под-этапе — **никакой** логики, только структура. Цель — убедиться, что `anchor build` **работает** в нашем окружении, до того как писать код.
+Создать **каркас** Anchor-программы. На этом под-этапе — **никакой** логики, только структура.
 
 ### Что делаем
 
 **1. Создать workspace через `anchor init`.**
-
-Попытка напрямую:
-
-```bash
-cd onchain
-anchor init . --no-git
-```
 
 **⚠️ Ошибка №1:** `anchor init .` **не работает**.
 
@@ -71,86 +64,34 @@ anchor init . --no-git
 Error: Anchor workspace name must be a valid Rust identifier.
 ```
 
-**Причина:** Anchor использует **имя текущей директории** (`onchain`) как имя workspace. Имя должно быть валидным Rust-идентификатором.
-
-**Решение:** создавать во **временной** папке с правильным именем, потом копировать.
+**Решение:** создавать во **временной** папке.
 
 ```bash
 cd /tmp
 anchor init zk_pool --no-git --test-template rust
 ```
 
-**Флаг `--test-template rust`** — генерирует **Rust-тесты** вместо Mocha/Jest. Нам нужен Rust: LiteSVM-тесты на TypeScript **нельзя** написать.
-
-**2. Скопировать нужное в `onchain/`.**
-
+Затем скопировать в `onchain/`:
 ```bash
-cd /tmp/zk_pool
-cp Anchor.toml /home/ubuntu/onchain/
-cp Cargo.toml /home/ubuntu/onchain/
-cp rust-toolchain.toml /home/ubuntu/onchain/
-cp -r programs /home/ubuntu/onchain/
-cp -r tests /home/ubuntu/onchain/
+cp Anchor.toml Cargo.toml rust-toolchain.toml /home/ubuntu/onchain/
+cp -r programs tests /home/ubuntu/onchain/
 ```
 
-**Что НЕ копируем:**
-- `app/` — пустая.
-- `migrations/` — не нужна.
-- `target/` — скомпилированное.
-- `.gitignore`, `.prettierignore` — у нас **свой** корневой.
+**Что НЕ копируем:** `app/`, `migrations/`, `target/`, `.gitignore`, `.prettierignore`.
 
-**3. Настроить workspace `Cargo.toml`.**
+**2. Настроить workspace `Cargo.toml`.**
 
 Убрать `tests` из members **временно** (вернём на 4.5).
 
-```toml
-[workspace]
-members = ["programs/*"]
-resolver = "2"
+**3. Настроить `Anchor.toml`.** Cluster = devnet, `[programs.devnet]`.
 
-[workspace.package]
-edition = "2021"
-rust-version = "1.89.0"
+**4. Настроить `programs/zk_pool/Cargo.toml`.**
 
-[profile.release]
-overflow-checks = true
-lto = "fat"
-codegen-units = 1
+**⚠️ Ошибка №2:** `invalid --check-cfg argument`.
 
-[profile.release.build-override]
-opt-level = 3
-incremental = false
-codegen-units = 1
-```
+**Что не так:** нельзя «разрешить» `cfg(anchor-debug)` через `[lints.rust]`.
 
-**4. Настроить `Anchor.toml`.**
-
-Добавить `devnet` cluster и `programs.devnet` блок. Program ID пока шаблонный (`EDzVvsts...`) — **изменится** после `anchor build`.
-
-**5. Настроить `programs/zk_pool/Cargo.toml`.**
-
-**Ошибка №2 — правильный набор features.**
-
-Первая попытка:
-
-```toml
-[lints.rust]
-unexpected_cfgs = { level = "allow", check-cfg = [
-    'cfg(anchor-debug)',
-    'cfg(custom-heap)',
-    'cfg(custom-panic)',
-] }
-```
-
-**Результат:** `error: invalid --check-cfg argument`.
-
-**Что не так:** `check-cfg` **не принимает** такие строки. Синтаксис другой.
-
-**Вторая попытка:** `'anchor_debug'`.
-
-**Результат:** `error: invalid --check-cfg argument: anchor_debug`.
-
-**Правильное решение (из v2):** не пытаться «разрешить» через `[lints]`, а **объявить** `anchor-debug`, `custom-heap`, `custom-panic` как **features**:
+**Решение:** **объявить** `anchor-debug`, `custom-heap`, `custom-panic` как **features**:
 
 ```toml
 [features]
@@ -163,82 +104,28 @@ anchor-debug = []
 custom-heap = []
 custom-panic = []
 
-[dependencies]
-anchor-lang = "1.1.2"
-
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(target_os, values("solana"))',
 ] }
 ```
 
-**Результат:** ноль warnings.
+**5. Упростить `lib.rs`.**
 
-**Урок:** если макрос обращается к `cfg(feature = "X")` — объяви `X` в `[features]`. Не борись с линтером.
+**⚠️ Ошибка №3:** `E0107: struct takes 0 lifetime arguments but 1 was given` — `#[derive(Accounts)]` **не работает** с пустыми структурами.
 
-**6. Упростить `lib.rs`.**
-
-Попытка с заглушкой:
-
-```rust
-#[program]
-pub mod zk_pool {
-    use super::*;
-    pub fn noop(_ctx: Context<Noop>) -> Result<()> { Ok(()) }
-}
-
-#[derive(Accounts)]
-pub struct Noop {}
-```
-
-**⚠️ Ошибка №3:** `E0107` — `struct takes 0 lifetime arguments but 1 was given`.
-
-**Что не так:** `#[derive(Accounts)]` **не работает** с пустыми структурами.
-
-**Решение:** **убрать** заглушку. Anchor **позволяет** программу **без** инструкций.
-
-```rust
-use anchor_lang::prelude::*;
-
-declare_id!("EDzVvstsabPPHYx6QLgw1J8ZRFhJrGv2fiz2a6o9Kym9");
-
-pub mod constants;
-pub mod error;
-pub mod instructions;
-pub mod state;
-
-#[program]
-pub mod zk_pool {
-    // No instructions yet — added in stages 4.1.5 – 4.1.7.
-}
-```
-
-**Результат:** сборка проходит, IDL пустой (356 байт).
+**Решение:** убрать заглушку. Anchor **позволяет** программу **без** инструкций.
 
 **⚠️ Ошибка №4:** `unused import: super::*`.
 
 **Решение:** убрать строку.
 
-### Итоги 4.1.1
+### Итоги
 
-**Program ID (настоящий):** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
-
-**Артефакты:**
-- `onchain/target/deploy/zk_pool.so` — 57 480 байт.
-- `onchain/target/deploy/zk_pool-keypair.json` — 292 байта.
-- `onchain/target/idl/zk_pool.json` — 356 байт (пустой IDL).
+**Program ID:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
 
 **Коммит:** `b8f6fdf`.
 **Чекпоинт:** `.checkpoints/04.1.1-anchor-init/`.
-
-### Ошибки 4.1.1
-
-| # | Симптом | Причина | Решение |
-|---|---|---|---|
-| 1 | `Anchor workspace name must be a valid Rust identifier` | `anchor init .` использует имя директории | Инициализировать во временной папке |
-| 2 | `invalid --check-cfg argument` | Неправильный синтаксис lints | Объявить `anchor-debug`, `custom-heap`, `custom-panic` как features |
-| 3 | `E0107: struct takes 0 lifetime arguments` | `#[derive(Accounts)]` не работает с пустыми структурами | Убрать заглушку |
-| 4 | `unused import: super::*` | Пустой `#[program]` не использует | Убрать строку |
 
 ---
 
@@ -246,88 +133,249 @@ pub mod zk_pool {
 
 ### Зачем
 
-Определить **все** константы программы в **одном** месте. Многие из них **должны совпадать** с другими слоями (circuit, spec, verifier) — если разойдутся, on-chain `withdraw` не сработает.
+**Все** константы программы в одном месте. Многие из них **должны совпадать** с circuit/spec/verifier.
 
 ### Что делает
 
 **Seeds для PDA:**
 
-| Seed | Значение | Где используется |
-|---|---|---|
-| `POOL_SEED` | `b"pool3"` | Адрес `PoolState` |
-| `VAULT_SEED` | `b"vault3"` | Адрес vault (хранение SOL) |
-| `NULLIFIER_RECORD_SEED` | `b"nullifier_record"` | Адрес записи о nullifier'е |
+| Seed | Значение |
+|---|---|
+| `POOL_SEED` | `b"pool3"` |
+| `VAULT_SEED` | `b"vault3"` |
+| `NULLIFIER_RECORD_SEED` | `b"nullifier_record"` |
 
-**Почему `pool3` / `vault3`, а не `pool` / `vault`:** суффикс `3` — версия. В v2 был `pool2` / `vault2`. В v3 — `pool3` / `vault3`. Это **позволяет** разным версиям **сосуществовать** на одном блокчейне.
+**Почему `pool3`:** суффикс `3` — версия (v3). Позволяет разным версиям **сосуществовать**.
 
 **Merkle tree:**
 
-| Константа | Значение | Что значит |
+| Константа | Значение | Совпадает с |
 |---|---|---|
-| `TREE_DEPTH` | 20 | Глубина дерева |
-| `MAX_LEAVES` | 2^20 = 1 048 576 | Максимум листьев |
-| `ROOT_HISTORY_SIZE` | 10 | Сколько последних root'ов хранить |
-| `EMPTY_ROOT` | `[0u8; 32]` | Root пустого дерева |
+| `TREE_DEPTH` | 20 | `spec.json` → `circuit.tree_depth`, `withdrawal/src/main.nr` → `global TREE_DEPTH` |
+| `MAX_LEAVES` | 2^20 = 1 048 576 | — |
+| `ROOT_HISTORY_SIZE` | 10 | — |
+| `EMPTY_ROOT` | `[0u8; 32]` | — |
 
-**`TREE_DEPTH = 20`** должен совпадать:
-- `spec.json` → `circuit.tree_depth = 20`.
-- `circuits/withdrawal/src/main.nr` → `global TREE_DEPTH = 20`.
-
-**`ROOT_HISTORY_SIZE = 10`** — зачем: root меняется на каждом депозите. Если пользователь подготовил proof по старому root'у, а за это время прошёл **новый** депозит — proof бы **не прошёл**. Храним 10 последних root'ов, чтобы дать **окно** для подтверждения.
+**`ROOT_HISTORY_SIZE = 10`** — окно для подтверждения proof'а: root меняется на каждом депозите, храним 10 последних.
 
 **ZK proof:**
 
-| Константа | Значение | Что значит |
+| Константа | Значение | Совпадает с |
 |---|---|---|
-| `NR_PUBLIC_INPUTS` | 5 | Сколько публичных входов |
-| `PUBLIC_INPUTS_BYTES` | 172 | Размер кодированных входов |
-| `PROOF_LEN` | 324 | Размер Groth16-proof |
-| `VERIFIER_PROGRAM_ID` | `5t51iu6a...` | Program ID verifier'а |
+| `NR_PUBLIC_INPUTS` | 5 | `spec.json` → `circuit.nr_public_inputs` |
+| `PUBLIC_INPUTS_BYTES` | 172 | `spec.json` → `witness_layout.total_bytes` |
+| `PROOF_LEN` | 324 | Groth16 (фиксировано) |
+| `VERIFIER_PROGRAM_ID` | `5t51iu6a...` | verifier, задеплоенный на 3.4 |
 
-**`NR_PUBLIC_INPUTS = 5`** должен совпадать с `spec.json` → `circuit.nr_public_inputs = 5`.
-
-**`PUBLIC_INPUTS_BYTES = 172`** — 12-byte header + 5 × 32 = **172**.
-
-**`PROOF_LEN = 324`** — Groth16 фиксирован.
-
-**`VERIFIER_PROGRAM_ID`** — verifier, задеплоенный на этапе 3.4:
-`5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
-
-**⚠️ Если circuit изменится** → verifier надо **пересобрать** → Program ID **изменится** → эту константу надо **обновить**. Это **известное ограничение**, описанное в `PROJECT_CONTEXT.md`, раздел 7.4.
+**`VERIFIER_PROGRAM_ID`** — **если circuit изменится**, verifier надо **пересобрать**, Program ID **изменится**, константу **обновить**.
 
 **Экономика:**
 
-| Константа | Значение | Что значит |
-|---|---|---|
-| `MIN_DEPOSIT_AMOUNT` | 1 000 000 lamports (0.001 SOL) | Минимальный депозит |
+| Константа | Значение |
+|---|---|
+| `MIN_DEPOSIT_AMOUNT` | 1 000 000 lamports (0.001 SOL) |
 
-**Зачем:** предотвратить спам-депозиты, которые заполнят Merkle tree **мусором**. 1 млн lamports — относительно небольшая сумма, но **достаточная**, чтобы спам был **дорогим**.
+**Зачем:** предотвратить спам-депозиты.
 
-### Что делаем
+### Итоги
 
-Создать `onchain/programs/zk_pool/src/constants.rs` — см. `PROJECT_CONTEXT.md`, раздел 6. Ключевые моменты:
-- `use anchor_lang::prelude::*;` — для `pubkey!` макроса.
-- Все константы `pub`.
-- `pubkey!` макрос для `VERIFIER_PROGRAM_ID`.
+**88 строк**, ноль warnings.
 
-### Ожидаемый результат
+**Коммит:** `23c4dd9`.
+**Чекпоинт:** `.checkpoints/04.1.2-constants/`.
 
-```bash
-cat onchain/programs/zk_pool/src/constants.rs
+---
+
+## 4.1.3. `error.rs`, `events.rs`, `state.rs`
+
+### Зачем
+
+Определить:
+- **Ошибки** — понятные сообщения при провалах (недостаточный депозит, использованный nullifier).
+- **События** — indexer (этап 5) читает их из логов транзакции.
+- **Аккаунты** — `PoolState` и `NullifierRecord`.
+
+### `error.rs` — 13 ошибок
+
+| Категория | Ошибки |
+|---|---|
+| Pool | `PoolAlreadyInitialized`, `PoolNotInitialized` |
+| Deposit | `DepositBelowMinimum`, `TreeFull`, `RootUnchanged` |
+| Withdraw | `UnknownRoot`, `NullifierAlreadyUsed`, `RecipientMismatch`, `AmountMismatch`, `InsufficientVaultBalance` |
+| ZK proof | `ProofVerificationFailed`, `InvalidProofLength`, `InvalidPublicInputsLength` |
+
+**Коммит:** `c45cb75`.
+
+### `events.rs` — 2 события
+
+**`DepositEvent`** — payload **88 байт**:
+- `commitment [u8; 32]`
+- `leaf_index u64`
+- `new_root [u8; 32]`
+- `timestamp i64`
+
+**`WithdrawEvent`** — payload **80 байт**:
+- `nullifier_hash [u8; 32]`
+- `recipient Pubkey`
+- `amount u64`
+- `timestamp i64`
+
+**Важно:** порядок и типы полей **нельзя менять** после деплоя — indexer парсит по **бинарному** layout.
+
+### `state.rs` — 2 аккаунта
+
+**`PoolState`** — PDA `[POOL_SEED]`, размер **384 байта**:
+
+```rust
+pub struct PoolState {
+    pub authority: Pubkey,                            // 32
+    pub next_leaf_index: u64,                         // 8
+    pub total_deposits: u64,                          // 8
+    pub current_root_index: u64,                      // 8
+    pub roots: [[u8; 32]; ROOT_HISTORY_SIZE],         // 10 × 32 = 320
+}
 ```
 
-88 строк. `anchor build` — **ноль** warnings, **ноль** ошибок.
+**Методы:**
+- `is_known_root(&root)` — линейный поиск.
+- `add_root(new_root)` — кольцевой буфер.
+- `current_root()` — текущий root.
+- `has_room()` — есть ли место в дереве.
 
-### Коммит
+**`NullifierRecord`** — PDA `[NULLIFIER_RECORD_SEED, pool, nullifier_hash]`, размер **88 байт**:
 
-`23c4dd9` — feat(onchain): add program constants (stage 4.1.2).
+```rust
+pub struct NullifierRecord {
+    pub pool: Pubkey,
+    pub nullifier_hash: [u8; 32],
+    pub recipient: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+```
 
-### Чекпоинт
+**Если аккаунт существует** → nullifier использован. `init` constraint в `withdraw` **упадёт** при попытке создать второй раз — это **защита от double-spend**.
 
-`.checkpoints/04.1.2-constants/`:
-- `constants.rs` — копия.
-- `constants.rs.sha256` — `14e60b2cf58c156f1be28bae6283accad0b7994cde7ceb810841526ed624330c`.
-- `commit.txt` — `23c4dd9c9657794663c23bb2623c679e7a15b02e`.
+**Коммит:** `c45cb75`.
+
+**Чекпоинт:** `.checkpoints/04.1.3-types/`.
+
+---
+
+## 4.1.4. `encode_public_inputs`
+
+### Зачем
+
+**Самая ответственная функция.** Именно здесь в v2 **сломалось**: байты программы **не совпали** с байтами, ожидаемыми verifier'ом.
+
+**Что делает:** из **5 публичных входов** собирает **172-байтный** блоб в **точно том же формате**, что:
+- `withdrawal.pw` (из `sunspot prove`, этап 3.5),
+- `spec.json` → `witness_layout`,
+- будет генерировать frontend (этап 8).
+
+### Формат
+
+```
+[12-byte header]
+  NR_PUBLIC_INPUTS (u32 BE) = 5
+  0                 (u32 BE) = 0
+  NR_PUBLIC_INPUTS (u32 BE) = 5
+[5 × 32 bytes]
+  root
+  nullifier_hash
+  recipient (reduced to BN254)
+  recipient_binding
+  amount (right-aligned u64)
+```
+
+**Итого: 12 + 5 × 32 = 172 байта.**
+
+### Проблема: BN254 reduction
+
+**Solana Pubkey = 32 байта = 256 бит.** **BN254 prime ≈ 2^254.** Pubkey **может быть** больше модуля — тогда он **не помещается** в `Field`.
+
+**Решение:** `reduce_to_field(pubkey) = pubkey mod BN254_prime`.
+
+**Алгоритм:** повторное **вычитание** prime из input'а, пока результат **не станет** `< prime`.
+
+### Реализация
+
+```rust
+pub fn reduce_to_field(input: &[u8; 32]) -> [u8; 32] {
+    let mut value = *input;
+    for _ in 0..5 {                    // ← 5, не 4!
+        if !is_ge(&value, &BN254_PRIME_BE) {
+            break;
+        }
+        value = sub_be(&value, &BN254_PRIME_BE);
+    }
+    value
+}
+```
+
+`is_ge` и `sub_be` — big-endian сравнение и вычитание.
+
+### ⚠️ Ошибка: цикл `for _ in 0..4`
+
+**Симптом:** тест `test_reduce_to_field_max` **падал** с `assertion failed: !is_ge(&reduced, &BN254_PRIME_BE)`.
+
+**Причина:** максимум `[0xff; 32]` = `2^256 - 1` ≈ **4.006 × p**. Четырёх итераций **не всегда достаточно** — если результат близок к `5 × p`, нужно **5** вычитаний.
+
+**Решение:** `for _ in 0..5`.
+
+**Урок:** прежде чем писать цикл `reduce`, **посчитай** worst case. `max_input / p` — сколько итераций **максимум** нужно.
+
+### `encode_public_inputs`
+
+```rust
+pub fn encode_public_inputs(
+    root: &[u8; 32],
+    nullifier_hash: &[u8; 32],
+    recipient: &Pubkey,
+    recipient_binding: &[u8; 32],
+    amount: u64,
+) -> [u8; PUBLIC_INPUTS_BYTES] {
+    let mut out = [0u8; PUBLIC_INPUTS_BYTES];
+
+    // 12-byte header
+    out[0..4].copy_from_slice(&NR_PUBLIC_INPUTS.to_be_bytes());
+    out[4..8].copy_from_slice(&0u32.to_be_bytes());
+    out[8..12].copy_from_slice(&NR_PUBLIC_INPUTS.to_be_bytes());
+
+    // 5 × 32 bytes
+    out[12..44].copy_from_slice(root);
+    out[44..76].copy_from_slice(nullifier_hash);
+    out[76..108].copy_from_slice(&reduce_to_field(&recipient.to_bytes()));
+    out[108..140].copy_from_slice(recipient_binding);
+    out[140..164].copy_from_slice(&[0u8; 24]);           // 24 zero bytes
+    out[164..172].copy_from_slice(&amount.to_be_bytes()); // u64 BE
+
+    out
+}
+```
+
+### 9 unit-тестов
+
+| Тест | Что проверяет |
+|---|---|
+| `test_encode_length_is_172` | Размер — 172 |
+| `test_header` | `[0,0,0,5, 0,0,0,0, 0,0,0,5]` |
+| `test_public_inputs_positions` | Каждое поле на своём месте |
+| `test_reduce_to_field_small_value_unchanged` | Маленькие значения не меняются |
+| `test_reduce_to_field_prime_is_zero` | `p mod p = 0` |
+| `test_reduce_to_field_max` | `(2^256 - 1) mod p < p` |
+| `test_is_ge_equal` | `a >= a` |
+| `test_sub_be_simple` | Простое вычитание |
+| `test_sub_be_borrow` | Вычитание с borrow |
+
+**Результат:** 9 / 9 passed.
+
+### Итоги
+
+**293 строки**, ноль warnings, 9 unit-тестов.
+
+**Коммит:** `dc0fb5e`.
+**Чекпоинт:** `.checkpoints/04.1.4-encoding/`.
 
 ---
 
@@ -339,15 +387,17 @@ cat onchain/programs/zk_pool/src/constants.rs
 | 2 | `invalid --check-cfg argument` | 4.1.1 | Объявить `anchor-debug`, `custom-heap`, `custom-panic` как features |
 | 3 | `E0107: struct takes 0 lifetime arguments` | 4.1.1 | Убрать заглушку с `#[derive(Accounts)]` |
 | 4 | `unused import: super::*` | 4.1.1 | Убрать строку |
+| 5 | `test_reduce_to_field_max` FAILED | 4.1.4 | Цикл `0..4` → `0..5` |
 
 ---
 
 ## Что дальше
 
-**Следующий под-этап:** 4.1.3 — `error.rs`, `events.rs`, `state.rs`.
+**Следующий под-этап:** 4.1.5 — инструкция `pool`.
 
 **Что будет:**
-- **`ZkPoolError`** — 10+ вариантов ошибок (недостаточный депозит, неизвестный root, использованный nullifier и т.д.).
-- **`DepositEvent`** и **`WithdrawEvent`** — Anchor events для indexer'а.
-- **`PoolState`** — аккаунт пула: authority, current_root_index, roots[10], next_leaf_index, total_deposits.
-- **`NullifierRecord`** — аккаунт-пометка «nullifier использован».
+- Структура `Pool` (accounts).
+- Инициализация `PoolState` PDA.
+- Инициализация `vault` PDA.
+- Anchor handler `handler_pool`.
+- Регистрация в `lib.rs`.
