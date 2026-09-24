@@ -1,7 +1,6 @@
 //! zk_pool — private SOL transfers on Solana using ZK proofs.
 //!
-//! Stage 4.1.6: `pool` and `deposit` instructions.
-//! `withdraw` is added in 4.1.7.
+//! Stage 4.1.7: `pool`, `deposit`, `withdraw` instructions.
 
 use anchor_lang::prelude::*;
 
@@ -33,10 +32,6 @@ pub mod zk_pool {
 
     /// Deposit SOL into the pool.
     ///
-    /// The depositor provides a commitment and the new Merkle root after
-    /// inserting it. The instruction transfers SOL to the vault and updates
-    /// the tree metadata.
-    ///
     /// **Trust model:** does NOT verify that `new_root` is the correct
     /// result of inserting `commitment`. See `docs/DEMO-NOTICE.md`.
     pub fn deposit(
@@ -46,5 +41,31 @@ pub mod zk_pool {
         amount: u64,
     ) -> Result<()> {
         instructions::deposit::handler_deposit(ctx, commitment, new_root, amount)
+    }
+
+    /// Withdraw SOL from the pool using a Groth16 proof.
+    ///
+    /// Verifies the proof via CPI to the Sunspot verifier, prevents
+    /// double-spend via `NullifierRecord` PDA, and transfers SOL from
+    /// the vault to the recipient.
+    #[allow(clippy::too_many_arguments)]
+    pub fn withdraw(
+        ctx: Context<Withdraw>,
+        proof: Vec<u8>,
+        nullifier_hash: [u8; 32],
+        root: [u8; 32],
+        recipient: Pubkey,
+        amount: u64,
+        recipient_binding: [u8; 32],
+    ) -> Result<()> {
+        instructions::withdraw::handler_withdraw(
+            ctx,
+            proof,
+            nullifier_hash,
+            root,
+            recipient,
+            amount,
+            recipient_binding,
+        )
     }
 }
