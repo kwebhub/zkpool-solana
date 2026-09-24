@@ -9,24 +9,15 @@
 
 ## TL;DR
 
-**Что делаем:** пишем on-chain программу `zk_pool` на Rust + Anchor. Три инструкции: `pool` (инициализация пула), `deposit` (внести SOL), `withdraw` (вывести SOL с ZK-proof).
+**Что делаем:** пишем on-chain программу `zk_pool` на Rust + Anchor. Три инструкции: `pool`, `deposit`, `withdraw`.
 
-**Зачем:** это **центральная** часть проекта — она связывает circuit (этап 2), verifier (этап 3) и клиент (этап 8) через **единый формат** публичных входов.
+**Зачем:** центральная часть проекта — связывает circuit (этап 2), verifier (этап 3) и клиент (этап 8) через **единый формат** публичных входов.
 
 **Сколько шагов:** 9 под-этапов (4.1.1 – 4.1.9).
 
-**Сколько времени:** ~3 часа.
+**Что понадобится:** `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, devnet-кошелёк.
 
-**Что понадобится:**
-- `01-setup.md` — Docker.
-- `02-circuits.md` — ACIR `withdrawal.json`.
-- `03-sunspot.md` — verifier Program ID.
-- Devnet-кошелёк с SOL.
-
-**Что получится:**
-- Программа `zk_pool` на devnet.
-- IDL для Codama.
-- LiteSVM E2E-тест (4.5).
+**Что получится:** программа `zk_pool` на devnet, IDL для Codama, LiteSVM E2E-тест (4.5).
 
 **Следующий этап:** `05-backend.md`.
 
@@ -42,42 +33,20 @@
 | 4.1.4 | `encode_public_inputs` | ✅ |
 | 4.1.5 | Инструкция `pool` | ✅ |
 | 4.1.6 | Инструкция `deposit` | ✅ |
-| 4.1.7 | Инструкция `withdraw` | ← следующий |
-| 4.1.8 | Тесты | ⏳ |
+| 4.1.7 | Инструкция `withdraw` | ✅ |
+| 4.1.8 | Тесты | ← следующий |
 | 4.1.9 | Деплой на devnet | ⏳ |
 
 ---
 
-## 4.1.1. Anchor-workspace
+## 4.1.1 – 4.1.4 (краткая сводка)
 
-См. предыдущую версию заметки (4.1.1 не менялась).
+**4.1.1 — Anchor-workspace.** Коммит `b8f6fdf`.
+**4.1.2 — `constants.rs`.** Коммит `23c4dd9`.
+**4.1.3 — `error.rs`, `events.rs`, `state.rs`.** Коммит `c45cb75`.
+**4.1.4 — `encode_public_inputs`.** Коммит `dc0fb5e`.
 
-**Program ID:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
-**Коммит:** `b8f6fdf`.
-
----
-
-## 4.1.2. `constants.rs`
-
-См. предыдущую версию заметки (4.1.2 не менялась).
-
-**Коммит:** `23c4dd9`.
-
----
-
-## 4.1.3. `error.rs`, `events.rs`, `state.rs`
-
-См. предыдущую версию заметки (4.1.3 не менялась).
-
-**Коммит:** `c45cb75`.
-
----
-
-## 4.1.4. `encode_public_inputs`
-
-См. предыдущую версию заметки (4.1.4 не менялась).
-
-**Коммит:** `dc0fb5e`.
+Полное описание — в `PROJECT_CONTEXT.md`, раздел 6.
 
 ---
 
@@ -85,95 +54,29 @@
 
 ### Зачем
 
-Инициализировать пул. Создаются **два** PDA:
-1. **`PoolState`** — метаданные пула.
-2. **`vault`** — аккаунт, хранящий SOL.
+Инициализация пула. Создаются **два** PDA: `PoolState` и `vault`.
 
-### Структура accounts
+### Структура
 
 ```rust
 #[derive(Accounts)]
 pub struct Pool<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
-
-    #[account(
-        init,
-        payer = authority,
-        space = 8 + PoolState::INIT_SPACE,
-        seeds = [POOL_SEED],
-        bump,
-    )]
+    #[account(init, payer = authority, space = 8 + PoolState::INIT_SPACE,
+              seeds = [POOL_SEED], bump)]
     pub pool: Account<'info, PoolState>,
-
-    #[account(
-        init,
-        payer = authority,
-        space = 0,
-        seeds = [VAULT_SEED, pool.key().as_ref()],
-        bump,
-    )]
-    /// CHECK: this account holds SOL only; it has no data and is never deserialized.
+    #[account(init, payer = authority, space = 0,
+              seeds = [VAULT_SEED, pool.key().as_ref()], bump)]
+    /// CHECK: ...
     pub vault: UncheckedAccount<'info>,
-
     pub system_program: Program<'info, System>,
 }
 ```
 
-### Разбор
-
-| Что | Зачем |
-|---|---|
-| `Signer<'info>` для `authority` | Плательщик, должен подписать |
-| `init` для `pool` | Создаёт аккаунт, **падает**, если уже существует |
-| `space = 8 + PoolState::INIT_SPACE` | 8 — Anchor discriminator, `INIT_SPACE` — размер структуры |
-| `seeds = [POOL_SEED]` | Детерминированный PDA |
-| `init` для `vault` со `space = 0` | Пустой аккаунт — **только** для хранения SOL |
-| `UncheckedAccount<'info>` | Мы **не читаем** данные — только SOL |
-| `Program<'info, System>` | Anchor требует для `init` |
-
-### Handler
-
-```rust
-pub fn handler_pool(ctx: Context<Pool>) -> Result<()> {
-    let pool = &mut ctx.accounts.pool;
-
-    pool.authority = ctx.accounts.authority.key();
-    pool.next_leaf_index = 0;
-    pool.total_deposits = 0;
-    pool.current_root_index = 0;
-    pool.roots = [[0u8; 32]; ROOT_HISTORY_SIZE];
-
-    msg!("Pool initialized: ...");
-    Ok(())
-}
-```
-
-### Итоги 4.1.5
-
-**69 строк**, ноль warnings.
-
-**IDL содержит:**
-- Инструкцию `pool` с discriminator `[134, 215, 119, 168, 28, 199, 193, 127]`.
-- Accounts: `authority`, `pool`, `vault`.
-- PDA seeds для `pool`: `b"pool3"`, для `vault`: `b"vault3"`.
+**Ключевое:** `space = 0` для vault — аккаунт **только** для хранения SOL, без данных.
 
 **Коммит:** `553634e`.
-**Чекпоинт:** `.checkpoints/04.1.5-pool/`.
-
-### ⚠️ Проблема: имя handler'а
-
-Первая версия: `pub fn handler(...)` в обоих модулях (`pool`, `deposit`). В `instructions.rs` было `pub use pool::*;` и `pub use deposit::*;`. Компилятор выдал:
-
-```
-warning: ambiguous glob re-exports
-```
-
-**Решение:** переименовать функции в **уникальные** имена:
-- `pool::handler` → `pool::handler_pool`.
-- `deposit::handler` → `deposit::handler_deposit`.
-
-Это **то, что было в v2** — и именно поэтому.
 
 ---
 
@@ -181,149 +84,176 @@ warning: ambiguous glob re-exports
 
 ### Зачем
 
-Принять SOL в vault. Клиент передаёт **commitment** и **new_root** — новый Merkle root после добавления commitment'а в дерево.
+Принять SOL в vault.
 
-### ⚠️ Trust model — важное замечание
+### ⚠️ Trust model
 
-**Инструкция НЕ проверяет** on-chain, что `new_root` — правильный результат вставки `commitment` в дерево. **Злоумышленник** может прислать **мусорный** `new_root` и **сломать** дерево для всех.
+**Инструкция НЕ проверяет** on-chain, что `new_root` — результат вставки `commitment`. Известное ограничение из v2.
 
-**Это — известное ограничение**, унаследованное из v2. Исправление требует **полного** Merkle tree on-chain или **дополнительного** ZK-proof корректности root'а — и то, и другое **вне** scope v3.
+### Структура + handler
 
-**Для production** — см. `docs/DEMO-NOTICE.md`.
+См. `PROJECT_CONTEXT.md`. Ключевое:
+- Валидация `amount >= MIN_DEPOSIT_AMOUNT`.
+- Проверка `has_room()`.
+- Проверка `new_root != current_root`.
+- **CPI-перевод SOL** через `transfer`.
+- Обновление `PoolState`.
+- `emit!(DepositEvent)`.
 
-### Структура accounts
+**Коммит:** `5455d04`.
+
+### ⚠️ Ошибка `E0308`: `CpiContext::new` в Anchor 1.2.0
+
+**Симптом:** `expected Pubkey, found AccountInfo`.
+
+**Причина:** в Anchor **1.2.0** сигнатура изменилась:
+```rust
+pub fn new(program_id: Pubkey, accounts: T) -> Self
+```
+**Не** `AccountInfo`, а **`Pubkey`**.
+
+**Решение:**
+```rust
+CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts)
+```
+
+**Урок:** всегда смотри сигнатуры **своей** версии крейта. Путь: `~/.cargo/registry/src/index.crates.io-*/anchor-lang-1.2.0/src/context.rs`.
+
+### ⚠️ Ошибка `E0432`: `unresolved import crate`
+
+**Симптом:** после замены glob re-exports на явные — `unresolved import crate` в `#[program]`.
+
+**Причина:** Anchor-макрос **требует** видимости `__client_accounts_*` — генерируемых структур для CPI. Их экспортирует **glob** `pub use pool::*;`.
+
+**Решение:** **вернуть** glob re-exports. Проблема `ambiguous` решается **переименованием** handler'ов.
+
+**Урок:** Anchor-макрос **неявно** использует glob-reexport'ы. Не «оптимизируй» их.
+
+---
+
+## 4.1.7. Инструкция `withdraw`
+
+### Зачем
+
+**Главный под-этап.** Именно здесь в v2 сломалось (`InvalidInstructionData`).
+
+### Что делает
+
+1. Проверяет длину proof.
+2. Проверяет, что `recipient` в инструкции **совпадает** с аккаунтом `to`.
+3. Проверяет, что `root` **известен**.
+4. **Кодирует** 172-байтный блоб из публичных входов.
+5. **Вызывает verifier** через CPI с **правильным** порядком `[proof || public_witness]`.
+6. Создаёт `NullifierRecord` PDA — защита от double-spend.
+7. Переводит SOL из vault в recipient.
+8. Эмитит `WithdrawEvent`.
+
+### Структура accounts (7)
 
 ```rust
 #[derive(Accounts)]
-pub struct Deposit<'info> {
-    #[account(mut)]
-    pub depositor: Signer<'info>,
-
-    #[account(
-        mut,
-        seeds = [POOL_SEED],
-        bump,
-    )]
-    pub pool: Account<'info, PoolState>,
-
-    #[account(
-        mut,
-        seeds = [VAULT_SEED, pool.key().as_ref()],
-        bump,
-    )]
-    /// CHECK: this account holds SOL only; ...
+#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]
+pub struct Withdraw<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    #[account(mut, seeds = [POOL_SEED], bump)] pub pool: Account<'info, PoolState>,
+    #[account(init, payer = payer, space = 8 + NullifierRecord::INIT_SPACE,
+              seeds = [NULLIFIER_RECORD_SEED, pool.key().as_ref(),
+                       nullifier_hash.as_ref()], bump)]
+    pub nullifier_record: Account<'info, NullifierRecord>,
+    #[account(mut, seeds = [VAULT_SEED, pool.key().as_ref()], bump)]
+    /// CHECK: ...
     pub vault: UncheckedAccount<'info>,
-
+    #[account(mut)] /// CHECK: ...
+    pub to: UncheckedAccount<'info>,
+    #[account(address = VERIFIER_PROGRAM_ID)] /// CHECK: ...
+    pub verifier_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 ```
 
-### Handler
+**Ключевое:**
+- `#[instruction(proof, nullifier_hash)]` — **оба** аргумента **в правильном порядке**.
+- `init` для `nullifier_record` — **падает**, если уже существует (double-spend).
+- `address = VERIFIER_PROGRAM_ID` — **проверка** адреса verifier'а.
+
+### ⚠️ Критично: порядок CPI
+
+**Смотрим исходник verifier'а** (`~/sunspot/gnark-solana/crates/verifier-bin/src/lib.rs`):
 
 ```rust
-pub fn handler_deposit(
-    ctx: Context<Deposit>,
-    commitment: [u8; 32],
-    new_root: [u8; 32],
-    amount: u64,
-) -> Result<()> {
-    let pool = &mut ctx.accounts.pool;
-
-    // 1. Validate amount
-    require!(amount >= MIN_DEPOSIT_AMOUNT, ZkPoolError::DepositBelowMinimum);
-
-    // 2. Validate tree has room
-    require!(pool.has_room(), ZkPoolError::TreeFull);
-
-    // 3. Validate new_root differs from current
-    require!(new_root != pool.current_root(), ZkPoolError::RootUnchanged);
-
-    // 4. Transfer SOL (CPI)
-    let cpi_accounts = Transfer {
-        from: ctx.accounts.depositor.to_account_info(),
-        to: ctx.accounts.vault.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
-    transfer(cpi_ctx, amount)?;
-
-    // 5. Update pool state
-    let leaf_index = pool.next_leaf_index;
-    pool.next_leaf_index = leaf_index.checked_add(1).ok_or(ZkPoolError::TreeFull)?;
-    pool.total_deposits = pool.total_deposits.checked_add(1).unwrap();
-    pool.add_root(new_root);
-
-    // 6. Emit event
-    emit!(DepositEvent {
-        commitment,
-        leaf_index,
-        new_root,
-        timestamp: Clock::get()?.unix_timestamp,
-    });
-
-    Ok(())
-}
+let proof_len = instruction_data.len() - (12 + NR_INPUTS * 32);
+let proof_bytes = &instruction_data[..proof_len];
+let public_witness_bytes = &instruction_data[proof_len..];
 ```
 
-### ⚠️ Ошибка: `E0308: mismatched types` в `CpiContext::new`
+**Verifier ожидает:**
+```
+[proof: PROOF_LEN bytes][public_witness: 12 + 5*32 = 172 bytes]
+```
+
+**Proof ПЕРВЫМ**, public witness **ВТОРЫМ**.
+
+**Мой черновик был неверным** — я написал `[public_inputs || proof]`. **Переписал** после просмотра исходника.
+
+### Правильный CPI
+
+```rust
+let mut data = Vec::with_capacity(PROOF_LEN + PUBLIC_INPUTS_BYTES);
+data.extend_from_slice(&proof);           // 324 bytes
+data.extend_from_slice(&public_inputs);   // 172 bytes
+
+let ix = Instruction {
+    program_id: VERIFIER_PROGRAM_ID,
+    accounts: vec![],
+    data,
+};
+
+invoke_signed(&ix, &[ctx.accounts.verifier_program.to_account_info()], &[])?;
+```
+
+**Никаких accounts у verifier'а** — он самодостаточен, читает только `instruction_data`.
+
+### ⚠️ Ошибка `E0277`: `#[instruction(...)]` type mismatch
 
 **Симптом:**
 
 ```
-error[E0308]: mismatched types
-  --> programs/zk_pool/src/instructions/deposit.rs:91:35
-   |
-91 |     let cpi_ctx = CpiContext::new(ctx.accounts.system_program.to_account_info(), cpi_accounts);
-   |                   --------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Pubkey`, found `AccountInfo`
+error[E0277]: instruction handler argument type `Vec<u8>` does not match
+              `#[instruction(...)]` attribute type `[u8; 32]`
 ```
 
-**Причина:** в **Anchor 1.2.0** сигнатура `CpiContext::new` **изменилась**:
+**Причина:** атрибут `#[instruction(nullifier_hash: [u8; 32])]` — **перечисляет** аргументы **в порядке**, в котором они идут в handler'е. Но **первый** аргумент — `proof: Vec<u8>`, а не `nullifier_hash`.
+
+**Решение:** указать **все** аргументы **в правильном порядке**:
 
 ```rust
-pub fn new(program_id: Pubkey, accounts: T) -> Self
+#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]
 ```
 
-**Первый аргумент — `Pubkey`, не `AccountInfo`.** В **старых** версиях Anchor было `AccountInfo`. Мы писали код по памяти из v2 — а там была **другая** версия.
+**Урок:** `#[instruction(...)]` **не** выбирает «нужный» аргумент из списка. Он **сверяет** **весь** список по порядку.
 
-**Решение:** использовать `.key()` вместо `.to_account_info()`:
+### Перевод SOL из vault
+
+Vault — PDA, без приватного ключа. **Нельзя** использовать `system_program::transfer`. Используем **прямую** манипуляцию lamports:
 
 ```rust
-let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
+**ctx.accounts.vault.try_borrow_mut_lamports()? = vault_lamports - amount;
+**ctx.accounts.to.try_borrow_mut_lamports()? = to_lamports + amount;
 ```
 
-**Урок:** **всегда** смотри сигнатуры **своей** версии крейта, а не копируй из старых примеров. Anchor **меняет** API между минорными версиями.
+**Почему безопасно:** vault принадлежит **нашей** программе, seeds валидированы, `require!(vault_lamports >= amount)`.
 
-**Как искать:** `~/.cargo/registry/src/index.crates.io-*/anchor-lang-1.2.0/src/context.rs`.
+### Итоги 4.1.7
 
-### ⚠️ Ошибка: `E0432: unresolved import crate` после уборки glob re-exports
+**216 строк**, ноль warnings.
 
-**Симптом:**
+**IDL:**
+- Discriminator: `[183, 18, 70, 156, 148, 109, 161, 34]`.
+- 7 accounts: `payer`, `pool`, `nullifier_record`, `vault`, `to`, `verifier_program`, `system_program`.
+- 6 args: `proof`, `nullifier_hash`, `root`, `recipient`, `amount`, `recipient_binding`.
 
-```
-error[E0432]: unresolved import `crate`
-  --> programs/zk_pool/src/lib.rs:19:1
-   |
-19 | #[program]
-   | ^^^^^^^^^^
-   | unresolved import
-   | help: a similar path exists: `deposit::__client_accounts_deposit`
-```
-
-**Причина:** мы **убрали** `pub use deposit::*;` и заменили на `pub use deposit::Deposit;`. Anchor-макрос `#[program]` **требует**, чтобы были **видны** сгенерированные структуры `__client_accounts_*` — они нужны для **CPI**.
-
-**Решение:** **вернуть** glob re-exports. Проблема `ambiguous glob re-exports` решается **переименованием** handler'ов (см. 4.1.5).
-
-**Урок:** Anchor-макрос **неявно** использует glob-reexport'ы. Не пытайся «оптимизировать» их в явные импорты — сломается.
-
-### Итоги 4.1.6
-
-**119 строк**, ноль warnings.
-
-**IDL содержит:**
-- Инструкцию `deposit` с accounts: `depositor`, `pool`, `vault`, `system_program`.
-- Аргументы: `commitment`, `new_root`, `amount`.
-
-**Коммит:** `5455d04`.
-**Чекпоинт:** `.checkpoints/04.1.6-deposit/`.
+**Коммит:** `ce71a47`.
+**Чекпоинт:** `.checkpoints/04.1.7-withdraw/`.
 
 ---
 
@@ -337,20 +267,23 @@ error[E0432]: unresolved import `crate`
 | 4 | `unused import: super::*` | 4.1.1 | Убрать строку |
 | 5 | `test_reduce_to_field_max` FAILED | 4.1.4 | Цикл `0..4` → `0..5` |
 | 6 | `ambiguous glob re-exports` | 4.1.5 | Переименовать `handler` → `handler_pool`, `handler_deposit` |
-| 7 | `E0308: mismatched types` в `CpiContext::new` | 4.1.6 | Первый аргумент — `Pubkey` (Anchor 1.2.0), не `AccountInfo` |
-| 8 | `E0432: unresolved import crate` | 4.1.6 | Вернуть glob re-exports (Anchor-макрос требует `__client_accounts_*`) |
+| 7 | `E0308: mismatched types` в `CpiContext::new` | 4.1.6 | `Pubkey` в 1.2.0, а не `AccountInfo` |
+| 8 | `E0432: unresolved import crate` | 4.1.6 | Вернуть glob re-exports |
+| 9 | `E0277: #[instruction] type mismatch` | 4.1.7 | `#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]` |
+| 10 | **Неправильный порядок CPI** | 4.1.7 | `[proof \|\| public_witness]`, а не наоборот |
+
+**Ошибка №10 — критичная.** Именно она привела бы к `InvalidInstructionData` в v2. Мы её **поймали** на этапе **проектирования**, посмотрев исходник verifier'а.
 
 ---
 
 ## Что дальше
 
-**Следующий под-этап:** 4.1.7 — инструкция `withdraw`.
+**Следующий под-этап:** 4.1.8 — тесты.
 
 **Что будет:**
-- Приём proof, nullifier_hash, root, recipient, amount, recipient_binding.
-- Проверка, что `recipient` в инструкции совпадает с `recipient` в proof.
-- Проверка `pool.is_known_root(&root)`.
-- Создание `NullifierRecord` PDA (защита от double-spend).
-- Вызов verifier через **CPI** с 172-байтным блобом из `encode_public_inputs`.
-- Перевод SOL из vault в recipient.
-- **Главный под-этап**: именно здесь в v2 сломалось.
+- Проверка Program ID и `VERIFIER_PROGRAM_ID` — parsing.
+- Проверка детерминизма PDA.
+- Проверка констант (`TREE_DEPTH`, `NR_PUBLIC_INPUTS`, `MIN_DEPOSIT_AMOUNT`).
+- Проверка размеров аккаунтов (`PoolState` 384, `NullifierRecord` 88).
+- Проверка размеров событий (88, 80).
+- Проверка `encode_public_inputs` (уже есть 9 тестов в `encoding.rs`).

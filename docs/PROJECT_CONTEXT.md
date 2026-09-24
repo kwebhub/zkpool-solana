@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-24 (after stage 3.7 — documentation enrichment complete)
+> **Last updated:** 2026-09-24 (after stage 4.1.7 — withdraw instruction)
 
 ---
 
@@ -22,9 +22,9 @@ git commit -m "..." && git push
 
 ### 0.2. Files are given in full — ALWAYS
 
-When the assistant asks the user to create or modify a file, it gives **the complete file contents**. Not a fragment, not "replace line N".
+When the assistant asks the user to create or modify a file, it gives **the complete file contents**. Not a fragment, not "replace line N", not "find section X".
 
-**Do NOT** say "replace this line". **DO** say "open file X and replace its entire contents with:".
+**Do NOT** say "replace this section". **DO** say "open file X and replace its entire contents with:".
 
 ### 0.3. Language
 
@@ -118,7 +118,8 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 │ SOLANA                                                           │
 │ • Wallet:            5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc │
 │ • Verifier program:  5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ │
-│ • zk_pool program:   (TBD after Stage 4)                         │
+│ • zk_pool program:   8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm │
+│   (built locally; not yet deployed to devnet)                    │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,7 +129,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Smart contract | Anchor | 1.1.2 |
+| Smart contract | Anchor | 1.1.2 (resolved to 1.2.0) |
 | ZK circuit | Noir / nargo | 1.0.0-rc.2 |
 | ZK backend | Sunspot | 1.0.0 |
 | ZK verification | gnark-solana | v2.0.0 |
@@ -153,19 +154,6 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 See `docs/notes/00-checkpoints.md`.
 
 **Rule:** after each stage, copy generated artifacts to `.checkpoints/NN-name/`, record SHA-256 in `manifest.txt`, record commit hash in `commit.txt`.
-
-**Key comparisons planned:**
-
-| Artifact | Created in stage | Compared in stage |
-|---|---|---|
-| `hash2.json`, `hashes.json`, `withdrawal.json` | 2 | 3, 6, 7, 8 |
-| `Prover.toml` (reference witness) | 3 | 4, 7, 8 |
-| `withdrawal.ccs`, `.pk`, `.vk`, `.so` | 3 | 4, 7 |
-| `proof`, `public_witness` (local) | 3 | 7 |
-| `encode_public_inputs` (172 bytes) | 4 | 7, 8 |
-| `zk_pool.json` (IDL) | 4 | 8 (Codama client) |
-| witness from `useWithdraw.ts` | 8 | must equal `Prover.toml` |
-| Instruction data from `useWithdraw.ts` | 8 | must equal bytes built by `encode_public_inputs` |
 
 ---
 
@@ -195,52 +183,77 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 ### ✅ Stage 3. Sunspot verifier (2026-09-23 — 2026-09-24)
 
-- **3.0 — Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`, 5 SOL via faucet. Commit: `e9ddbe5`.
-- **3.1 — `sunspot compile`:** `.ccs` (642 177 B), SHA-256 `a2baffa4...`.
-- **3.2 — `sunspot setup`:** `.pk` (2 145 109 B) + `.vk` (972 B), SHA-256 `1e7a6642...` and `6279a9e6...`.
-- **3.3 — `sunspot deploy`:** `.so` (87 312 B) + keypair, verifier Program ID `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`, SHA-256 `117fae71...`.
-- **3.4 — `solana program deploy`:** ProgramData `4RyRCMSUsA6VJkRLFABuTxT4e2baovEy9fWH67MTUUFt`, balance 0.444 SOL, signature `wE9xVi9Er6NX2GF57dzedxKtKP6KQPrdZS2Nb2oqsfrRkpSjRZm8PQA8WK8pjPa8G728cb1WRLfGFEm2uJ5kZVU`.
-- **3.5 — Local verification:** witness → proof → verify. `sunspot verify` → **`✅ Verification successful!`**.
-- **3.6 — Final checkpoint**: `.checkpoints/03.6-stage-3-final/`. Commit: `441b9d2`, docs commit `e32058e`.
+- **3.0 — Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`, 5 SOL. Commit: `e9ddbe5`.
+- **3.1 — `sunspot compile`:** `.ccs` (642 177 B).
+- **3.2 — `sunspot setup`:** `.pk` (2 145 109 B) + `.vk` (972 B).
+- **3.3 — `sunspot deploy`:** `.so` (87 312 B), verifier Program ID `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
+- **3.4 — `solana program deploy`:** on devnet, balance 0.444 SOL.
+- **3.5 — Local verification:** `sunspot verify` → `✅ Verification successful!`.
+- **3.6 — Final checkpoint.** Commit: `441b9d2`.
 
 ### ✅ Stage 3.7. Documentation enrichment (2026-09-24)
 
-**Goal:** turn `docs/notes/*.md` into portfolio-quality tutorial material for Medium / Mirror.xyz.
+- `docs/notes/00-glossary.md` — 545 lines, 76 terms.
+- `docs/notes/00-zk-primer.md` — 317 lines, 14 sections.
+- `docs/notes/01-setup.md` — 762 lines (was 165).
+- `docs/notes/02-circuits.md` — 957 lines (was 301).
+- `docs/notes/03-sunspot.md` — 996 lines (was 792).
 
-Created:
-- `docs/notes/00-glossary.md` — 545 lines, 76 terms across 7 sections.
-- `docs/notes/00-zk-primer.md` — 317 lines, 14 sections. Introduction to ZK for readers without prior experience.
+### 🚧 Stage 4. Anchor program (2026-09-24)
 
-Enriched:
-- `docs/notes/01-setup.md` — 762 lines (was 165), 16 sections. TL;DR, why-blocks, expected results, diagrams, cross-references.
-- `docs/notes/02-circuits.md` — 957 lines (was 301), 17 sections. Same additions plus a full error catalog.
-- `docs/notes/03-sunspot.md` — 996 lines (was 792), 15 sections. Same additions plus a pipeline diagram.
+**4.1.1 — Anchor workspace** ✅ (commit `b8f6fdf`):
+- `onchain/` created via `anchor init` in a temp dir.
+- `Anchor.toml`, `Cargo.toml`, `rust-toolchain.toml`.
+- Program ID: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
+- `.so`: 57 480 bytes.
 
-Structure:
-- `docs/notes/assets/` — folders for screenshots (01-setup, 02-circuits, 03-sunspot). No files yet; screenshots are captured as we go.
-- `docs/notes/assets/README.md` — created, then removed (rules live only in section 14.5).
+**4.1.2 — `constants.rs`** ✅ (commit `23c4dd9`):
+- Seeds: `POOL_SEED=b"pool3"`, `VAULT_SEED=b"vault3"`, `NULLIFIER_RECORD_SEED=b"nullifier_record"`.
+- `TREE_DEPTH=20`, `MAX_LEAVES=2^20`, `ROOT_HISTORY_SIZE=10`.
+- `NR_PUBLIC_INPUTS=5`, `PUBLIC_INPUTS_BYTES=172`, `PROOF_LEN=324`.
+- `VERIFIER_PROGRAM_ID=5t51iu6a...`, `MIN_DEPOSIT_AMOUNT=1_000_000`.
 
-Commits:
-- `02fc3ea` — glossary.
-- `69005a9` — ZK primer.
-- `f996e2b` — enrich 01-setup.
-- `49968fd` — enrich 02-circuits.
-- `73f00e0` — enrich 03-sunspot.
+**4.1.3 — `error.rs`, `events.rs`, `state.rs`** ✅ (commit `c45cb75`):
+- 13 errors in `ZkPoolError`.
+- `DepositEvent` (88 B), `WithdrawEvent` (80 B).
+- `PoolState` (384 B), `NullifierRecord` (88 B).
+
+**4.1.4 — `encoding.rs`** ✅ (commit `dc0fb5e`):
+- `encode_public_inputs` → 172 bytes.
+- `reduce_to_field` for BN254 reduction.
+- 9 unit tests.
+
+**4.1.5 — `pool` instruction** ✅ (commit `553634e`):
+- Creates `PoolState` PDA + `vault` PDA.
+- `handler_pool`.
+- Discriminator: `[134, 215, 119, 168, 28, 199, 193, 127]`.
+
+**4.1.6 — `deposit` instruction** ✅ (commit `5455d04`):
+- Validates amount, root, tree room.
+- CPI transfer SOL to vault.
+- Updates `PoolState`, emits `DepositEvent`.
+- `handler_deposit`.
+
+**4.1.7 — `withdraw` instruction** ✅ (commit `ce71a47`):
+- Validates proof length, recipient, root.
+- Encodes 172-byte blob, calls verifier via CPI (`[proof || public_witness]`).
+- Creates `NullifierRecord`, transfers SOL, emits `WithdrawEvent`.
+- `handler_withdraw`.
+- Discriminator: `[183, 18, 70, 156, 148, 109, 161, 34]`.
+- **This is where v2 broke — the CPI data order is critical.**
+
+**4.1.8 — Tests** ← next.
+**4.1.9 — Deploy to devnet.**
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
-- `docs/notes/00-checkpoints.md` — checkpoint methodology (RU).
-- `docs/notes/00-glossary.md` — glossary (RU).
-- `docs/notes/00-zk-primer.md` — ZK introduction (RU).
-- `docs/notes/01-setup.md` — stage 1 (RU, 762 lines).
-- `docs/notes/02-circuits.md` — stage 2 (RU, 957 lines).
-- `docs/notes/03-sunspot.md` — stage 3 (RU, 996 lines).
-- `docs/DEMO-NOTICE.md` — missing production features (EN, 214 lines).
-- `docs/PROJECT_CONTEXT.md` — this file (EN).
-- `docs/notes/assets/` — folders for screenshots (empty).
-- `docs/notes/` is committed.
+- `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
+- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
+- `docs/DEMO-NOTICE.md` — missing production features.
+- `docs/PROJECT_CONTEXT.md` — this file.
+- `docs/notes/assets/` — folders for screenshots.
 
-**Checkpoints:** 01-setup, 02.1-validate-spec, 02.2.1-poseidon, 02.2.2-hash2-hashes, 02.2.3-withdrawal, 02.3-sync-circuits, 02.4-stage-2-final, 03.1-sunspot-compile, 03.2-sunspot-setup, 03.3-sunspot-deploy, 03.4-deploy-verifier, 03.5-witness, 03.6-stage-3-final.
+**Checkpoints:** 01-setup, 02.1-validate-spec, 02.2.1-poseidon, 02.2.2-hash2-hashes, 02.2.3-withdrawal, 02.3-sync-circuits, 02.4-stage-2-final, 03.1-sunspot-compile, 03.2-sunspot-setup, 03.3-sunspot-deploy, 03.4-deploy-verifier, 03.5-witness, 03.6-stage-3-final, 04.1.1-anchor-init, 04.1.2-constants, 04.1.3-types, 04.1.4-encoding, 04.1.5-pool, 04.1.6-deposit, 04.1.7-withdraw.
 
 ---
 
@@ -252,7 +265,7 @@ Commits:
 
 ### 7.2. LiteSVM E2E test — YES
 
-`onchain/programs/zk_pool/tests/e2e_deposit_withdraw.rs`: init pool → deposit → generate proof with real Sunspot → withdraw → verify SOL moved. Runs after Stage 4.5.
+Runs after Stage 4.5.
 
 ### 7.3. One circuit with `recipient_binding` — YES
 
@@ -260,24 +273,24 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 
 ### 7.4. Zero-padding (no domain separation) — CONFIRMED
 
-`hash_1(x) == hash_2(x, 0)`, `hash_2(x, y) == hash_3(x, y, 0)`. Documented. Safe for zkpool-solana.
+`hash_1(x) == hash_2(x, 0)`, `hash_2(x, y) == hash_3(x, y, 0)`. Documented.
 
 ### 7.5. `sync-circuits` — check/apply modes
 
-`--check`: mismatch → error, exit 1, no copy. `--apply`: mismatch → copy + warning, exit 0.
+`--check`: mismatch → error, exit 1. `--apply`: mismatch → copy + warning.
 
 ### 7.6. Split deposit — DEFERRED to Stage 12
 
 ### 7.7. Makefile — clean design (Stage 9)
 
-### 7.8. Stages list (v3)
+### 7.8. Stages list
 
 - Stage 0 — Repository skeleton ✅
 - Stage 1 — Docker environment ✅
 - Stage 2 — Circuits on Noir ✅
 - Stage 3 — Sunspot verifier ✅
 - Stage 3.7 — Documentation enrichment ✅
-- **Stage 4.1 — Anchor program (next)**
+- Stage 4.1 — Anchor program 🚧
 - Stage 4.5 — LiteSVM E2E
 - Stage 5 — Backend
 - Stage 6 — Merkle service
@@ -321,6 +334,26 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - **TOML parser rejects hex literals > 2^63** — wrap large Field values in double quotes.
 - **Sunspot generates 6 `deprecated` warnings** during `sunspot deploy` — this is normal.
 
+### From Stage 4.1 (Anchor)
+
+- **`anchor init .` fails** — workspace name must be a valid Rust identifier. Use a temp dir: `cd /tmp && anchor init zk_pool --no-git --test-template rust`, then copy.
+- **`invalid --check-cfg argument`** — declare `anchor-debug`, `custom-heap`, `custom-panic` as **features**, not through `[lints.rust]`.
+- **`E0107: struct takes 0 lifetime arguments`** — `#[derive(Accounts)]` does **not** work with empty structs. Use an empty `#[program]` instead.
+- **`unused import: super::*`** — remove the line from empty `#[program]`.
+- **`test_reduce_to_field_max` FAILED** — loop `0..4` → `0..5`. `2^256 / p ≈ 4.006`, edge case needs the full 5 subtractions.
+- **`ambiguous glob re-exports`** — rename `handler` → `handler_pool`, `handler_deposit`, `handler_withdraw`. In Anchor you still need glob re-exports (`pub use module::*;`).
+- **`E0308: mismatched types` in `CpiContext::new`** — in Anchor 1.2.0 the first argument is `Pubkey`, not `AccountInfo`. Use `.key()` not `.to_account_info()`.
+- **`E0432: unresolved import crate`** — Anchor's `#[program]` macro needs the generated `__client_accounts_*` structures. Do not replace glob re-exports with explicit imports.
+- **`E0277: #[instruction] type mismatch`** — `#[instruction(...)]` must list **all** handler arguments **in order**. `#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]`.
+- **CPI to Sunspot verifier: data layout is `[proof || public_witness]`** — proof FIRST (324 bytes), then public witness (172 bytes). Verify by reading `~/sunspot/gnark-solana/crates/verifier-bin/src/lib.rs`. Wrong order → `InvalidInstructionData`.
+- **Vault PDA has no private key** — use direct lamport manipulation (`try_borrow_mut_lamports`), not `system_program::transfer`.
+
+### How to find exact signatures for the installed crate version
+
+- Rust crate sources: `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`.
+- Anchor: `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anchor-lang-1.2.0/src/`.
+- Always check your **own** version, not v2 examples.
+
 ---
 
 ## 9. Repository structure
@@ -337,20 +370,36 @@ zkpool-solana/
 │   │   ├── 01-setup.md
 │   │   ├── 02-circuits.md
 │   │   ├── 03-sunspot.md
-│   │   └── assets/          ← screenshots for Medium
-│   │       ├── 01-setup/    ← empty
-│   │       ├── 02-circuits/ ← empty
-│   │       └── 03-sunspot/  ← empty
+│   │   ├── 04-anchor.md
+│   │   └── assets/{01-setup,02-circuits,03-sunspot}/
 │   ├── ru/README.md
 │   ├── DEMO-NOTICE.md
 │   ├── PROJECT_CONTEXT.md   ← this file
 │   └── threat-model.md
-├── infra/
-├── circuits/
+├── infra/{docker-compose.yml,docker/Dockerfile.solana}
+├── circuits/{poseidon,hash2,hashes,withdrawal}/
 ├── onchain/
-├── services/
+│   ├── Anchor.toml
+│   ├── Cargo.toml
+│   ├── rust-toolchain.toml
+│   ├── programs/zk_pool/
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       ├── constants.rs
+│   │       ├── encoding.rs
+│   │       ├── error.rs
+│   │       ├── events.rs
+│   │       ├── instructions.rs
+│   │       ├── instructions/
+│   │       │   ├── deposit.rs
+│   │       │   ├── pool.rs
+│   │       │   └── withdraw.rs
+│   │       ├── lib.rs
+│   │       └── state.rs
+│   └── tests/               ← not in workspace members yet
+├── services/{backend,merkle,prover}/
 ├── web/
-├── scripts/
+├── scripts/{validate-spec,sync-circuits}/
 ├── solana/                  ← gitignored
 ├── .env.example
 └── .gitignore
@@ -390,6 +439,16 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- check'
 ```
 
+### Anchor build / test
+
+```bash
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu/onchain && anchor build'
+
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu/onchain && cargo test -p zk_pool --lib'
+```
+
 ### Full Sunspot pipeline (from `circuits/withdrawal/`)
 
 ```bash
@@ -407,13 +466,21 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 3.7 (documentation enrichment).
-**Next stage:** Stage 4.1 — Anchor program.
+**Last completed stage:** Stage 4.1.7 (withdraw instruction built).
+**Next stage:** Stage 4.1.8 — tests.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (4.554 SOL, devnet).
 
 **Deployed programs on devnet:**
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B, balance 0.444 SOL).
+
+**Local programs (not deployed):**
+- zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (57 480 B `.so`).
+
+**Instruction discriminators:**
+- `pool`: `[134, 215, 119, 168, 28, 199, 193, 127]`
+- `deposit`: (see IDL)
+- `withdraw`: `[183, 18, 70, 156, 148, 109, 161, 34]`
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -431,16 +498,15 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `withdrawal.pw` — `c4ffea4a4f03c123977f3931b548b01f55820840bc144495063798f2acadb07f`
 - `Prover.toml` — `fb144adb85ea5061c13e89b5d217b4e21a485829cf52149a1bc53571cabc92b2`
 
-**Tests:** 41 (11 poseidon + 5 hash2 + 9 hashes + 16 withdrawal).
+**Tests:** 41 (circuits) + 9 (encoding) = 50.
 
 **Docs sizes:**
-- `00-checkpoints.md` — 130 lines.
 - `00-glossary.md` — 545 lines.
 - `00-zk-primer.md` — 317 lines.
 - `01-setup.md` — 762 lines.
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
-- `DEMO-NOTICE.md` — 214 lines.
+- `04-anchor.md` — 500+ lines.
 
 ---
 
@@ -449,12 +515,12 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 1. Read **section 0** first.
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
-4. Read `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`.
-5. Last completed stage: **Stage 3.7**.
-6. Next task: **Stage 4.1 — Anchor program**.
+4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
+5. Last completed stage: **Stage 4.1.7**.
+6. Next task: **Stage 4.1.8 — tests**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
-8. **Give files in full.**
-9. **Never guess.**
+8. **Give files in full — always.** Never "find section X and replace".
+9. **Never guess.** If ambiguous — ask.
 10. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
 
 ---
@@ -465,128 +531,63 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ### 14.1. Context
 
-`docs/notes/*.md` is **not only** internal project memory. It is:
+`docs/notes/*.md` is:
 
 1. **Raw material** for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
-2. **Part of the GitHub portfolio** — the repository is shown to potential employers and collaborators.
-3. **Teaching material** for readers ranging from **beginners** to **professional engineers**.
+2. **Part of the GitHub portfolio** — shown to potential employers and collaborators.
+3. **Teaching material** for readers from beginners to professional engineers.
 
 ### 14.2. Structure requirements for every note
 
-Every note in `docs/notes/` must contain:
-
-**1. TL;DR at the top.**
-- What this stage is about.
-- How many steps.
-- Estimated time.
-- Prerequisites (links to other notes).
-- What will be produced.
-- Link to the next stage.
-
-**2. Glossary links.**
-- At the top: link to `docs/notes/00-glossary.md`.
-- Inline: terms are linked on first use.
-
-**3. "Why" block before each step.**
-- Before every command or code block, explain **why** we do it.
-- What it produces.
-- How it fits into the bigger picture.
-
-**4. "Expected result" block after each step.**
-- Real output (pasted from the actual run).
-- What to look for.
-- Link to "Common errors" section if relevant.
-
-**5. ASCII diagrams.**
-- For architecture, data flow, algorithm structure.
-- Rendered directly in Markdown (works on GitHub).
-
-**6. Screenshots (for Medium).**
-- Saved in `docs/notes/assets/NN-<name>/`.
-- Referenced from the note with relative paths.
-- Filename pattern: `NN-MM-description.png`.
-
-**7. Cross-references.**
-- Explicit links to related notes: "see `02-circuits.md`, section on Poseidon".
-
-**8. "Common errors" section.**
-- Every error encountered during the actual run.
-- Full error message.
-- Root cause.
-- Fix.
-- Lesson for the future.
-
-**9. "Reproduction" section at the end.**
-- Minimal set of commands to reproduce the stage from scratch.
-
-**10. "What's next" section.**
-- Link to the next note.
-- What will be covered.
+1. **TL;DR** at the top: what, why, how many steps, prerequisites, next stage.
+2. **Glossary links** at the top and inline.
+3. **"Why" block** before each command.
+4. **"Expected result" block** after each command.
+5. **ASCII diagrams** for architecture, data flow, algorithm structure.
+6. **Screenshots** for Medium, in `docs/notes/assets/NN-<name>/`.
+7. **Cross-references** to related notes.
+8. **"Common errors" section** with full message, root cause, fix, lesson.
+9. **"Reproduction" section** at the end.
+10. **"What's next" section.**
 
 ### 14.3. Glossary — `docs/notes/00-glossary.md`
 
-**Status: ✅ done.** 545 lines, 76 terms, 7 sections.
+**Status:** ✅ done. 545 lines, 76 terms, 7 sections.
 
 ### 14.4. ZK-primer — `docs/notes/00-zk-primer.md`
 
-**Status: ✅ done.** 317 lines, 14 sections.
+**Status:** ✅ done. 317 lines, 14 sections.
 
 ### 14.5. Screenshots policy
 
-Screenshots are saved to `docs/notes/assets/NN-<stage>/` and referenced from the note:
-
-```markdown
-![Verifier program on Solana Explorer](assets/03-sunspot/03-04-deploy-verifier-explorer.png)
-```
-
-**Naming convention:** `NN-MM-<description>.png`
-- `NN` — stage number.
-- `MM` — step number within the note.
-- `<description>` — short kebab-case description.
-
-**What to screenshot:**
-- Terminal output for key commands (short, focused).
-- Block explorers (Solana Explorer, SolanaFM).
-- Browser DevTools (Network tab, Console).
-- Grafana dashboards (once they exist).
-- Wallet interactions (Phantom prompts).
-
-**Not to screenshot:**
-- Long terminal logs — paste as text instead.
-- Anything already in the text body as a code block.
-
-**Format:**
-- PNG, max 500 KB per file.
-- 2× retina preferred.
-- Redact seed phrases, private keys, other users' addresses.
-
-**Screenshots are committed** (portfolio material).
-
-**Folders:** `docs/notes/assets/{01-setup,02-circuits,03-sunspot}` exist. No files yet — captured as we go.
+- Saved to `docs/notes/assets/NN-<stage>/`.
+- Naming: `NN-MM-<description>.png`.
+- What to screenshot: terminal output, block explorers, DevTools, Grafana, wallet prompts.
+- Format: PNG, max 500 KB.
+- Redact seed phrases, private keys.
+- **Committed** — portfolio material.
 
 ### 14.6. Enrichment procedure
 
-When a stage is finished:
-1. Write the technical note (`NN-<stage>.md`) — first version, raw.
-2. **Immediately after** — enrich with TL;DR, why-blocks, expected results, common errors, what's next.
-3. **Within the same session** — capture screenshots.
-4. Update `docs/notes/00-glossary.md` with new terms.
-5. Update `docs/notes/00-zk-primer.md` if a new foundational concept appeared.
-
-**Do not defer enrichment to the end of the project.**
+After each stage:
+1. Write the technical note.
+2. **Immediately** enrich with TL;DR, why-blocks, expected results, common errors, what's next.
+3. Capture screenshots in the same session.
+4. Update glossary with new terms.
+5. Update ZK-primer if a new foundational concept appeared.
 
 ### 14.7. Enrichment of stages 01–03 — DONE
 
-- `01-setup.md` — 762 lines. ✅
-- `02-circuits.md` — 957 lines. ✅
-- `03-sunspot.md` — 996 lines. ✅
+- `01-setup.md` — 762 lines ✅.
+- `02-circuits.md` — 957 lines ✅.
+- `03-sunspot.md` — 996 lines ✅.
 
 ### 14.8. Stage 3.7 — DONE
 
-1. `00-glossary.md` — ✅.
-2. `00-zk-primer.md` — ✅.
-3. Enrich `01-setup.md` — ✅.
-4. Enrich `02-circuits.md` — ✅.
-5. Enrich `03-sunspot.md` — ✅.
-6. `docs/notes/assets/` structure — ✅ (folders only).
-7. Screenshots — captured as we go (not a blocking task).
+All items completed.
+
+### 14.9. Ongoing
+
+- Screenshots captured as we go.
+- `04-anchor.md` grows with each sub-stage (4.1.8, 4.1.9, 4.5 pending).
+- Glossary updated when new terms appear.
