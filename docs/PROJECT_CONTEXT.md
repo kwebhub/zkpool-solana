@@ -30,9 +30,10 @@ When the assistant asks the user to create or modify a file, it gives **the comp
 
 - **Chat communication: English.** All messages between the user and the assistant are in English.
 - **Files on disk:**
-  - **English** by default.
-  - **Russian** only for `docs/ru/*.md` (Russian translations of README and similar documents for the Russian-speaking audience).
-  - `docs/notes/*.md` are in **English** as well (updated 2026-09-24 — previously Russian).
+  - **English** by default — code, configs, docs at root level.
+  - **Russian** for `docs/ru/*.md` and `docs/notes/*.md`.
+
+**Rationale for English chat:** Russian tokens are 2–3× more expensive in the model's tokenizer, which has been causing context-limit issues. Notes stay in Russian for the portfolio and for the Russian-speaking audience.
 
 ### 0.4. Never guess
 
@@ -269,7 +270,7 @@ All 9 sub-stages complete:
 
 **Deployed program:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
-### 🚧 Stage 4.5. LiteSVM E2E test (in progress)
+### ✅ Stage 4.5. LiteSVM E2E test (2026-09-24)
 
 | # | Sub-stage | Status |
 |---|---|---|
@@ -278,11 +279,20 @@ All 9 sub-stages complete:
 | 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ commit `59cf81e` |
 | 4.5.4 | `test_deposit.rs` | ✅ commit `838cf85` |
 | 4.5.5 | `test_withdraw.rs` (3 validation tests) | ✅ commit `c90442a` |
-| 4.5.6 | `test_double_spend.rs` | ← next |
-| 4.5.7 | Final checkpoint | ⏳ |
+| 4.5.6 | `test_double_spend.rs` | ✅ commit `b7c4284` |
+| 4.5.7 | Final checkpoint | ✅ commit `b7c4284` |
 
+**8 tests passing:**
+- `helpers::tests::test_setup_svm_loads_both_programs`
+- `test_pool::test_airdrop_works`
+- `test_pool::test_pool_creates_state_and_vault`
+- `test_deposit::test_deposit_updates_state_and_vault`
+- `test_withdraw::test_withdraw_rejects_wrong_proof_length`
+- `test_withdraw::test_withdraw_rejects_recipient_mismatch`
+- `test_withdraw::test_withdraw_rejects_unknown_root`
+- `test_double_spend::test_double_spend_rejected`
 
-**Tests passing:** 7 (helpers: 1, test_pool: 2, test_deposit: 1, test_withdraw: 3).
+**Known limitation:** E2E withdraw with a real proof is not feasible in LiteSVM (see section 8, "From Stage 4.5"). Full E2E is deferred to devnet + frontend (stage 8).
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
@@ -330,8 +340,8 @@ All 9 sub-stages complete:
 - Stage 3 — Sunspot verifier ✅
 - Stage 3.7 — Documentation enrichment ✅
 - Stage 4.1 — Anchor program ✅
-- **Stage 4.5 — LiteSVM E2E test 🚧**
-- Stage 5 — Backend
+- Stage 4.5 — LiteSVM E2E test ✅
+- **Stage 5 — Backend ← next**
 - Stage 6 — Merkle service
 - Stage 7 — Prover
 - Stage 8 — Frontend
@@ -567,8 +577,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 4.5.5 (`test_withdraw.rs`).
-**Next stage:** Stage 4.5.6 — `test_double_spend.rs`.
+**Last completed stage:** Stage 4.5 (LiteSVM E2E test).
+**Next stage:** Stage 5 — Backend.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -576,9 +586,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) + 3 (LiteSVM) = **81**.
-
-**LiteSVM tests passing:** `helpers::test_setup_svm_loads_both_programs`, `test_pool::test_airdrop_works`, `test_pool::test_pool_creates_state_and_vault`.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) = **86**.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -601,8 +609,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 4.5.5**.
-6. Next task: **Stage 4.5.6 — `test_double_spend.rs`**.
+5. Last completed stage: **Stage 4.5**.
+6. Next task: **Stage 5 — Backend**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.

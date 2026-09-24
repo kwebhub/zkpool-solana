@@ -46,11 +46,10 @@
 | 4.5.1 | Реорганизация `tests/` (вынос из `onchain/`) | ✅ |
 | 4.5.2 | `helpers.rs` (загрузка программ) | ✅ |
 | 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ |
-| 4.5.4 | `test_deposit.rs` | ← следующий |
-| 4.5.5 | `test_withdraw.rs` | ⏳ |
-| 4.5.6 | `test_double_spend.rs` | ⏳ |
-| 4.5.7 | Финальный чекпоинт | ⏳ |
-
+| 4.5.4 | `test_deposit.rs` | ✅ |
+| 4.5.5 | `test_withdraw.rs` (3 validation test) | ✅ |
+| 4.5.6 | `test_double_spend.rs` | ✅ |
+| 4.5.7 | Финальный чекпоинт | ✅ |
 ---
 
 ## 4.1.1. Anchor-workspace
@@ -966,6 +965,156 @@ assert_eq!(vault_account.data.len(), 0, "vault must have no data");
 - `202d3ed` — record stage 4.5.1 completion.
 - `cd01255` — minimal `helpers.rs` loading both programs.
 - `59cf81e` — `pool` instruction test.
+- `06e90d4` — record stages 4.5.2 and 4.5.3.
+- `838cf85` — `deposit` instruction test.
+- `c90442a` — `withdraw` validation tests (3 tests).
+- `b7c4284` — double-spend protection test.
+
+### 4.5.4. `test_deposit.rs`
+
+**Цель:** проверить, что инструкция `deposit` обновляет `vault` и `PoolState`.
+
+**Дискриминатор `deposit`:** `[242, 35, 198, 137, 82, 225, 242, 182]` (из IDL).
+
+**Что тестируется:**
+1. Init pool (helper `init_and_deposit`).
+2. Запомнить **начальный** баланс `vault` **после** init (rent-exempt минимум).
+3. Вызвать `deposit(commitment, new_root, amount)`.
+4. Проверить:
+   - `vault_balance == vault_initial + amount`.
+   - `pool.next_leaf_index == 1`.
+   - `pool.total_deposits == 1`.
+   - `pool.is_known_root(&new_root) == true`.
+
+**Правильная сериализация instruction data:**
+```
+[discriminator 8 bytes]
+[commitment 32 bytes]         ← фиксированный массив, без длины
+[new_root 32 bytes]           ← фиксированный массив, без длины
+[amount u64 LE 8 bytes]       ← little-endian
+```
+
+**⚠️ Ошибка: vault balance is NOT zero after init.**
+
+**Симптом:**
+```
+assertion `left == right` failed
+  left: Some(890880)
+ right: Some(0)
+```
+
+**Причина:** vault — это PDA с **0 байт данных**. На Solana такой аккаунт **должен** держать rent-exempt минимум (890 880 lamports для 0-байтного аккаунта на devnet), чтобы **существовать**. Это **не** деньги пользователя — это **плата за существование** аккаунта.
+
+**Решение:**
+```rust
+let vault_initial = svm.get_balance(&vault_pda).expect("vault exists");
+// ... deposit ...
+let vault_after = svm.get_balance(&vault_pda).expect("vault exists");
+assert_eq!(vault_after, vault_initial + amount);
+```
+
+**Урок:** **никогда** не предполагай, что у PDA ноль lamports после `init`. **Читай** фактический начальный баланс.
+
+**Результат:** 1 / 1 passed.
+
+**Коммит:** `838cf85`.
+
+### 4.5.5. `test_withdraw.rs`
+
+**Цель:** проверить **on-chain валидации** и **CPI в verifier**.
+
+**⚠️ Ограничение:** E2E с **реальным** proof в LiteSVM **не работает**.
+
+**Причина:** proof из этапа 3.5 сгенерирован для **конкретного** синтетического состояния (конкретный `root`, конкретный `recipient` как field-элемент, **не** как Pubkey). Воспроизвести это состояние в LiteSVM можно только:
+- on-the-fly `sunspot prove` (43 секунды на proof), **или**
+- мок verifier'а.
+
+Оба подхода **усложняют** тест без **реальной** пользы. Proof **уже** проверен локально на этапе 3.5.
+
+**Решение:** тестируем **валидации** + **достижение** CPI:
+1. `require!` на длину proof.
+2. `require!` на `recipient == to`.
+3. `require!` на известный `root`.
+4. CPI **происходит** (verifier отвергает фиктивный proof).
+
+**Дискриминатор `withdraw`:** `[183, 18, 70, 156, 148, 109, 161, 34]`.
+
+**Три теста:**
+
+| Тест | Проверяет |
+|---|---|
+| `test_withdraw_rejects_wrong_proof_length` | `proof.len() != PROOF_LEN` → ошибка |
+| `test_withdraw_rejects_recipient_mismatch` | `recipient_in_ix != to` → ошибка |
+| `test_withdraw_rejects_unknown_root` | `root` **не** в `PoolState.roots` → ошибка |
+
+**Правильная сериализация instruction data для `withdraw`:**
+```
+[discriminator 8 bytes]
+[proof length u32 LE 4 bytes]  ← Borsh для Vec<u8>!
+[proof N bytes]                ← N = length, не фиксировано
+[nullifier_hash 32 bytes]      ← без длины
+[root 32 bytes]                ← без длины
+[recipient 32 bytes]           ← Pubkey, без длины
+[amount u64 LE 8 bytes]
+[recipient_binding 32 bytes]   ← без длины
+```
+
+**⚠️ Ключевое:** `proof: Vec<u8>` сериализуется **Borsh** как `u32 LE length` + bytes. **Фиксированные массивы** (`[u8; 32]`) сериализуются **без** length-префикса.
+
+**Порядок accounts (7):** `payer`, `pool`, `nullifier_record`, `vault`, `to`, `verifier_program`, `system_program` — **точно** как в IDL.
+
+**Результат:** 3 / 3 passed.
+
+**Коммит:** `c90442a`.
+
+### 4.5.6. `test_double_spend.rs`
+
+**Цель:** проверить защиту от double-spend.
+
+**Как работает защита:**
+- `withdraw` создаёт PDA `NullifierRecord` через `init` constraint.
+- Anchor `init` **падает**, если аккаунт **уже существует** — `AccountAlreadyInUse`.
+- Это происходит **до** выполнения handler'а, на этапе **валидации** аккаунтов.
+
+**Проблема с "естественным" тестом:**
+- Первый `withdraw` должен **успешно** пройти, чтобы `NullifierRecord` **сохранился**.
+- Но с фиктивным proof первый `withdraw` **падает** на CPI в verifier.
+- Solana **атомарна**: если handler вернул **ошибку**, **все** изменения **откатываются**. `NullifierRecord` **не сохраняется**.
+
+**Решение:** **симулировать** состояние "nullifier уже использован" вручную:
+1. Init pool + deposit.
+2. **Вручную** создать `NullifierRecord` PDA через `svm.set_account(...)`.
+3. Вызвать `withdraw` с **тем же** `nullifier_hash`.
+4. `init` constraint **падает** на существующем аккаунте.
+
+**API:**
+```rust
+svm.set_account(pda, Account {
+    lamports: 10_000_000,           // достаточно для rent-exempt
+    data: vec![0u8; 120],           // фиктивное содержимое
+    owner: zk_pool_pubkey,          // zk_pool владеет аккаунтом
+    executable: false,
+    rent_epoch: 0,
+}).expect("set_account failed");
+```
+
+**Почему данные фиктивные:** `init` проверяет **существование** аккаунта, **не** его содержимое. Валидная сериализация `NullifierRecord` **не** нужна.
+
+**Результат:** 1 / 1 passed.
+
+**Коммит:** `b7c4284`.
+
+### 4.5.7. Финальный чекпоинт
+
+**Что сохранено:** `.checkpoints/04.5.7-stage-4.5-final/`:
+- `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` — конфигурация.
+- `sources/*.rs` — все 6 source-файлов.
+- `manifest.txt` — SHA-256 всех файлов.
+- `commit.txt` — `b7c428446144e2b3d3b12f911e978bcd8ed3e318`.
+
+**Всего файлов:** 11.
+
+**Всего тестов LiteSVM:** 8 (helpers: 1, test_pool: 2, test_deposit: 1, test_withdraw: 3, test_double_spend: 1).
 
 ---
 
@@ -999,16 +1148,22 @@ assert_eq!(vault_account.data.len(), 0, "vault must have no data");
 | 5 | `E0583: file not found for module` (5 модулей) | 4.5.2 | Placeholder-файлы. |
 | 6 | Случайный файл `.rs` (bash heredoc в цикле) | 4.5.2 | Удалить, проверить `ls`. |
 | 7 | `E0308`: `Transaction::new_signed_with_payer` ожидает `&[Instruction]` | 4.5.3 | Не использовать `Message` при сборке транзакции. |
-
+| 8 | Vault balance NOT zero after init (890880 lamports) | 4.5.4 | Запомнить rent-exempt минимум, читать `vault_initial`. |
+| 9 | `E2E withdraw with real proof not feasible in LiteSVM` | 4.5.5 | Тестировать валидации + CPI, полный E2E — на devnet. |
+| 10 | `Borsh serialization for Vec<u8>` — length prefix | 4.5.5 | `u32 LE length` + bytes для `proof`. |
+| 11 | `Init` constraint runs before handler body | 4.5.6 | Тест double-spend через `svm.set_account` (pre-create PDA). |
 ---
-
 ## Что дальше
 
-**Следующий под-этап:** 4.5.4 — `test_deposit.rs`.
+**Stage 4.5 завершён.** Все 7 под-этапов (4.5.1 – 4.5.7) пройдены. Всего **8 LiteSVM-тестов**, все проходят.
+
+**Следующий этап:** **Stage 5** — Backend (Rust + axum).
 
 **Что будет:**
-- Сначала `pool` (init).
-- Потом `deposit`: commitment + new_root + amount.
-- Проверки: `vault` баланс увеличился, `next_leaf_index=1`, `total_deposits=1`, `roots[1]=new_root`.
+- HTTP API: `/api/health`, `/api/commitments`, `/api/root`, `/api/proof`, `/api/withdraw`.
+- Indexer — фоновый воркер для чтения событий `DepositEvent` и `WithdrawEvent` из блокчейна.
+- Postgres + Redis.
+- Incremental Merkle tree.
+- Rate limiting, метрики Prometheus.
 
-**После 4.5.7** (финальный чекпоинт) — переход к **Stage 5** (backend).
+**См. `05-backend.md`** (будет создан в Stage 5).
