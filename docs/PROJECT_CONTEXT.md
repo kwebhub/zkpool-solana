@@ -318,6 +318,23 @@ All 9 sub-stages complete:
 
 ### 7.6. Split deposit — DEFERRED to Stage 12
 
+**Feature:** split a single deposit into multiple unequal commitments (for improved privacy — breaks the link between deposit and withdrawal amounts).
+
+**Status:** deferred. Not implemented in v3 either.
+
+**Rationale for deferral:**
+- Changes the public input layout (N commitments, aggregated amount).
+- Would obscure the root-cause analysis of the original `InvalidInstructionData` bug (from v2).
+- Requires changes at every layer (circuit, Anchor program, backend, frontend, prover).
+
+**Architectural compatibility (to be preserved from Stage 2 onwards):**
+- `TREE_DEPTH` and other constants live in one place (spec).
+- `PoolState` on-chain does not assume "1 deposit = 1 commitment" beyond what's needed.
+- `commitments` table in Postgres does **not** have a `UNIQUE` constraint on `(pool, tx_signature)`.
+- `WithdrawEvent` includes an explicit `amount` field.
+
+**When implemented:** after v0.1.0 release, as a separate stage (Stage 13 or a follow-up project).
+
 ### 7.7. Makefile — clean design (Stage 9)
 
 ### 7.8. Tests/ directory — separate crate at root
