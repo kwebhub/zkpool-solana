@@ -86,3 +86,71 @@ pub const VERIFIER_PROGRAM_ID: Pubkey = pubkey!("5t51iu6apRxgLbt91eVZ6YYzHsnmBCV
 ///
 /// Prevents spam deposits that would fill the Merkle tree with dust.
 pub const MIN_DEPOSIT_AMOUNT: u64 = 1_000_000;
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tree_depth() {
+        assert_eq!(TREE_DEPTH, 20);
+    }
+
+    #[test]
+    fn test_max_leaves() {
+        assert_eq!(MAX_LEAVES, 1 << 20);
+        assert_eq!(MAX_LEAVES, 1_048_576);
+    }
+
+    #[test]
+    fn test_root_history_size() {
+        assert_eq!(ROOT_HISTORY_SIZE, 10);
+    }
+
+    #[test]
+    fn test_nr_public_inputs() {
+        assert_eq!(NR_PUBLIC_INPUTS, 5);
+    }
+
+    #[test]
+    fn test_public_inputs_bytes() {
+        // 12-byte header + 5 × 32 = 172
+        assert_eq!(PUBLIC_INPUTS_BYTES, 12 + (NR_PUBLIC_INPUTS as usize) * 32);
+        assert_eq!(PUBLIC_INPUTS_BYTES, 172);
+    }
+
+    #[test]
+    fn test_proof_len() {
+        // Groth16 proof size (constant)
+        assert_eq!(PROOF_LEN, 324);
+    }
+
+    #[test]
+    fn test_min_deposit_amount() {
+        assert_eq!(MIN_DEPOSIT_AMOUNT, 1_000_000);
+    }
+
+    #[test]
+    fn test_empty_root() {
+        assert_eq!(EMPTY_ROOT, [0u8; 32]);
+    }
+
+    #[test]
+    fn test_seeds_are_distinct() {
+        assert_ne!(POOL_SEED, VAULT_SEED);
+        assert_ne!(POOL_SEED, NULLIFIER_RECORD_SEED);
+        assert_ne!(VAULT_SEED, NULLIFIER_RECORD_SEED);
+    }
+
+    #[test]
+    fn test_verifier_program_id_parses() {
+        // The pubkey! macro validates at compile time, but we double-check
+        // the exact address string here.
+        let expected = "5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ";
+        assert_eq!(VERIFIER_PROGRAM_ID.to_string(), expected);
+    }
+}

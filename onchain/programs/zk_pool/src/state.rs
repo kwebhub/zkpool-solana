@@ -98,3 +98,120 @@ pub struct NullifierRecord {
     /// Unix timestamp of the withdrawal.
     pub timestamp: i64,
 }
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anchor_lang::prelude::Pubkey;
+
+    fn empty_pool() -> PoolState {
+        PoolState {
+            authority: Pubkey::default(),
+            next_leaf_index: 0,
+            total_deposits: 0,
+            current_root_index: 0,
+            roots: [[0u8; 32]; ROOT_HISTORY_SIZE],
+        }
+    }
+
+    #[test]
+    fn test_pool_state_init_space() {
+        // 32 (authority) + 8 (next_leaf_index) + 8 (total_deposits)
+        // + 8 (current_root_index) + 10 * 32 (roots) = 376
+        // Anchor adds 8-byte discriminator on top; INIT_SPACE = 376.
+        assert_eq!(PoolState::INIT_SPACE, 32 + 8 + 8 + 8 + (10 * 32));
+        assert_eq!(PoolState::INIT_SPACE, 376);
+    }
+
+    #[test]
+    fn test_nullifier_record_init_space() {
+        // 32 (pool) + 32 (nullifier_hash) + 32 (recipient) + 8 (amount) + 8 (timestamp) = 112
+        assert_eq!(NullifierRecord::INIT_SPACE, 32 + 32 + 32 + 8 + 8);
+        assert_eq!(NullifierRecord::INIT_SPACE, 112);
+    }
+
+    #[test]
+    fn test_is_known_root_empty() {
+        let pool = empty_pool();
+        assert!(!pool.is_known_root(&[0u8; 32]));
+        assert!(!pool.is_known_root(&[1u8; 32]));
+    }
+
+    #[test]
+    fn test_add_root_and_is_known() {
+        let mut pool = empty_pool();
+        let root_a = [0xaau8; 32];
+        pool.add_root(root_a);
+        assert!(pool.is_known_root(&root_a));
+        assert_eq!(pool.current_root(), root_a);
+    }
+
+    #[test]
+    fn test_add_multiple_roots_ring_buffer() {
+        let mut pool = empty_pool();
+        for i in 0..15u8 {
+            let mut root = [0u8; 32];
+            root[0] = i + 1; // avoid all-zero
+            pool.add_root(root);
+        }
+        // Only the last ROOT_HISTORY_SIZE (10) roots should be present.
+        for i in 5..15u8 {
+            let mut root = [0u8; 32];
+            root[0] = i + 1;
+            assert!(pool.is_known_root(&root), "root #{} should be known", i + 1);
+        }
+        // The first few should have been overwritten.
+        for i in 0..5u8 {
+            let mut root = [0u8; 32];
+            root[0] = i + 1;
+            assert!(
+                !pool.is_known_root(&root),
+                "root #{} should be forgotten",
+                i + 1
+            );
+        }
+    }
+
+    #[test]
+    fn test_current_root_after_add() {
+        let mut pool = empty_pool();
+        assert_eq!(pool.current_root(), [0u8; 32]);
+        pool.add_root([1u8; 32]);
+        assert_eq!(pool.current_root(), [1u8; 32]);
+        pool.add_root([2u8; 32]);
+        assert_eq!(pool.current_root(), [2u8; 32]);
+    }
+
+    #[test]
+    fn test_has_room_empty() {
+        let pool = empty_pool();
+        assert!(pool.has_room());
+    }
+
+    #[test]
+    fn test_has_room_at_limit() {
+        let mut pool = empty_pool();
+        pool.next_leaf_index = MAX_LEAVES;
+        assert!(!pool.has_room());
+    }
+
+    #[test]
+    fn test_has_room_just_below_limit() {
+        let mut pool = empty_pool();
+        pool.next_leaf_index = MAX_LEAVES - 1;
+        assert!(pool.has_room());
+    }
+
+    #[test]
+    fn test_is_known_root_rejects_zero() {
+        let mut pool = empty_pool();
+        // Even if we explicitly try to add [0; 32], is_known_root returns false
+        // because zero roots are treated as empty slots.
+        pool.add_root([0u8; 32]);
+        assert!(!pool.is_known_root(&[0u8; 32]));
+    }
+}

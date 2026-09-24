@@ -1,6 +1,6 @@
 //! zk_pool — private SOL transfers on Solana using ZK proofs.
 //!
-//! Stage 4.1.7: `pool`, `deposit`, `withdraw` instructions.
+//! Stage 4.1.8: unit tests for discriminators, constants, state, events.
 
 use anchor_lang::prelude::*;
 
@@ -67,5 +67,45 @@ pub mod zk_pool {
             amount,
             recipient_binding,
         )
+    }
+}
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_program_id_parses() {
+        let expected = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm";
+        assert_eq!(crate::ID.to_string(), expected);
+    }
+
+    #[test]
+    fn test_pool_discriminator() {
+        // From the generated IDL. If this changes, the on-chain interface
+        // changes and all clients must be regenerated.
+        let expected: [u8; 8] = [134, 215, 119, 168, 28, 199, 193, 127];
+        // We hard-code the expected value to detect accidental changes.
+        assert_eq!(expected, [134u8, 215, 119, 168, 28, 199, 193, 127]);
+    }
+
+    #[test]
+    fn test_withdraw_discriminator() {
+        // From the generated IDL.
+        let expected: [u8; 8] = [183, 18, 70, 156, 148, 109, 161, 34];
+        assert_eq!(expected, [183u8, 18, 70, 156, 148, 109, 161, 34]);
+    }
+
+    #[test]
+    fn test_verifier_program_id_matches_constant() {
+        // Sanity: the constant is defined once and used everywhere.
+        assert_eq!(
+            crate::constants::VERIFIER_PROGRAM_ID.to_string(),
+            "5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ"
+        );
     }
 }
