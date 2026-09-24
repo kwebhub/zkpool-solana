@@ -1,60 +1,179 @@
-# Этап 3. Sunspot: верifier program для Groth16
+# Этап 3. Sunspot: verifier program для Groth16
 
-## Обзор
-
-Этот этап превращает Noir circuit (`withdrawal.json`, 41 КБ, 6308 constraints) в **on-chain verifier program** на Solana. Это самая **неочевидная** и **ручная** часть проекта — много CLI-команд, каждая со своими подводными камнями.
-
-**Ключевой факт:** Sunspot генерирует **отдельную** Solana-программу (verifier), **независимую** от основной программы `zk_pool`. Основная программа будет вызывать verifier через **CPI** (Cross-Program Invocation).
-
-**Пайплайн:**
-
-```
-withdrawal.json  (ACIR, 41 КБ)
-    │ sunspot compile
-    ▼
-withdrawal.ccs   (CCS — Constraint System, 642 КБ)
-    │ sunspot setup
-    ▼
-withdrawal.pk  +  withdrawal.vk  (proving key 2.1 МБ + verifying key 972 Б)
-    │ sunspot deploy
-    ▼
-withdrawal.so  +  withdrawal-keypair.json  (verifier program 87 КБ)
-    │ solana program deploy
-    ▼
-verifier on devnet  (Program ID: 5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ)
-```
+> **См. также:**
+> - `00-zk-primer.md` — что такое Groth16, trusted setup, proof, witness.
+> - `00-glossary.md` — все термины.
+> - `02-circuits.md` — что такое circuit, ACIR (предыдущий этап).
 
 ---
 
-## Разбиение этапа
+## TL;DR
 
-- **3.0** — Кошелёк Solana (devnet). ✅
-- **3.1** — `sunspot compile`. ✅
-- **3.2** — `sunspot setup`. ✅
-- **3.3** — `sunspot deploy`. ✅
-- **3.4** — `solana program deploy`. ✅
-- **3.5** — Локальная проверка: witness → proof → verify. ✅
-- **3.6** — Финальный чекпоинт этапа 3. ⏳
+**Что делаем:** превращаем ACIR circuit'а `withdrawal.json` (41 КБ, 6308 constraints) в **Solana-программу**, которая проверяет Groth16-proof'ы. Плюс — генерируем локально proof и убеждаемся, что он **валиден**.
+
+**Зачем:** on-chain `withdraw` **не может** сам проверять ZK-proof — это **дорого**. Вместо этого он вызывает **отдельную** программу-verifier через **CPI** (Cross-Program Invocation). Verifier получает proof и публичные входы, возвращает `true`/`false`.
+
+**Сколько шагов:** 7 под-этапов (3.0 – 3.6).
+
+**Сколько времени:** ~1.5 часа (из них 5 минут — первая сборка verifier'а).
+
+**Что понадобится:**
+- `01-setup.md` — Docker-окружение.
+- `02-circuits.md` — ACIR `withdrawal.json`.
+- Devnet-кошелёк с ≥ 3 SOL.
+
+**Что получится:**
+- Verifier Program ID на devnet: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
+- Локально проверенный proof.
+- 9 артефактов (`.ccs`, `.pk`, `.vk`, `.so`, `.gz`, `.proof`, `.pw`, keypair, `Prover.toml`).
+
+**Следующий этап:** `04-anchor.md` (Anchor-программа).
 
 ---
 
-## Этап 3.0. Кошелёк Solana (devnet)
+## 1. Что такое Groth16
 
-### Что сделано
+**Groth16** — протокол ZK-доказательств, опубликованный Jens Groth в 2016 году. **Стандарт** в ZK-мире для блокчейнов.
 
-Создан **новый** devnet-кошелёк (не переиспользован из v2 — принцип «всё с нуля»).
+### Свойства
 
-**Адрес:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`
+| Свойство | Значение |
+|---|---|
+| **Размер proof** | **324 байта** — очень компактно |
+| **Время верификации** | **1.25 секунды** — быстро |
+| **Время генерации** | **43 секунды** — медленно (но offline) |
+| **Trusted setup** | **Нужен** |
 
-**Путь в контейнере:** `/home/ubuntu/.config/solana/id.json`
+### Как это работает (упрощённо)
 
-**Volume на хосте:** `~/Projects/Solana/zkpool-solana/solana/`
+1. **Trusted setup** — генерируются `proving key` (PK) и `verifying key` (VK).
+2. **Prover** использует PK + witness → генерирует **proof**.
+3. **Verifier** использует VK + публичные входы + proof → возвращает `true`/`false`.
 
-**Баланс:** 5 SOL (пополнено через faucet).
+**Ключевое свойство:** verifier **не знает** witness, но **убеждается**, что prover его знает.
 
-### Команды
+### Почему Groth16, а не альтернативы
 
-**Создание кошелька:**
+| Протокол | Размер proof | Trusted setup | On-chain friendly |
+|---|---|---|---|
+| **Groth16** | 324 B | **Да** | ✅ |
+| **PLONK** | ~1 КБ | Универсальный | ⚠️ Транзакция не влезает в Solana |
+| **STARK** | ~50 КБ | Нет | ❌ Транзакция не влезает |
+
+**Solana ограничивает** размер транзакции **1232 байта**. Proof 324 байта **влезает**, 1 КБ и 50 КБ — **нет**.
+
+**Groth16 — единственный практичный выбор для Solana.**
+
+### Почему верификация в 35 раз быстрее генерации
+
+**Prover** делает **тяжёлую** работу:
+- Вычисляет constraints для **всех** приватных и публичных входов.
+- Строит полиномы.
+- Применяет proving key.
+
+**Verifier** делает **лёгкую** работу:
+- Проверяет **три** парных спаривания (pairings) на эллиптической кривой.
+- Парные спаривания — операция **дорогая** в общем случае, но их **всего три**.
+
+**Итог:** asymmetry by design. Prover — медленный и **offline**, verifier — быстрый и **on-chain**.
+
+### Что такое trusted setup и почему это **риск**
+
+**Trusted setup** — разовая процедура генерации PK и VK из constraint system.
+
+**Проблема:** во время setup генерируется **toxic waste** — промежуточные значения. Если их **сохранить**, можно **подделывать** proof, которые verifier **примет** (без знания witness).
+
+**Простая аналогия:** представь, что при генерации ключа от сейфа ты видишь **комбинацию**. Если ты её **запомнил** — можешь открыть сейф **без** ключа.
+
+**MPC ceremony** — способ **устранить** эту проблему: несколько независимых сторон комбинируют вклады так, что **никто** не знает полный toxic waste. Нужно, чтобы **все** стороны сговорились.
+
+**В нашем проекте:** setup делается **одной** стороной (нами). Toxic waste **не сохраняется** (процесс завершается). Для **devnet/demo** это **приемлемо**. Для **production** — нужна **MPC ceremony** (см. `docs/DEMO-NOTICE.md`).
+
+### Что такое CCS
+
+**CCS** (Constraint System) — представление circuit'а для Groth16. Более **низкоуровневое**, чем ACIR.
+
+**Что содержит:**
+- **Переменные** (witness + публичные входы + промежуточные).
+- **Constraints** в форме полиномиальных уравнений.
+- **Метаданные** для генерации PK/VK.
+
+**Файл:** `withdrawal.ccs` — **642 177 байт** (627 КБ).
+
+**Для сравнения:** ACIR `withdrawal.json` — 41 КБ. CCS **в 15 раз больше** — потому что он разворачивает высокоуровневые операции (Poseidon2) в **тысячи** низкоуровневых constraints.
+
+---
+
+## 2. Общая картина
+
+### Пайплайн
+
+```
+┌─────────────────────┐
+│ withdrawal.json     │  ACIR (41 КБ, 6308 constraints)
+│ (from stage 2)      │
+└──────────┬──────────┘
+           │ sunspot compile
+           ▼
+┌─────────────────────┐
+│ withdrawal.ccs      │  Constraint System (642 КБ)
+└──────────┬──────────┘
+           │ sunspot setup
+           ├─────────────────────┐
+           ▼                     ▼
+┌─────────────────────┐  ┌─────────────────────┐
+│ withdrawal.pk       │  │ withdrawal.vk       │  Verifying key (972 B)
+│ Proving key (2 МБ)  │  │                     │
+└──────────┬──────────┘  └──────────┬──────────┘
+           │                        │ sunspot deploy
+           │                        ▼
+           │              ┌─────────────────────┐
+           │              │ withdrawal.so       │  Solana BPF program (87 КБ)
+           │              └──────────┬──────────┘
+           │                        │ solana program deploy
+           │                        ▼
+           │              ┌─────────────────────┐
+           │              │ Verifier on devnet  │  Program ID 5t51iu6a...
+           │              └─────────────────────┘
+           │
+           │  ┌─────────────────────┐
+           │  │ withdrawal.gz       │  Witness (3825 B)
+           │  │ (from nargo execute)│
+           │  └──────────┬──────────┘
+           │             │
+           │  sunspot prove
+           ▼             ▼
+┌─────────────────────┐  ┌─────────────────────┐
+│ withdrawal.proof    │  │ withdrawal.pw       │  Public witness (172 B)
+│ Groth16 proof (324) │  │                     │
+└──────────┬──────────┘  └──────────┬──────────┘
+           │                        │
+           └────────────┬───────────┘
+                        │ sunspot verify
+                        ▼
+                    ✅ valid
+```
+
+### Два независимых артефакта
+
+**Обрати внимание:** у нас **два независимых** результата:
+
+1. **Verifier program** (`.so` → Solana program) — используется **on-chain** в этапе 4.
+2. **Proof** (`.proof` + `.pw`) — генерируется **offline** и передаётся on-chain.
+
+Они **связаны** через VK: proof **принимается** только если он **валиден** для **этого** VK.
+
+---
+
+## 3. Под-этап 3.0: кошелёк Solana
+
+### Зачем
+
+Для деплоя verifier program на devnet нужен **кошелёк** с SOL. Также кошелёк станет **upgrade authority** (в будущем — multisig).
+
+### Создание
+
+**Важно:** создаём **новый** кошелёк (не переиспользуем из v2 — принцип «всё с нуля»).
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -62,7 +181,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-**Вывод:**
+### Ожидаемый результат
 
 ```
 Generating a new keypair
@@ -75,7 +194,9 @@ mixed occur kite boring game enact shadow dream tree hollow cube pole
 =====================================================================
 ```
 
-**Настройка RPC:**
+**⚠️ Сохрани seed phrase!** Запиши **вне** проекта. Не коммить.
+
+### Настройка RPC на devnet
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -83,7 +204,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-**Проверка:**
+### Проверка
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -93,21 +214,35 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
+### Ожидаемый результат
+
+```
+RPC URL: https://api.devnet.solana.com
+Keypair Path: /home/ubuntu/.config/solana/id.json
+
+5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc
+
+0 SOL
+```
+
 ### Пополнение через faucet
 
-**CLI airdrop часто падает** с `429 Too Many Requests`. **Надёжнее — веб-фаусет:** https://faucet.solana.com
+**Команда `solana airdrop` часто падает** с `429 Too Many Requests`. Надёжнее — **веб-фаусет:**
 
-Вставляешь адрес `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`, выбираешь Devnet, запрашиваешь 5 SOL.
+1. Открыть https://faucet.solana.com
+2. Вставить адрес `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`.
+3. Выбрать **Devnet**.
+4. Запросить **5 SOL**.
 
-**Проверка баланса:**
+### Проверка баланса
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic 'solana balance'
 ```
 
-**Ожидаемый вывод:** `5 SOL`.
+**Ожидаемый результат:** `5 SOL`.
 
-### ⚠️ Ошибка: `Permission denied` при создании кошелька
+### ⚠️ Ошибка №1: `Permission denied` при создании кошелька
 
 **Симптом:**
 
@@ -115,35 +250,32 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic 'solana balance'
 Error: Unable to write /home/ubuntu/.config/solana/id.json: Permission denied (os error 13)
 ```
 
-**Причина:** Volume `solana/` на хосте был создан **от root** (UID 0) при первом запуске. Пользователь `ubuntu` в контейнере имеет **UID 1000**, не может писать.
+**Причина:** Volume `solana/` на хосте создан **от root** (UID 0) при первом запуске контейнера. Пользователь `ubuntu` (UID 1000) **не может** писать.
 
 **Диагностика:**
 
 ```bash
-ls -la solana/                                         # на хосте
+ls -la solana/                                                    # на хосте
 docker compose -f infra/docker-compose.yml exec solana bash -ic 'id'
-docker compose -f infra/docker-compose.yml exec solana bash -ic 'ls -la /home/ubuntu/.config/solana/'
 ```
 
-Показывает: `solana/` → `root:root`, а `ubuntu` внутри → `uid=1000(ubuntu)`.
+Показывает: `solana/` — `root:root`, `ubuntu` внутри — `uid=1000(ubuntu)`.
 
-**Решение (на хосте):**
+**Решение:**
 
 ```bash
 sudo chown -R 1000:1000 solana/
 ```
 
-**После этого кошелёк создаётся.**
+**Урок:** Volume, впервые созданный контейнером **от root**, остаётся root-owned. Все volumes проекта должны быть созданы **от пользователя** (UID 1000) или приведены к нему.
 
-**Урок:** Volume, который впервые создаётся контейнером **от root**, навсегда остаётся root-owned. Все volumes проекта должны быть созданы **от пользователя**, либо — после первого запуска — приведены к UID 1000 через `chown`.
-
-### ⚠️ Ошибка: `solana/cli/config.yml` попал в git
+### ⚠️ Ошибка №2: `solana/cli/config.yml` попал в git
 
 **Симптом:** `git status` показывает `new file: solana/cli/config.yml`.
 
-**Причина:** `.gitignore` содержал `solana/*.json`, но **не** `solana/**`. Подпапки и yml-файлы не игнорировались.
+**Причина:** в `.gitignore` было `solana/*.json`, но **не** `solana/**`. Файлы yml не игнорировались.
 
-**Решение:** Заменить в `.gitignore` блок:
+**Решение:** заменить в `.gitignore`:
 
 ```
 # Solana keypairs
@@ -158,21 +290,21 @@ solana/
 **/solana/
 ```
 
-И убрать из staging:
+Плюс убрать из staging:
 
 ```bash
 git rm --cached solana/cli/config.yml
 ```
 
-**Урок:** Игнорировать **всю** папку `solana/`, а не отдельные расширения — там лежит и keypair (`id.json`), и конфиг (`cli/config.yml`), и потенциальные lock-файлы.
+**Урок:** если папка содержит **и** приватное, **и** конфиги — игнорируй **всю** папку.
 
 ---
 
-## Этап 3.1. `sunspot compile`
+## 4. Под-этап 3.1: `sunspot compile`
 
-### Что делает
+### Зачем
 
-Преобразует ACIR (`.json`) в **CCS** (Constraint System) — представление для Groth16.
+Преобразовать **ACIR** (`withdrawal.json`) в **CCS** — представление для Groth16.
 
 ### Команда
 
@@ -183,7 +315,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-### Вывод
+### Ожидаемый результат
 
 ```
 Loading ACIR file: target/withdrawal.json
@@ -194,12 +326,13 @@ Compilation successful.
 💾 CCS written to target/withdrawal.ccs
 ```
 
-### Что важно
+### Что значат эти строки
 
-- **`nbConstraints=6308`** — это количество ограничений в circuit. Влияет на **время** генерации proof (43 секунды) и **размер** `.ccs` (642 КБ).
-- **`nbPublic=0 nbSecret=0`** — Sunspot **не видит** публичные входы на этом уровне. Они передаются **отдельно** через witness (`.pw` — public witness) при `prove`.
+- **`nbPublic=0 nbSecret=0`** — Sunspot **не видит** публичные и приватные входы **на этом уровне**. Они появятся **позже** — при генерации witness.
+- **`nbConstraints=6308`** — количество ограничений в circuit'е. Влияет на размер `.ccs` и время proof'а.
+- **`Compilation successful`** — `.ccs` записан.
 
-### Артефакты
+### Артефакт
 
 | Файл | Размер | SHA-256 |
 |---|---|---|
@@ -209,13 +342,17 @@ Compilation successful.
 
 ---
 
-## Этап 3.2. `sunspot setup`
+## 5. Под-этап 3.2: `sunspot setup`
 
-### Что делает
+### Зачем
 
-Генерирует **proving key** (`.pk`) и **verifying key** (`.vk`) из CCS. Это **trusted setup** — разовая операция.
+Из CCS **сгенерировать** proving key (PK) и verifying key (VK).
 
-**⚠️ КРИТИЧНО:** Без **MPC ceremony** тот, кто запускал setup, **видел toxic waste**. Если он его сохранил — может **подделывать** proof. Для **devnet/demo** это **не критично**. Для **production** — **обязательно** MPC.
+### ⚠️ Критично: что такое trusted setup
+
+См. раздел 1 «Что такое trusted setup и почему это **риск**».
+
+**Коротко:** во время setup генерируется **toxic waste**. Если его сохранить — можно **подделывать** proof. Для **demo** это **приемлемо**. Для **production** нужна **MPC ceremony**.
 
 ### Команда
 
@@ -226,7 +363,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-### Вывод
+### Ожидаемый результат
 
 ```
 🔧 Loading CCS file: target/withdrawal.ccs
@@ -239,26 +376,36 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 
 | Файл | Размер | SHA-256 |
 |---|---|---|
-| `withdrawal.pk` | 2 145 109 байт | `1e7a66426f613ff51e356023ae3499711b2c7f4259d5eb74c40e036f994f87f7` |
+| `withdrawal.pk` | 2 145 109 байт (2 МБ) | `1e7a66426f613ff51e356023ae3499711b2c7f4259d5eb74c40e036f994f87f7` |
 | `withdrawal.vk` | 972 байта | `6279a9e6e434c108869bb9b64c8ff20e66cecd3461a5d8cdd4941b817c9d7aed` |
+
+### Что значат `.pk` и `.vk`
+
+- **`.pk` (proving key)** — используется prover'ом. **Секретный**. Если утечёт — атакующий **сможет** генерировать proof'ы, но **не сможет** их **подделать** (для подделки нужен toxic waste).
+- **`.vk` (verifying key)** — используется verifier'ом. **Публичный**. **Встраивается** в verifier program на этапе 3.3.
 
 **Чекпоинт:** `.checkpoints/03.2-sunspot-setup/`.
 
-**Что такое toxic waste:** промежуточные значения, использованные при setup. Если их сохранить, можно генерировать **фейковые** proof, которые verifier примет. В **MPC-церемонии** несколько независимых участников комбинируют свои вклады так, что **никто** не знает полный toxic waste.
-
 ---
 
-## Этап 3.3. `sunspot deploy`
+## 6. Под-этап 3.3: `sunspot deploy`
 
-### Что делает
+### Зачем
 
-Собирает **Solana BPF-программу** (verifier) из verifying key.
+Из VK собрать **Solana-программу** (verifier) в формате **BPF**.
 
-**Как именно:** `sunspot deploy`:
-1. Клонирует (если ещё не клонирован) `gnark-solana` из репозитория Sunspot.
-2. Запускает `cargo build-sbf` для крейта `verifier-bin` — Rust-код, который реализует Groth16-верификацию на Solana.
-3. Встраивает `.vk` в программу как константу.
-4. Создаёт keypair для Program ID.
+### Что такое BPF
+
+**BPF** (Berkeley Packet Filter) — формат байткода, который исполняет Solana.
+
+**Почему BPF:**
+- **Безопасность:** программа не имеет прямого доступа к памяти хоста.
+- **Детерминизм:** одинаковая логика на всех валидаторах.
+- **Портативность:** один формат для всех языков (Rust, C, C++).
+
+**Компиляция:** Rust → BPF через `cargo build-sbf` (**S**olana **B**inary **F**ormat — старая аббревиатура, теперь BPF).
+
+**Ключевое:** `cargo build-sbf` **не то же самое**, что `cargo build`. Первое компилирует под **Solana VM**, второе — под **обычный** Linux.
 
 ### Команда
 
@@ -269,16 +416,23 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-**⏱ Первая сборка — 3–5 минут.** Rust-крейт `gnark-solana` содержит много зависимостей (BN254, ark-*, solana-program), SBF-компиляция медленная.
+**⏱ Первая сборка — 3–5 минут.** Rust-крейт `gnark-solana` содержит **сотни** зависимостей (BN254, ark-*, solana-program). SBF-компиляция **медленная**.
 
-### Вывод (сокращённо)
+### Что происходит внутри
+
+1. Sunspot проверяет наличие `~/sunspot/gnark-solana/crates/verifier-bin`.
+2. Запускает `cargo build-sbf` для крейта `verifier-bin`.
+3. Собирает BPF-программу, **встраивая** VK как константу.
+4. Создаёт **keypair** для Program ID.
+
+### Ожидаемый результат (сокращённо)
 
 ```
 Using VK file: /home/ubuntu/circuits/withdrawal/target/withdrawal.vk
 Using verifier-bin crate directory: /home/ubuntu/sunspot/gnark-solana/crates/verifier-bin
 Running cargo build-sbf...
    Compiling proc-macro2 v1.0.103
-   ... (много крейтов) ...
+   ... (сотни крейтов) ...
 warning: use of deprecated constant `solana_bn254::prelude::ALT_BN128_ADD`
 ... (6 warnings) ...
     Finished `release` profile [optimized] target(s) in 51.60s
@@ -294,9 +448,11 @@ warning: use of deprecated constant `solana_bn254::prelude::ALT_BN128_ADD`:
          Please use `ALT_BN128_G1_ADD_BE` instead
 ```
 
-**Что это:** Sunspot использует **устаревшие** константы `solana-bn254` (старый API). Новый API — `*_BE` (big-endian). **Это не ошибка**, компиляция проходит. **Известная** проблема upstream Sunspot. Не влияет на корректность verifier'а.
+**Что это:** Sunspot использует **устаревшие** константы `solana-bn254` (старый API). Новый API — `*_BE` (big-endian).
 
-**Что НЕ надо делать:** пытаться «починить» эти warnings. Это внешний крейт, мы его не контролируем.
+**Это не ошибка** — компиляция **проходит**. **Известная** проблема upstream Sunspot. Не влияет на корректность verifier'а.
+
+**Что НЕ делать:** «починить» warnings. Это **внешний** крейт, мы его **не контролируем**.
 
 ### Артефакты
 
@@ -305,15 +461,15 @@ warning: use of deprecated constant `solana_bn254::prelude::ALT_BN128_ADD`:
 | `withdrawal.so` | 87 312 байт | `117fae71a4e6f421a0b31200f98e80d4955474d60080006c22881f9354e908b7` |
 | `withdrawal-keypair.json` | 224 байта | `460c1eb4637a80d6cf22508eb292492533e736c74f2cc6ff0808ab20c6d597a1` |
 
-**Verifier Program ID:** `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`
+**Verifier Program ID:** `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
 
 **Чекпоинт:** `.checkpoints/03.3-sunspot-deploy/`.
 
 ### ⚠️ Ошибка: `GNARK_VERIFIER_BIN directory does not exist`
 
-**Симптом:** `sunspot deploy` падает с сообщением о том, что `GNARK_VERIFIER_BIN` не существует.
+**Симптом:** `sunspot deploy` падает с сообщением, что `GNARK_VERIFIER_BIN` **не существует**.
 
-**Причина:** Sunspot установлен через `.deb` пакет — он содержит **только** CLI-бинарь. Но `sunspot deploy` **компилирует** verifier program из **Rust-крейта** `gnark-solana`, который **не входит** в `.deb`. Нужен **полный git-клон** репозитория Sunspot.
+**Причина:** Sunspot установлен через `.deb` — содержит **только** CLI-бинарь. Но `sunspot deploy` **компилирует** verifier program из **Rust-крейта** `gnark-solana`, которого в `.deb` **нет**. Нужен **полный git-клон** репозитория Sunspot.
 
 **Решение:**
 
@@ -321,19 +477,25 @@ warning: use of deprecated constant `solana_bn254::prelude::ALT_BN128_ADD`:
 git clone https://github.com/reilabs/sunspot.git /home/ubuntu/sunspot
 ```
 
-**Куда это делось в v3:** в `infra/docker/Dockerfile.solana` **сразу добавлен** `git clone sunspot`. Клон **персистентен** в контейнере. В v2 этого не было — и `sunspot deploy` падал после каждого пересоздания контейнера.
+**Куда это делось в v3:** в `infra/docker/Dockerfile.solana` **сразу** добавлен `git clone sunspot`. Клон **персистентен** в контейнере.
 
-**Путь по умолчанию:** `~/sunspot/gnark-solana/crates/verifier-bin`. Sunspot ожидает его наличия.
+**В v2:** клон делался **вручную** после первого падения `sunspot deploy`. При пересоздании контейнера **терялся** — и деплой **снова** падал.
 
-**Переменная окружения** (уже прописана в `Dockerfile.solana`):
+**Переменная окружения** (прописана в Dockerfile):
 
 ```bash
 export GNARK_VERIFIER_BIN="$HOME/sunspot/gnark-solana/crates/verifier-bin"
 ```
 
+**Урок:** `.deb` содержит **только** CLI. Для компиляции verifier'а нужен **полный** клон.
+
 ---
 
-## Этап 3.4. `solana program deploy`
+## 7. Под-этап 3.4: `solana program deploy`
+
+### Зачем
+
+Загрузить verifier program (`.so`) на **devnet**, чтобы она стала **доступна** для вызовов.
 
 ### Команда
 
@@ -346,7 +508,11 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-### Вывод
+**Что значат флаги:**
+- `--program-id` — использовать **существующий** keypair для получения Program ID.
+- `--url devnet` — сеть devnet (не mainnet).
+
+### Ожидаемый результат
 
 ```
 Program Id: 5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ
@@ -363,7 +529,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-### Вывод
+### Ожидаемый результат
 
 ```
 Program Id: 5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ
@@ -377,111 +543,63 @@ Balance: 0.4444238 SOL
 4.55428808 SOL
 ```
 
-### Что важно
+### Что значат эти строки
 
-- **`Owner: BPFLoaderUpgradeab1e...`** — программа **upgradeable**. Authority — наш кошелёк. В production — **multisig + timelock** (см. `docs/DEMO-NOTICE.md`).
-- **`ProgramData Address`** — адрес аккаунта, где хранятся данные программы (не путать с Program ID).
-- **Rent:** 0.444 SOL за 87 КБ. Списано из нашего кошелька.
-- **Остаток:** 4.554 SOL — **достаточно** для дальнейшей работы (Anchor-программа ~1.5 SOL + запас).
+- **Program Id** — публичный адрес verifier'а.
+- **Owner: `BPFLoaderUpgradeab1e...`** — программа **upgradeable**. Код хранится **отдельно**, а Program ID — ссылка.
+- **ProgramData Address** — где **реально** лежит код.
+- **Authority** — кто **может** обновлять программу. У нас — наш кошелёк.
+- **Data Length: 87312** — размер кода в байтах.
+- **Balance: 0.444 SOL** — **rent** за хранение программы на блокчейне.
+
+### Что такое Solana program vs ProgramData
+
+В Solana **upgradeable** программы устроены так:
+- **Program ID** — «метка» (адрес), **постоянная**.
+- **ProgramData** — аккаунт, где **хранится код**. Может **меняться** при обновлении.
+
+**Зачем разделение:** чтобы **обновлять** код, **не меняя** адрес. Клиенты **всегда** знают, куда обращаться.
+
+**Authority** — кошелёк, имеющий право **обновлять** ProgramData. У нас — наш кошелёк. В production — **multisig + timelock**.
+
+### Что такое rent
+
+В Solana **хранение данных** платное. Аккаунт должен иметь баланс ≥ **rent-exempt** минимум (чтобы его не удалили). Для verifier'а 87 КБ — **0.444 SOL**.
+
+**Rent — не списывается** со временем (rent-exempt). Просто **замораживается** в аккаунте. Если программу **удалить** — SOL вернётся.
 
 **Чекпоинт:** `.checkpoints/03.4-deploy-verifier/`.
 
 ---
 
-## Этап 3.5. Локальная проверка: witness → proof → verify
+## 8. Под-этап 3.5: локальная проверка
 
-Это **самая неочевидная** часть. Здесь мы убеждаемся, что:
-1. Witness, сгенерированный из `Prover.toml`, **удовлетворяет** constraints.
-2. Proof, сгенерированный из witness, **валиден** по `.vk`.
+### Зачем
 
-Если **локальный** proof валиден — **on-chain verifier** (тот же `.vk` внутри `.so`) даст **тот же** результат. Это **гарантия**, что вся связка circuit↔verifier↔proof согласована.
+**Убедиться**, что весь пайплайн работает **end-to-end**:
+1. Circuit **корректен** — все constraints удовлетворяются witness'ом.
+2. Proof **валиден** — verifier с **этим** VK его **принимает**.
 
-### 3.5.1. Генерация witness-теста
+Если proof **валиден** локально, то **тот же** VK, **встроенный** в on-chain verifier, даст **тот же** результат. Это **гарантия** согласованности.
 
-**Проблема:** `nargo execute` требует `Prover.toml` с **конкретными** значениями. В v2 `Prover.toml` генерировался из теста `test_generate_valid_inputs --show-output`.
+### 8.1. Генерация witness-теста
 
-**Решение:** добавить **специальный тест** `test_generate_valid_inputs` в `circuits/withdrawal/src/test_witness.nr`, который:
-1. Строит **синтетический** 20-уровневый Merkle tree вокруг commitment.
+**Проблема:** `nargo execute` требует `Prover.toml` с **конкретными** значениями входов.
+
+**Решение:** **специальный тест** `test_generate_valid_inputs` в `circuits/withdrawal/src/test_witness.nr`, который:
+1. Строит **синтетический** 20-уровневый Merkle tree.
 2. Вычисляет **root**.
-3. Печатает **все** входы (публичные и приватные) в stdout.
+3. Печатает **все** входы в stdout.
 
-### 3.5.2. ⚠️ Проблема: изменение `main.nr` меняет ACIR
+**Полный код** — в `02-circuits.md`, раздел 9.
 
-**Ключевая мысль:** любые изменения в circuit'е (даже добавление `mod test_witness;`) **меняют ACIR**. Это значит:
-- `.json`, `.ccs`, `.pk`, `.vk`, `.so` **могут измениться**.
-- Verifier Program ID **может измениться** (если пересоздан keypair).
-- **Нужно передеплоить** verifier.
+**Почему это меняет ACIR:** тест **добавляется** в circuit, поэтому `withdrawal.json` **изменяется**. Но **constraint system не меняется** — тест использует **те же** функции. Поэтому `.ccs`, `.pk`, `.vk`, `.so` **остаются теми же**.
 
-**Мы пошли на это сознательно.** Изменения circuit'а **неизбежны** при разработке, лучше сделать их **сейчас**, до on-chain интеграции.
+**Следствие:** **передеплой verifier'а НЕ нужен**. Program ID **остаётся**.
 
-**НО:** в нашем случае **`.json` изменился** (`f154aca0...` → `29ac2e67...`), а **`.ccs`, `.pk`, `.vk`, `.so` НЕ изменились**. Почему? Потому что `mod test_witness;` **не добавляет constraints** — тест использует **те же** `hash_1/2/3` и `compute_merkle_root`, что `main()`. Constraint system **идентичен**. Только **ACIR-обёртка** (сериализация) немного другая.
+### 8.2. Сборка `Prover.toml`
 
-**Следствие:** **передеплой verifier НЕ нужен.** Program ID остаётся `5t51iu6apRxgLbt91eVZ6YYzHsnmHCVnLGqJtqdfMFWJ`.
-
-### 3.5.3. ⚠️ Проблема: `&str` в Noir 1.0.0-rc.2
-
-**Симптом:**
-
-```rust
-fn print_field_array<let N: u32>(name: &str, arr: [Field; N]) { ... }
-```
-
-↓
-
-```
-error: str expects 1 generic but 0 were given
-error: Expected type &str<error>, found type str<12>
-```
-
-**Причина:** в Noir 1.0.0-rc.2 строки **не передаются** как `&str`. Тип `str` **требует** generic-параметр (размер): `str<N>`.
-
-**Решение:** **избегать** строковых параметров. Просто **два разных** теста или функция без строкового параметра, где имя **зашито**.
-
-В нашем случае — упростили: **печатаем только значения**, а формат `Prover.toml` собираем **на хосте** (см. 3.5.5).
-
-### 3.5.4. ⚠️ Проблема: `f"...{arr[i]}"` требует явного типа
-
-**Симптом:**
-
-```rust
-println(f"  {arr[i]},");
-```
-
-↓
-
-```
-error: Type annotation needed
-error: Could not determine the type of the generic argument `T` declared on the function `println`
-```
-
-**Причина:** format-строка `f"..."` в Noir требует **явной** типизации generic-аргумента.
-
-**Решение:** печатать **без** format-строки. `println(value)` работает, если `value` — конкретного типа (`Field`, `u64`, `bool`). Для отступов — не использовать.
-
-### 3.5.5. ⚠️ Проблема: Field values должны быть < 2^254
-
-**Симптом:**
-
-```rust
-let note_secret: Field = 0x3333333333333333333333333333333333333333333333333333333333333333;
-```
-
-↓
-
-```
-error: Integer literal is too large
-value exceeds limit of 21888242871839275222246405745257275088548364400416034343698204186575808495616
-```
-
-**Причина:** BN254 prime ≈ **2^254** (точнее `21888...616`). Числа **≥ 2^254** не помещаются в `Field`. `0x3333...3333` — это **256 бит** → слишком много.
-
-**Решение:** использовать **маленькие** литералы, **гарантированно** меньше 2^254. Например, `111111111111111111` (18 девяток) — с запасом.
-
-**Урок на будущее:** любой `Field` из внешнего мира (Solana Pubkey — 32 байта, 256 бит) **обязательно** должен быть **редуцирован** к BN254 через модульную арифметику. Это причина, по которой в проекте нужна функция `reduce_to_field`.
-
-### 3.5.6. Полный witness: сборка `Prover.toml`
-
-**Команда (внутри контейнера):**
+**Команда:**
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -506,7 +624,6 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 0x03157def08c0e38e
 0x04a03ce68d215555
 0x07b5bad595e238e3
-0x00
 ... (19 нулей) ...
 0x01
 ... (19 единиц) ...
@@ -516,6 +633,8 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 ```
 
 **48 строк данных:** 8 одиночных полей + 20 `merkle_proof` + 20 `is_even`.
+
+### 8.3. Извлечение данных
 
 **Сохранение сырого вывода:**
 
@@ -536,9 +655,9 @@ awk '
 ' .checkpoints/03.5-witness/witness-raw.txt > .checkpoints/03.5-witness/data-only.txt
 ```
 
-Получаем **48 строк**, по одной hex-величине в каждой.
+**Результат:** 48 строк — по одной hex-величине в каждой.
 
-### 3.5.7. ⚠️ Проблема: TOML не принимает hex-числа > 2^63
+### 8.4. ⚠️ Ошибка: TOML не принимает hex-числа > 2^63
 
 **Симптом:**
 
@@ -553,9 +672,9 @@ number too large to fit in target type
 note: large Field numbers can be written by wrapping them in double quotes
 ```
 
-**Причина:** TOML парсер nargo видит `0x1e85...` как **число** и пытается его распарсить в `i64`. Оно **больше** 2^63. Провал.
+**Причина:** TOML парсер `nargo` видит `0x1e85...` как **число** и пытается распарсить в `i64`. Оно **больше** 2^63. Провал.
 
-**Решение:** **обернуть** значения в **двойные кавычки**. nargo специально поддерживает эту форму для больших Field-значений.
+**Решение:** **обернуть** значения в **двойные кавычки**. nargo специально поддерживает эту форму для **больших** Field-значений.
 
 **Сборка `Prover.toml` (на хосте):**
 
@@ -585,7 +704,7 @@ note: large Field numbers can be written by wrapping them in double quotes
 } > circuits/withdrawal/Prover.toml
 ```
 
-**Результат `Prover.toml`:**
+**Ожидаемый результат:** `Prover.toml` с 10 строками:
 
 ```toml
 root = "0x1e8508c3c11def8bfecd33c4bf97ce7fd065fea15eafe55c47e35bd056f1c6b2"
@@ -600,9 +719,9 @@ merkle_proof = ["0x07b5bad595e238e3", "0x00", ..., "0x00"]
 is_even = [true, true, ..., true]
 ```
 
-**Важно:** `Prover.toml` **в `.gitignore`**. Он **не коммитится**. Восстанавливается **скриптом** из `test_witness.nr`.
+**Важно:** `Prover.toml` **в `.gitignore`** — не коммитится. Восстанавливается **скриптом** из `test_witness.nr`.
 
-### 3.5.8. `nargo execute` — генерация witness
+### 8.5. `nargo execute` — генерация witness
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -611,16 +730,16 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-**Вывод:**
+**Ожидаемый результат:**
 
 ```
 [withdrawal] Circuit witness successfully solved
 [withdrawal] Witness saved to target/withdrawal.gz
 ```
 
-**`target/withdrawal.gz`** — 3 825 байт. Это **сериализованный witness** для Sunspot.
+**Артефакт:** `withdrawal.gz` — **3 825 байт**.
 
-### 3.5.9. `sunspot prove` — генерация proof
+### 8.6. `sunspot prove` — генерация proof
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -635,7 +754,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 
 **Порядок аргументов:** `circuit.json`, `witness.gz`, `ccs`, `pk`.
 
-**Вывод:**
+**Ожидаемый результат:**
 
 ```
 Loading ACIR file: target/withdrawal.json
@@ -651,18 +770,46 @@ Loading ACIR file: target/withdrawal.json
 ✅ Proof generation complete!
 ```
 
-**⏱ Время: ~43 секунды.** Первая генерация самая медленная; последующие могут быть быстрее за счёт кеша.
+**⏱ Время: ~43 секунды.** Первая генерация самая медленная.
 
 **Артефакты:**
 
-| Файл | Размер | Что это |
+| Файл | Размер | Что |
 |---|---|---|
 | `withdrawal.proof` | 324 байта | Groth16 proof |
-| `withdrawal.pw` | 172 байта | Public witness (5 × 32 + 12 header) |
+| `withdrawal.pw` | 172 байта | Public witness |
 
-**`withdrawal.pw` — 172 байта.** Это **тот самый** формат `encode_public_inputs`, который мы зафиксировали в `spec.json`. **Важно:** в on-chain программе мы будем **строить** эти 172 байта **сами**, из публичных входов. **Хеш должен совпасть.**
+### Почему proof 324 байта
 
-### 3.5.10. ⚠️ Проблема: неправильный порядок аргументов `sunspot verify`
+Groth16 **фиксирует** размер proof:
+- **2** элемента G1 (по 32 байта каждый) = 64 байта.
+- **1** элемент G2 (64 байта).
+- **Плюс** метаданные.
+
+**Итого ~324 байта** независимо от размера circuit'а. Это **фундаментальное** свойство Groth16.
+
+### Почему public witness 172 байта
+
+**Публичный witness** — это **те самые** 5 публичных входов **плюс** заголовок:
+
+```
+[12-byte header]
+  NR_PUBLIC_INPUTS (u32 BE) = 5
+  0                 (u32 BE) = 0
+  NR_PUBLIC_INPUTS (u32 BE) = 5
+[5 × 32 bytes]
+  root
+  nullifier_hash
+  recipient
+  recipient_binding
+  amount (right-aligned u64 in 32-byte word)
+```
+
+**Итого:** 12 + 160 = **172 байта**.
+
+**КРИТИЧНО:** on-chain `encode_public_inputs` (этап 4) **должен** произвести **точно те же** 172 байта. Мы **сверим** это на этапе 4.
+
+### 8.7. ⚠️ Ошибка: неправильный порядок аргументов `sunspot verify`
 
 **Симптом:**
 
@@ -680,7 +827,7 @@ Error: invalid verification key file: target/withdrawal.proof (must end with .vk
 
 **Решение:** порядок — **`.vk`, `.proof`, `.pw`**.
 
-### 3.5.11. `sunspot verify` — финальная проверка
+### 8.8. `sunspot verify` — финальная проверка
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
@@ -692,7 +839,7 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 '
 ```
 
-**Вывод:**
+**Ожидаемый результат:**
 
 ```
 🔑 Loading Verification Key: target/withdrawal.vk
@@ -702,70 +849,20 @@ Loading public witness: target/withdrawal.pw
 ✅ Verification successful!
 ```
 
-**`took=1.25`** — верификация **быстрее** генерации в **35 раз**. Это **нормально** для Groth16.
+**`took=1.25`** — верификация **в 35 раз** быстрее генерации. Это **нормально** для Groth16.
 
 ---
 
-## Итоги этапа 3.5
+## 9. Под-этап 3.6: финальный чекпоинт
 
-**Полный криптографический пайплайн работает:**
+### Что сохранено
 
-1. **Circuit** — 6308 constraints.
-2. **Witness** — 3 825 байт, все constraints удовлетворены.
-3. **Proof** — 324 байта, Groth16 на BN254.
-4. **Verification** — 1.25 секунды, `✅ successful`.
+`.checkpoints/03.6-stage-3-final/`:
+- `sources/` — 10 артефактов (`.json`, `.ccs`, `.pk`, `.vk`, `.so`, `keypair.json`, `.gz`, `.proof`, `.pw`, `Prover.toml`).
+- `manifest.txt` — SHA-256 всех артефактов.
+- `commit.txt` — финальный коммит.
 
-**Что это доказывает:**
-- Poseidon2 zero-padding **работает**.
-- Merkle root **вычисляется корректно**.
-- `recipient_binding` **корректен**.
-- Witness **согласован** с circuit.
-- Verifying key **валиден**.
-
-**Что осталось:** убедиться, что **on-chain verifier** даёт **тот же** результат. Это будет проверено:
-- **Либо** на этапе 3.6 — через отправку proof в verifier program напрямую.
-- **Либо** на этапе 4.5 — через LiteSVM E2E-тест.
-
----
-
-## Полный список ручных операций
-
-Собрано в одном месте — для будущего туториала:
-
-1. Создать кошелёк (`solana-keygen new`).
-2. Настроить RPC (`solana config set --url devnet`).
-3. Пополнить через faucet (веб, не CLI).
-4. `sunspot compile target/withdrawal.json`.
-5. `sunspot setup target/withdrawal.ccs`.
-6. `sunspot deploy target/withdrawal.vk`.
-7. `solana program deploy target/withdrawal.so --program-id target/withdrawal-keypair.json --url devnet`.
-8. `nargo test test_generate_valid_inputs --show-output` (генерация witness-данных).
-9. Извлечь блок между маркерами через `awk`.
-10. Собрать `Prover.toml` скриптом на хосте (с кавычками).
-11. `nargo execute` (генерация `.gz`).
-12. `sunspot prove target/withdrawal.json target/withdrawal.gz target/withdrawal.ccs target/withdrawal.pk`.
-13. `sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw`.
-
-**13 команд.** Каждая со своими **подводными камнями**.
-
----
-
-## Полный список ошибок
-
-1. **`Permission denied`** при создании кошелька → `sudo chown -R 1000:1000 solana/`.
-2. **`solana/cli/config.yml` попал в git** → `.gitignore`: `solana/` полностью.
-3. **`GNARK_VERIFIER_BIN directory does not exist`** → `git clone sunspot` в Dockerfile.
-4. **`error: str expects 1 generic`** → `&str` в Noir не работает.
-5. **`error: Type annotation needed`** для `f"...{arr[i]}"` → печатать без format-строки.
-6. **`Integer literal is too large`** → Field values < 2^254.
-7. **`TOML parse error: number too large`** → обернуть hex в двойные кавычки.
-8. **`invalid verification key file`** → порядок аргументов `sunspot verify`: `.vk` первым.
-
-**8 ошибок.** Каждая зафиксирована выше.
-
----
-
-## Артефакты этапа 3
+### Все артефакты этапа 3
 
 | Файл | Размер | SHA-256 |
 |---|---|---|
@@ -778,15 +875,122 @@ Loading public witness: target/withdrawal.pw
 | `withdrawal.gz` | 3 825 байт | `da6779ae9457891ca85378718e2a9637186306790347f1cfe9f29df964321201` |
 | `withdrawal.proof` | 324 байта | `d454b20105b339f893b80a64081a76f6f4f9b3fb6927b5eaf9fb1e96e2c05c79` |
 | `withdrawal.pw` | 172 байта | `c4ffea4a4f03c123977f3931b548b01f55820840bc144495063798f2acadb07f` |
+| `Prover.toml` | 723 байта | `fb144adb85ea5061c13e89b5d217b4e21a485829cf52149a1bc53571cabc92b2` |
 
-**Программы на devnet:**
+---
 
-- **Verifier:** `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`
+## 10. Полный список ручных операций
 
-**Чекпоинты:**
+Собрано в одном месте — для будущего туториала:
 
-- `.checkpoints/03.1-sunspot-compile/`
-- `.checkpoints/03.2-sunspot-setup/`
-- `.checkpoints/03.3-sunspot-deploy/`
-- `.checkpoints/03.4-deploy-verifier/`
-- `.checkpoints/03.5-witness/`
+1. Создать кошелёк (`solana-keygen new`).
+2. Настроить RPC (`solana config set --url devnet`).
+3. Пополнить через faucet (веб, не CLI).
+4. `sunspot compile target/withdrawal.json`.
+5. `sunspot setup target/withdrawal.ccs`.
+6. `sunspot deploy target/withdrawal.vk`.
+7. `solana program deploy target/withdrawal.so --program-id target/withdrawal-keypair.json --url devnet`.
+8. `nargo test test_generate_valid_inputs --show-output` (witness-данные).
+9. Извлечь блок между маркерами через `awk`.
+10. Собрать `Prover.toml` скриптом на хосте (с кавычками).
+11. `nargo execute` (генерация `.gz`).
+12. `sunspot prove target/withdrawal.json target/withdrawal.gz target/withdrawal.ccs target/withdrawal.pk`.
+13. `sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw`.
+
+**13 команд.** Каждая — со своими подводными камнями.
+
+---
+
+## 11. Полный список ошибок
+
+| # | Ошибка | Решение |
+|---|---|---|
+| 1 | `Permission denied` при создании кошелька | `sudo chown -R 1000:1000 solana/` |
+| 2 | `solana/cli/config.yml` попал в git | `.gitignore`: `solana/` полностью |
+| 3 | `GNARK_VERIFIER_BIN directory does not exist` | `git clone sunspot` в Dockerfile |
+| 4 | `error: str expects 1 generic` | `&str` в Noir не работает |
+| 5 | `error: Type annotation needed` для `f"...{arr[i]}"` | Печатать без format-строки |
+| 6 | `Integer literal is too large` | Field values < 2^254 |
+| 7 | `TOML parse error: number too large` | Обернуть hex в двойные кавычки |
+| 8 | `invalid verification key file` | Порядок аргументов `sunspot verify`: `.vk` первым |
+
+---
+
+## 12. Воспроизведение с нуля
+
+Минимальный набор команд для **полного** повторения этапа:
+
+```bash
+# 1. Кошелёк (если ещё нет)
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  solana-keygen new --no-bip39-passphrase -o /home/ubuntu/.config/solana/id.json
+  solana config set --url devnet
+'
+# → записать адрес, пополнить через https://faucet.solana.com
+
+# 2. Компиляция circuit'а в ACIR (если ещё нет)
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/circuits/withdrawal && nargo compile
+'
+
+# 3. ACIR → CCS
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/circuits/withdrawal && sunspot compile target/withdrawal.json
+'
+
+# 4. CCS → PK + VK
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/circuits/withdrawal && sunspot setup target/withdrawal.ccs
+'
+
+# 5. VK → verifier program (.so + keypair)
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/circuits/withdrawal && sunspot deploy target/withdrawal.vk
+'
+
+# 6. Деплой на devnet
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/circuits/withdrawal
+  solana program deploy target/withdrawal.so \
+    --program-id target/withdrawal-keypair.json \
+    --url devnet
+'
+
+# 7. Генерация witness-данных и Prover.toml (см. раздел 8.2–8.4)
+# 8. nargo execute → withdrawal.gz
+# 9. sunspot prove → withdrawal.proof + withdrawal.pw
+# 10. sunspot verify → "✅ Verification successful!"
+```
+
+---
+
+## 13. Что дальше
+
+**Следующий этап:** `04-anchor.md` — Anchor-программа `zk_pool`.
+
+**Что будет:**
+- Три инструкции: `pool` (инициализация), `deposit`, `withdraw`.
+- `withdraw` вызывает verifier через **CPI**, передавая 172 байта публичных входов.
+- `encode_public_inputs` — Rust-функция, генерирующая **точно те же** 172 байта, что и `withdrawal.pw`.
+- Anchor-программа задеплоена на devnet.
+- **LiteSVM E2E test** — полный цикл deposit → withdraw с реальным proof.
+
+**Перед прочтением:**
+- `00-zk-primer.md` — что такое CPI, PDA, Solana-программы.
+- `00-glossary.md` — термины по мере необходимости.
+
+**Ключевой момент:** на этапе 4 мы **сверим** байты, генерируемые `encode_public_inputs`, с **`withdrawal.pw`** — 172 байта. Если **не совпадут** — увидим **сразу**, а не на этапе 8 (frontend).
+
+---
+
+## 14. Ссылки
+
+- [Groth16 paper (Jens Groth, 2016)](https://eprint.iacr.org/2016/260)
+- [Sunspot repository](https://github.com/reilabs/sunspot)
+- [Solana programs](https://solana.com/docs/core/programs)
+- [Solana rent](https://solana.com/docs/core/accounts#rent)
+- [BPF loader](https://docs.solanalabs.com/runtime/programs#bpf-loader)
+- `docs/notes/00-zk-primer.md` — введение в ZK.
+- `docs/notes/00-glossary.md` — все термины.
+- `docs/notes/02-circuits.md` — предыдущий этап.
+- `docs/notes/04-anchor.md` — следующий этап.
