@@ -1,0 +1,20 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+zk_pool = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm"
+
+[programs.devnet]
+zk_pool = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
+
+[hooks]
