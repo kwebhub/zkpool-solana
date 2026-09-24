@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-24 (after stage 4.5.1 — tests/ reorganization)
+> **Last updated:** 2026-09-24 (after stage 4.5.3 — test_pool.rs)
 
 ---
 
@@ -73,6 +73,22 @@ When working with a **new** library (like LiteSVM), **do not** write a large fil
 **Rationale:** LiteSVM (and other Solana crates) change API between minor versions. A 200-line file may produce 50 compile errors, all mixed. A 20-line file produces 1–2 errors, easy to isolate.
 
 **How to check exact API:** read the crate sources in `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
+
+### 0.11. Updating existing files — never delete information
+
+When the assistant updates an existing file in `docs/notes/` or `docs/PROJECT_CONTEXT.md`:
+
+1. **Take the current file content** (the user pastes it, or the assistant has it from the chat history).
+2. **Preserve it in full** — no information is removed.
+3. **Add** the new sections in the appropriate place.
+4. **Update** the glossary if new terms appeared.
+5. **Give back the full text** — old content + additions.
+
+**Allowed:** rephrase, reorder sections, improve wording — as long as the **information is preserved**.
+
+**Forbidden:** remove, shorten, "simplify", or replace existing sections with a summary.
+
+The user explicitly requested this (2026-09-24): "к существующему тексту добавляешь описание своих действий, ошибок и их решений, объяснений почему, если нужно дополняешь глоссарий и после этого даёшь мне полный текст файла с учетом того что в нём было и добавлений".
 
 ---
 
@@ -239,10 +255,10 @@ All 9 sub-stages complete:
 
 | # | Sub-stage | Status |
 |---|---|---|
-| 4.5.1 | Tests reorganization | ✅ commit `050e58f` |
-| 4.5.2 | `helpers.rs` | ← next |
-| 4.5.3 | `test_pool.rs` | ⏳ |
-| 4.5.4 | `test_deposit.rs` | ⏳ |
+| 4.5.1 | Tests reorganization (move out of `onchain/`) | ✅ commit `050e58f` |
+| 4.5.2 | `helpers.rs` (load both programs) | ✅ commit `cd01255` |
+| 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ commit `59cf81e` |
+| 4.5.4 | `test_deposit.rs` | ← next |
 | 4.5.5 | `test_withdraw.rs` | ⏳ |
 | 4.5.6 | `test_double_spend.rs` | ⏳ |
 | 4.5.7 | Final checkpoint | ⏳ |
@@ -250,7 +266,7 @@ All 9 sub-stages complete:
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
-- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (874 lines).
+- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (1014 lines).
 - `docs/DEMO-NOTICE.md`.
 - `docs/PROJECT_CONTEXT.md` — this file.
 - `docs/notes/assets/` — folders for screenshots.
@@ -365,6 +381,7 @@ All 9 sub-stages complete:
 - **`failed to select a version for solana-hash`** — version conflict between `litesvm 0.16` (needs `solana-hash ~4.5.0`) and `solana-message 5` (needs `solana-hash >= 4.6.0`).
   - **Fix:** use exact versions from litesvm's `Cargo.toml`:
     - `solana-account = "4.3.0"`
+    - `solana-address = "~2.6.1"`
     - `solana-hash = "4.5.0"`
     - `solana-instruction = "3.4.0"`
     - `solana-keypair = "3.1.2"`
@@ -376,6 +393,16 @@ All 9 sub-stages complete:
 - **`/home/ubuntu/tests: No such file or directory`** — volume not mounted.
   - **Fix:** add `- ../tests:/home/ubuntu/tests` to `infra/docker-compose.yml`; recreate container with `docker compose up -d --force-recreate solana`.
 - **`E0583: file not found for module`** for 5 modules — expected, files not written yet.
+  - **Fix:** create placeholder files (`//! Placeholder`) for each missing module.
+- **Random `.rs` file (bash heredoc in a for-loop).**
+  - **Symptom:** after running `for f in a b c; do cat > tests/src/$f.rs <<EOF ... EOF; done`, an unexpected file `tests/src/.rs` appeared.
+  - **Cause:** bash mishandled the first iteration (variable expansion / heredoc interaction).
+  - **Fix:** `rm tests/src/.rs`.
+  - **Lesson:** when using loops with heredoc — check `ls` immediately after.
+- **`E0308: Transaction::new_signed_with_payer` expects `&[Instruction]`, found `&Vec<CompiledInstruction>`.**
+  - **Cause:** `Message::new_with_blockhash` compiles instructions. We were passing `&msg.instructions` (compiled) to a function that expects raw instructions.
+  - **Fix:** use `Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)` directly with raw instructions, without `Message::new_with_blockhash`.
+  - **Lesson:** in `solana-transaction` there are two paths — through `Message` (compiled) and through raw `Instruction`. Do not mix them.
 
 ### How to find exact signatures for the installed crate version
 
@@ -408,7 +435,7 @@ zkpool-solana/
 │   │   ├── 01-setup.md
 │   │   ├── 02-circuits.md
 │   │   ├── 03-sunspot.md
-│   │   ├── 04-anchor.md
+│   │   ├── 04-anchor.md (1014 lines)
 │   │   └── assets/{01-setup,02-circuits,03-sunspot}/
 │   ├── ru/README.md
 │   ├── DEMO-NOTICE.md
@@ -428,7 +455,11 @@ zkpool-solana/
 │   ├── rust-toolchain.toml
 │   └── src/
 │       ├── lib.rs
-│       └── (helpers.rs, test_pool.rs, etc. — next)
+│       ├── helpers.rs       ← load both programs
+│       ├── test_pool.rs     ← airdrop + pool instruction
+│       ├── test_deposit.rs  ← placeholder
+│       ├── test_withdraw.rs ← placeholder
+│       └── test_double_spend.rs ← placeholder
 ├── services/{backend,merkle,prover}/
 ├── web/
 ├── scripts/{validate-spec,sync-circuits}/
@@ -504,8 +535,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 4.5.1 (tests reorganization).
-**Next stage:** Stage 4.5.2 — `helpers.rs`.
+**Last completed stage:** Stage 4.5.3 (`test_pool.rs`).
+**Next stage:** Stage 4.5.4 — `test_deposit.rs`.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -513,7 +544,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) = **78**. LiteSVM tests not yet written.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 3 (LiteSVM) = **81**.
+
+**LiteSVM tests passing:** `helpers::test_setup_svm_loads_both_programs`, `test_pool::test_airdrop_works`, `test_pool::test_pool_creates_state_and_vault`.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -526,23 +559,24 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `01-setup.md` — 762 lines.
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
-- `04-anchor.md` — 874 lines.
+- `04-anchor.md` — 1014 lines.
 
 ---
 
 ## 13. Instructions for a new assistant
 
-1. Read **section 0** first — especially **0.9** (document non-obvious) and **0.10** (test in small steps).
+1. Read **section 0** first — especially **0.9** (document non-obvious), **0.10** (test in small steps), **0.11** (never delete information).
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 4.5.1**.
-6. Next task: **Stage 4.5.2 — `helpers.rs`**.
+5. Last completed stage: **Stage 4.5.3**.
+6. Next task: **Stage 4.5.4 — `test_deposit.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
 10. **Test in small steps.** 20 lines, not 200.
-11. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
+11. **Never delete information from existing files.**
+12. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
 
 ---
 
@@ -596,5 +630,5 @@ After each stage: write technical note → enrich → capture screenshots → up
 ### 14.9. Ongoing
 
 - Screenshots captured as we go.
-- `04-anchor.md` — 874 lines.
+- `04-anchor.md` — 1014 lines.
 - Glossary updated when new terms appear.

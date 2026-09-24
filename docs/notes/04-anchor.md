@@ -44,9 +44,9 @@
 | # | Что делаем | Статус |
 |---|---|---|
 | 4.5.1 | Реорганизация `tests/` (вынос из `onchain/`) | ✅ |
-| 4.5.2 | `helpers.rs` | ← следующий |
-| 4.5.3 | `test_pool.rs` | ⏳ |
-| 4.5.4 | `test_deposit.rs` | ⏳ |
+| 4.5.2 | `helpers.rs` (загрузка программ) | ✅ |
+| 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ |
+| 4.5.4 | `test_deposit.rs` | ← следующий |
 | 4.5.5 | `test_withdraw.rs` | ⏳ |
 | 4.5.6 | `test_double_spend.rs` | ⏳ |
 | 4.5.7 | Финальный чекпоинт | ⏳ |
@@ -825,10 +825,147 @@ zk_pool = { path = "../onchain/programs/zk_pool" }
 
 **Rust toolchain:** `1.98.1`.
 
-### Коммиты
+### 4.5.2. `helpers.rs`
+
+**Цель:** загрузить **обе** программы в LiteSVM.
+
+**Что сделали:**
+
+Создали `tests/src/helpers.rs` с функцией `setup_svm()`, которая:
+1. Создаёт `LiteSVM::new()`.
+2. Парсит Program IDs из строк в `Address`.
+3. Загружает `zk_pool.so` через `add_program_from_file`.
+4. Загружает `withdrawal.so` (verifier) через `add_program_from_file`.
+
+**Итоговый код:**
+
+```rust
+use litesvm::LiteSVM;
+use solana_address::Address;
+
+const ZK_POOL_SO: &str = "/home/ubuntu/onchain/target/deploy/zk_pool.so";
+const VERIFIER_SO: &str = "/home/ubuntu/circuits/withdrawal/target/withdrawal.so";
+
+pub const ZK_POOL_ID: &str = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm";
+pub const VERIFIER_ID: &str = "5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ";
+
+pub fn setup_svm() -> LiteSVM {
+    let mut svm = LiteSVM::new();
+    let zk_pool_id: Address = ZK_POOL_ID.parse().expect("valid zk_pool ID");
+    let verifier_id: Address = VERIFIER_ID.parse().expect("valid verifier ID");
+    svm.add_program_from_file(zk_pool_id, ZK_POOL_SO)
+        .expect("failed to load zk_pool.so");
+    svm.add_program_from_file(verifier_id, VERIFIER_SO)
+        .expect("failed to load withdrawal.so");
+    svm
+}
+```
+
+**API LiteSVM 0.16 (найдено чтением исходников):**
+
+- `LiteSVM::new()` — конструктор.
+- `add_program_from_file(program_id: impl Into<Address>, path: impl AsRef<Path>) -> Result<(), LiteSVMError>` — загрузка `.so` из файла.
+- `add_program(program_id, program_bytes: &[u8])` — из байтов.
+- `airdrop(address: &Address, lamports: u64) -> TransactionResult`.
+- `send_transaction(tx: impl Into<VersionedTransaction>) -> TransactionResult`.
+- `get_account(address: &Address) -> Option<Account>`.
+- `get_balance(address: &Address) -> Option<u64>`.
+- `latest_blockhash() -> Hash`.
+
+**⚠️ Ключевое:** LiteSVM работает с типом **`Address`** (из `solana-address`), а Anchor — с **`Pubkey`**. Нужна конвертация: `payer.pubkey().into()`.
+
+**Тест:** `test_setup_svm_loads_both_programs` — проверяет, что **обе** программы **загружены** через `svm.get_account(&id)`.
+
+**Результат:** 1 / 1 passed за 0.12s.
+
+**⚠️ Артефакт:** скрипт для создания placeholder-файлов через bash-heredoc **создал случайный файл** `.rs` (без имени). **Причина:** переменная `$f` не раскрылась при первом вызове. **Решение:** `rm tests/src/.rs`. **Урок:** при работе с циклами и heredoc — **проверяй** результат `ls`.
+
+**Коммит:** `cd01255`.
+
+### 4.5.3. `test_pool.rs`
+
+**Цель:** проверить, что инструкция `pool` создаёт `PoolState` и `vault`.
+
+**Подход:**
+
+1. `test_airdrop_works` — проверка, что LiteSVM-`airdrop` и `get_balance` работают.
+2. `test_pool_creates_state_and_vault` — полный тест:
+   - Airdrop payer'у.
+   - Вычислить PDA `pool` и `vault` через `Address::find_program_address`.
+   - Построить **сырую** `Instruction` с **дискриминатором** `POOL_DISCRIMINATOR`.
+   - Подписать транзакцию `Transaction::new_signed_with_payer`.
+   - Отправить `svm.send_transaction(tx)`.
+   - Десериализовать `PoolState` через `anchor_lang::AccountDeserialize::try_deserialize`.
+   - Проверить поля: `authority`, `next_leaf_index=0`, `total_deposits=0`, `current_root_index=0`, `roots=[[0; 32]; 10]`.
+   - Проверить, что `vault` создан с **пустыми** данными.
+
+**Дискриминатор `pool`:** `[134, 215, 119, 168, 28, 199, 193, 127]` (из IDL).
+
+**⚠️ Ошибка `E0308`:** `Transaction::new_signed_with_payer` ожидает `&[Instruction]`, а мы передавали `&msg.instructions` (там `CompiledInstruction`).
+
+**Что не так:** `Message::new_with_blockhash` **компилирует** инструкции. Мы **дублировали** работу — собирали `Message` **и** пытались собрать транзакцию из `msg.instructions`.
+
+**Решение:** использовать `Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)` — **напрямую** с исходными инструкциями, **без** `Message::new_with_blockhash`.
+
+**Правильный код:**
+
+```rust
+let ix = Instruction {
+    program_id,
+    accounts: vec![
+        AccountMeta::new(payer_addr, true),
+        AccountMeta::new(pool_pda, false),
+        AccountMeta::new(vault_pda, false),
+        AccountMeta::new_readonly(system_program_id(), false),
+    ],
+    data: POOL_DISCRIMINATOR.to_vec(),
+};
+
+let blockhash = svm.latest_blockhash();
+let tx = Transaction::new_signed_with_payer(
+    &[ix],
+    Some(&payer.pubkey()),
+    &[&payer],
+    blockhash,
+);
+
+svm.send_transaction(tx).expect("pool instruction failed");
+```
+
+**Урок:** в `solana-transaction` **два** пути:
+1. Через `Message` — когда нужны **compiled** инструкции для `VersionedTransaction`.
+2. Через исходные `Instruction` — когда `Transaction::new_signed_with_payer` **сам** компилирует.
+
+**Не смешивай** их.
+
+**Проверка состояния:**
+
+```rust
+let pool_account = svm.get_account(&pool_pda).expect("pool PDA exists");
+let mut data: &[u8] = &pool_account.data;
+let pool_state = PoolState::try_deserialize(&mut data).expect("deserialize");
+
+assert_eq!(pool_state.authority.to_bytes(), payer_addr.as_ref());
+assert_eq!(pool_state.next_leaf_index, 0);
+assert_eq!(pool_state.total_deposits, 0);
+assert_eq!(pool_state.current_root_index, 0);
+assert_eq!(pool_state.roots, [[0u8; 32]; 10]);
+
+let vault_account = svm.get_account(&vault_pda).expect("vault PDA exists");
+assert_eq!(vault_account.data.len(), 0, "vault must have no data");
+```
+
+**Результат:** 3 / 3 passed за 0.18s.
+
+**Коммит:** `59cf81e`.
+
+### Коммиты Stage 4.5
 
 - `bf04b7d` — set up workspace config; document `workspace.exclude` pitfall.
-- Восстановление `tests/` в корне — будет в следующем коммите.
+- `050e58f` — move `tests/` to project root (Rust 1.98.1).
+- `202d3ed` — record stage 4.5.1 completion.
+- `cd01255` — minimal `helpers.rs` loading both programs.
+- `59cf81e` — `pool` instruction test.
 
 ---
 
@@ -853,22 +990,25 @@ zk_pool = { path = "../onchain/programs/zk_pool" }
 
 ## Ошибки Stage 4.5 — сводка
 
-| # | Симптом | Решение |
-|---|---|---|
-| 1 | `current package believes it's in a workspace when it's not` | Вынести `tests/` из `onchain/`. |
-| 2 | `E0658: maybe_uninit_write_slice` | Rust 1.98.1, изолировать крейт. |
-| 3 | `failed to select a version for solana-hash` | Точные версии из `Cargo.toml` litesvm. |
-| 4 | `/home/ubuntu/tests: No such file or directory` | Volume в `docker-compose.yml`, пересоздать контейнер. |
-| 5 | `E0583: file not found for module` (5 модулей) | Ожидаемо — модули не написаны. |
+| # | Симптом | Под-этап | Решение |
+|---|---|---|---|
+| 1 | `current package believes it's in a workspace when it's not` | 4.5.1 | Вынести `tests/` из `onchain/`. |
+| 2 | `E0658: maybe_uninit_write_slice` | 4.5.1 | Rust 1.98.1, изолировать крейт. |
+| 3 | `failed to select a version for solana-hash` | 4.5.1 | Точные версии из `Cargo.toml` litesvm. |
+| 4 | `/home/ubuntu/tests: No such file or directory` | 4.5.1 | Volume в `docker-compose.yml`, пересоздать контейнер. |
+| 5 | `E0583: file not found for module` (5 модулей) | 4.5.2 | Placeholder-файлы. |
+| 6 | Случайный файл `.rs` (bash heredoc в цикле) | 4.5.2 | Удалить, проверить `ls`. |
+| 7 | `E0308`: `Transaction::new_signed_with_payer` ожидает `&[Instruction]` | 4.5.3 | Не использовать `Message` при сборке транзакции. |
 
 ---
 
 ## Что дальше
 
-**Следующий под-этап:** 4.5.2 — `helpers.rs`.
+**Следующий под-этап:** 4.5.4 — `test_deposit.rs`.
 
 **Что будет:**
-- Функции для **загрузки** `zk_pool.so` и `verifier.so` в LiteSVM.
-- Функции для **создания** аккаунтов (payer, recipient).
-- Функции для **вызова** инструкций.
-- Функции для **чтения** состояния.
+- Сначала `pool` (init).
+- Потом `deposit`: commitment + new_root + amount.
+- Проверки: `vault` баланс увеличился, `next_leaf_index=1`, `total_deposits=1`, `roots[1]=new_root`.
+
+**После 4.5.7** (финальный чекпоинт) — переход к **Stage 5** (backend).
