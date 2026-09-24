@@ -28,8 +28,11 @@ When the assistant asks the user to create or modify a file, it gives **the comp
 
 ### 0.3. Language
 
-- Reply to the user **in Russian**.
-- Files on disk: **English**, except `docs/notes/*.md` and `docs/ru/README.md` (Russian).
+- **Chat communication: English.** All messages between the user and the assistant are in English.
+- **Files on disk:**
+  - **English** by default.
+  - **Russian** only for `docs/ru/*.md` (Russian translations of README and similar documents for the Russian-speaking audience).
+  - `docs/notes/*.md` are in **English** as well (updated 2026-09-24 — previously Russian).
 
 ### 0.4. Never guess
 
@@ -82,13 +85,28 @@ When the assistant updates an existing file in `docs/notes/` or `docs/PROJECT_CO
 2. **Preserve it in full** — no information is removed.
 3. **Add** the new sections in the appropriate place.
 4. **Update** the glossary if new terms appeared.
-5. **Give back the full text** — old content + additions.
+
+**Output format** (revised 2026-09-24, to save chat context):
+
+- **New files** — give the **full file**.
+- **Existing files** — give **insertion point + block**. Do **not** give the full file unless the user explicitly asks.
+- **Never** shorten, "simplify", or replace existing sections with a summary.
 
 **Allowed:** rephrase, reorder sections, improve wording — as long as the **information is preserved**.
 
-**Forbidden:** remove, shorten, "simplify", or replace existing sections with a summary.
+**Forbidden:** remove or shorten existing sections.
 
-The user explicitly requested this (2026-09-24): "к существующему тексту добавляешь описание своих действий, ошибок и их решений, объяснений почему, если нужно дополняешь глоссарий и после этого даёшь мне полный текст файла с учетом того что в нём было и добавлений".
+Rationale for the revision: this chat is 100 000+ tokens because `04-anchor.md` (1014 lines) and `PROJECT_CONTEXT.md` (634 lines) were pasted 2–3 times each. The full-file rule is correct for correctness but expensive for the token budget. The user explicitly requested the revision (2026-09-24).
+
+### 0.12. Chat language — English only
+
+All chat messages between user and assistant are in **English**.
+
+Russian is used **only** for files in `docs/ru/*.md` (translations for the Russian-speaking audience).
+
+`docs/notes/*.md` are **English** (updated 2026-09-24).
+
+**Rationale:** Russian tokens are 2–3× more expensive than English tokens in the model's tokenizer. The chat history has been growing fast; English-only chat preserves context.
 
 ---
 
@@ -258,10 +276,13 @@ All 9 sub-stages complete:
 | 4.5.1 | Tests reorganization (move out of `onchain/`) | ✅ commit `050e58f` |
 | 4.5.2 | `helpers.rs` (load both programs) | ✅ commit `cd01255` |
 | 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ commit `59cf81e` |
-| 4.5.4 | `test_deposit.rs` | ← next |
-| 4.5.5 | `test_withdraw.rs` | ⏳ |
-| 4.5.6 | `test_double_spend.rs` | ⏳ |
+| 4.5.4 | `test_deposit.rs` | ✅ commit `838cf85` |
+| 4.5.5 | `test_withdraw.rs` (3 validation tests) | ✅ commit `c90442a` |
+| 4.5.6 | `test_double_spend.rs` | ← next |
 | 4.5.7 | Final checkpoint | ⏳ |
+
+
+**Tests passing:** 7 (helpers: 1, test_pool: 2, test_deposit: 1, test_withdraw: 3).
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
@@ -403,6 +424,17 @@ All 9 sub-stages complete:
   - **Cause:** `Message::new_with_blockhash` compiles instructions. We were passing `&msg.instructions` (compiled) to a function that expects raw instructions.
   - **Fix:** use `Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)` directly with raw instructions, without `Message::new_with_blockhash`.
   - **Lesson:** in `solana-transaction` there are two paths — through `Message` (compiled) and through raw `Instruction`. Do not mix them.
+- **Deposit test: vault balance is NOT zero after init.**
+  - **Symptom:** `assert_eq!(svm.get_balance(&vault_pda), Some(0))` failed with `Some(890880)`.
+  - **Cause:** the vault PDA is an empty (0-byte data) account and must hold the rent-exempt minimum (890 880 lamports) to exist on Solana.
+  - **Fix:** read `vault_initial` after init, then assert `vault_after == vault_initial + amount`.
+  - **Lesson:** never assume a PDA has zero lamports after `init`. Read the actual initial balance.
+- **Withdraw test: Borsh serialization for `Vec<u8>` proof.**
+  - **Fact:** in Anchor, a `Vec<u8>` argument is serialized as `u32 LE length` + bytes. Fixed-size arrays (`[u8; 32]`) are serialized raw, no length prefix.
+  - **Where:** instruction data for `withdraw` — `proof` needs the length prefix; `nullifier_hash`, `root`, `recipient_binding` do not.
+- **Withdraw E2E with a real proof is not feasible in LiteSVM.**
+  - **Reason:** the proof from stage 3.5 was generated for a specific synthetic state (specific root, specific recipient as a field element, not a Pubkey). Reproducing that state in LiteSVM would require either on-the-fly `sunspot prove` (43 s per proof) or mocking the verifier.
+  - **Decision:** test on-chain validations (proof length, recipient match, known root) plus CPI reaching the verifier. Full E2E with real proof is deferred to devnet + frontend (stage 8).
 
 ### How to find exact signatures for the installed crate version
 
@@ -535,8 +567,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 4.5.3 (`test_pool.rs`).
-**Next stage:** Stage 4.5.4 — `test_deposit.rs`.
+**Last completed stage:** Stage 4.5.5 (`test_withdraw.rs`).
+**Next stage:** Stage 4.5.6 — `test_double_spend.rs`.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -569,8 +601,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 4.5.3**.
-6. Next task: **Stage 4.5.4 — `test_deposit.rs`**.
+5. Last completed stage: **Stage 4.5.5**.
+6. Next task: **Stage 4.5.6 — `test_double_spend.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
