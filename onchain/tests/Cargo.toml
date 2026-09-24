@@ -1,14 +1,29 @@
 [package]
 name = "tests"
 version = "0.1.0"
-description = "Created with Anchor"
+description = "LiteSVM integration tests for zk_pool"
 edition = "2021"
 rust-version = "1.89.0"
 
 [dependencies]
-anchor-client = "1.1.2"
-zk_pool = { version = "0.1.0", path = "../programs/zk_pool" }
-solana-keypair = "3.0.0"
-solana-pubkey = "3.0.0"
+anchor-lang = "1.1.2"
+borsh = "1"
+litesvm = "0.16"
+solana-account = "3"
+solana-hash = "3"
+solana-instruction = "4"
+solana-keypair = "3"
+solana-message = "5"
+solana-pubkey = "3"
 solana-sdk-ids = "3"
 solana-signer = "3"
+solana-transaction = "5"
+zk_pool = { version = "0.1.0", path = "../programs/zk_pool" }
+
+[dev-dependencies]
+solana-system-interface = "1"
+solana-transaction-error = "3"
+
+[lib]
+name = "tests"
+path = "src/lib.rs"

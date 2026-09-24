@@ -2,7 +2,7 @@
 
 > **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
 >
-> **Last updated:** 2026-09-24 (after stage 4.1.9 — zk_pool deployed to devnet)
+> **Last updated:** 2026-09-24 (after stage 4.1.9 — zk_pool deployed; starting stage 4.5)
 
 ---
 
@@ -52,6 +52,20 @@ After each completed stage:
 
 **CRITICAL:** `docs/notes/*.md` is not just internal memory. It is the raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio. See section 14 for the full policy.
 
+### 0.9. Non-obvious project actions must be documented
+
+Any **non-obvious** action required to complete a stage (unusual `cargo` behavior, workspace configuration, manual API checking) must be:
+1. Recorded in `PROJECT_CONTEXT.md`, section 8 "Known pitfalls", under the appropriate stage.
+2. Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, and fix.
+
+The user explicitly requested this (2026-09-24): "все эти неочевидные для проекта действия нужно фиксировать".
+
+Examples of non-obvious actions:
+- Manual reading of crate sources (`~/.cargo/registry/src/...`) to check exact API.
+- Adding packages to `workspace.exclude` instead of `members`.
+- Running `cargo fetch` in a sub-crate to trigger dependency resolution.
+- Any unusual CLI flag or environment variable.
+
 ---
 
 ## 1. What this project is
@@ -80,8 +94,8 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 
 ### Five principles
 
-1. **Single source of truth** — `spec.json` defines layout; layers **validated against** it via `scripts/validate-spec`.
-2. **Contract checks at every boundary** — byte-level, not "should work".
+1. **Single source of truth** — `spec.json` defines layout; layers **validated against** it.
+2. **Contract checks at every boundary** — byte-level.
 3. **No magic numbers** — all constants in one place.
 4. **LiteSVM E2E test before devnet** — from Stage 4.5 onwards.
 5. **Checkpoints with artifacts** — SHA-256, `.checkpoints/NN-name/`.
@@ -138,6 +152,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. On-chain logs showed `Pr
 | Prover | Rust + axum | 1.98.1 + 0.7 |
 | Frontend | Vue 3 + Vite + Pinia | 3.5+ / 8.x / 4.x |
 | Solana CLI | Agave | 3.1.10 |
+| LiteSVM | litesvm | 0.16 |
 | Spec validator | Rust CLI | `scripts/validate-spec` |
 | Circuit sync | Rust CLI | `scripts/sync-circuits` |
 | DB | PostgreSQL | 16 |
@@ -190,43 +205,54 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 ### ✅ Stage 3.7. Documentation enrichment (2026-09-24)
 
-- `docs/notes/00-glossary.md` — 545 lines, 76 terms.
-- `docs/notes/00-zk-primer.md` — 317 lines, 14 sections.
+- `docs/notes/00-glossary.md` — 545 lines.
+- `docs/notes/00-zk-primer.md` — 317 lines.
 - `docs/notes/01-setup.md` — 762 lines.
 - `docs/notes/02-circuits.md` — 957 lines.
 - `docs/notes/03-sunspot.md` — 996 lines.
 
-### ✅ Stage 4.1. Anchor program — all 9 sub-stages complete
+### ✅ Stage 4.1. Anchor program (2026-09-24)
 
-**4.1.1 — Anchor workspace** ✅ (commit `b8f6fdf`).
-**4.1.2 — `constants.rs`** ✅ (commit `23c4dd9`).
-**4.1.3 — `error.rs`, `events.rs`, `state.rs`** ✅ (commit `c45cb75`).
-**4.1.4 — `encoding.rs`** ✅ (commit `dc0fb5e`).
-**4.1.5 — `pool` instruction** ✅ (commit `553634e`).
-**4.1.6 — `deposit` instruction** ✅ (commit `5455d04`).
-**4.1.7 — `withdraw` instruction** ✅ (commit `ce71a47`).
-**4.1.8 — Tests** ✅ (commit `8261530`, 37 unit tests).
-**4.1.9 — Deploy to devnet** ✅ (program deployed).
+All 9 sub-stages complete:
 
-**Deployed program details:**
+| # | Sub-stage | Commit |
+|---|---|---|
+| 4.1.1 | Anchor workspace | `b8f6fdf` |
+| 4.1.2 | `constants.rs` | `23c4dd9` |
+| 4.1.3 | `error.rs`, `events.rs`, `state.rs` | `c45cb75` |
+| 4.1.4 | `encoding.rs` | `dc0fb5e` |
+| 4.1.5 | `pool` instruction | `553634e` |
+| 4.1.6 | `deposit` instruction | `5455d04` |
+| 4.1.7 | `withdraw` instruction | `ce71a47` |
+| 4.1.8 | Tests (37 unit) | `8261530` |
+| 4.1.9 | Deploy to devnet | `3f6dcd6` |
+
+**Deployed program:**
 - Program Id: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
-- ProgramData Address: `FaLqLdL1FVLcwZPpJTw2ugG67KKnEbZRuUJmqvyNtCeA`.
+- ProgramData: `FaLqLdL1FVLcwZPpJTw2ugG67KKnEbZRuUJmqvyNtCeA`.
 - Authority: `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc`.
 - Data Length: 210 000 bytes.
-- Program balance: 1.068 SOL.
-- Wallet balance: 3.468 SOL.
-- Metadata account (IDL): `C931NVVbVKu4mjh1wjgh7bmFx6j6TfML89ut1GsRQHXk`.
-- Keypair backed up to `.secrets/zk_pool-keypair.json` (stable Program ID).
+- Rent: 1.068 SOL.
+- IDL metadata: `C931NVVbVKu4mjh1wjgh7bmFx6j6TfML89ut1GsRQHXk`.
+
+### 🚧 Stage 4.5. LiteSVM E2E test (in progress)
+
+Sub-stages:
+- 4.5.1 — workspace config (in progress)
+- 4.5.2 — helpers
+- 4.5.3 — test_pool
+- 4.5.4 — test_deposit
+- 4.5.5 — test_withdraw
+- 4.5.6 — test_double_spend
+- 4.5.7 — final checkpoint
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
 - `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (813 lines).
-- `docs/DEMO-NOTICE.md` — missing production features.
+- `docs/DEMO-NOTICE.md`.
 - `docs/PROJECT_CONTEXT.md` — this file.
 - `docs/notes/assets/` — folders for screenshots.
-
-**Checkpoints:** 01-setup, 02.1-validate-spec, 02.2.1-poseidon, 02.2.2-hash2-hashes, 02.2.3-withdrawal, 02.3-sync-circuits, 02.4-stage-2-final, 03.1-sunspot-compile, 03.2-sunspot-setup, 03.3-sunspot-deploy, 03.4-deploy-verifier, 03.5-witness, 03.6-stage-3-final, 04.1.1-anchor-init, 04.1.2-constants, 04.1.3-types, 04.1.4-encoding, 04.1.5-pool, 04.1.6-deposit, 04.1.7-withdraw, 04.1.8-tests, 04.1.9-deploy.
 
 ---
 
@@ -234,23 +260,15 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 ### 7.1. Spec validation — YES (not generation)
 
-`spec.json` is the source of truth. Files **validated against** it.
-
 ### 7.2. LiteSVM E2E test — YES
 
 Runs after Stage 4.5.
 
 ### 7.3. One circuit with `recipient_binding` — YES
 
-Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `amount`.
-
 ### 7.4. Zero-padding (no domain separation) — CONFIRMED
 
-`hash_1(x) == hash_2(x, 0)`, `hash_2(x, y) == hash_3(x, y, 0)`. Documented.
-
 ### 7.5. `sync-circuits` — check/apply modes
-
-`--check`: mismatch → error, exit 1. `--apply`: mismatch → copy + warning.
 
 ### 7.6. Split deposit — DEFERRED to Stage 12
 
@@ -264,7 +282,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 3 — Sunspot verifier ✅
 - Stage 3.7 — Documentation enrichment ✅
 - Stage 4.1 — Anchor program ✅
-- **Stage 4.5 — LiteSVM E2E test ← next**
+- **Stage 4.5 — LiteSVM E2E test 🚧**
 - Stage 5 — Backend
 - Stage 6 — Merkle service
 - Stage 7 — Prover
@@ -291,37 +309,46 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 
 ### From Stage 2 (circuits)
 
-- **`poseidon2_permutation` in nargo 1.0.0-rc.2 takes ONE argument** (the state array).
-- **Zero-padding causes arity collisions** (`hash_1(x) == hash_2(x, 0)`) — documented.
+- **`poseidon2_permutation` in nargo 1.0.0-rc.2 takes ONE argument.**
+- **Zero-padding causes arity collisions** — documented.
 - **`main()` in `type = "bin"` circuits must have `pub` on return type.**
-- **Field values must be < 2^254** (BN254 prime).
-- **Noir does not support float literals.** Use lamports.
-- **`&str` parameters in Noir don't work** — `str` requires a generic size (`str<N>`).
+- **Field values must be < 2^254.**
+- **Noir does not support float literals.**
+- **`&str` parameters in Noir don't work.**
 - **`f"...{value}"` format strings need explicit type annotation.**
 
 ### From Stage 3 (sunspot)
 
-- **`solana/` volume may be root-owned** — fix with `sudo chown -R 1000:1000 solana/` on host.
-- **Ignore entire `solana/` directory** in `.gitignore`.
-- **`sunspot verify` argument order** is: `.vk`, `.proof`, `.pw`.
-- **TOML parser rejects hex literals > 2^63** — wrap large Field values in double quotes.
-- **Sunspot generates 6 `deprecated` warnings** during `sunspot deploy` — this is normal.
+- **`solana/` volume may be root-owned.**
+- **Ignore entire `solana/` directory.**
+- **`sunspot verify` argument order** is `.vk`, `.proof`, `.pw`.
+- **TOML parser rejects hex literals > 2^63** — wrap in quotes.
+- **Sunspot generates 6 `deprecated` warnings** — normal.
 
 ### From Stage 4.1 (Anchor)
 
-- **`anchor init .` fails** — workspace name must be a valid Rust identifier. Use a temp dir: `cd /tmp && anchor init zk_pool --no-git --test-template rust`, then copy.
-- **`invalid --check-cfg argument`** — declare `anchor-debug`, `custom-heap`, `custom-panic` as **features**, not through `[lints.rust]`.
-- **`E0107: struct takes 0 lifetime arguments`** — `#[derive(Accounts)]` does **not** work with empty structs. Use an empty `#[program]` instead.
-- **`unused import: super::*`** — remove the line from empty `#[program]`.
-- **`test_reduce_to_field_max` FAILED** — loop `0..4` → `0..5`. `2^256 / p ≈ 4.006`, edge case needs the full 5 subtractions.
-- **`ambiguous glob re-exports`** — rename `handler` → `handler_pool`, `handler_deposit`, `handler_withdraw`. In Anchor you still need glob re-exports (`pub use module::*;`).
-- **`E0308: mismatched types` in `CpiContext::new`** — in Anchor 1.2.0 the first argument is `Pubkey`, not `AccountInfo`. Use `.key()` not `.to_account_info()`.
-- **`E0432: unresolved import crate`** — Anchor's `#[program]` macro needs the generated `__client_accounts_*` structures. Do not replace glob re-exports with explicit imports.
-- **`E0277: #[instruction] type mismatch`** — `#[instruction(...)]` must list **all** handler arguments **in order**. `#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]`.
-- **CPI to Sunspot verifier: data layout is `[proof || public_witness]`** — proof FIRST (324 bytes), then public witness (172 bytes). Verify by reading `~/sunspot/gnark-solana/crates/verifier-bin/src/lib.rs`. Wrong order → `InvalidInstructionData`.
-- **Vault PDA has no private key** — use direct lamport manipulation (`try_borrow_mut_lamports`), not `system_program::transfer`.
-- **`anchor deploy` is deprecated** — use `anchor program deploy`. Both work.
-- **`zk_pool.so` grows from 57 KB (empty) to 210 KB (3 instructions)** — expected.
+- **`anchor init .` fails** — use a temp dir.
+- **`invalid --check-cfg argument`** — declare `anchor-debug`, `custom-heap`, `custom-panic` as features.
+- **`E0107: struct takes 0 lifetime arguments`** — empty `#[derive(Accounts)]` doesn't work.
+- **`unused import: super::*`.**
+- **`test_reduce_to_field_max` FAILED** — loop `0..4` → `0..5`.
+- **`ambiguous glob re-exports`** — rename handlers.
+- **`E0308: mismatched types` in `CpiContext::new`** — `Pubkey` in Anchor 1.2.0, not `AccountInfo`.
+- **`E0432: unresolved import crate`** — keep glob re-exports.
+- **`E0277: #[instruction] type mismatch`** — list **all** handler args in order.
+- **CPI to Sunspot verifier: `[proof || public_witness]`** — proof FIRST.
+- **Vault PDA has no private key.**
+- **`anchor deploy` is deprecated** — use `anchor program deploy`.
+- **`zk_pool.so` grows to 210 KB** with 3 instructions.
+
+### From Stage 4.5 (LiteSVM) — IN PROGRESS
+
+- **`cargo fetch` fails in `onchain/tests/`**: "current package believes it's in a workspace when it's not".
+  - **Cause:** `onchain/Cargo.toml` is a workspace root, but `tests` is not in `workspace.members`.
+  - **Fix:** add `tests` to `workspace.exclude` in `onchain/Cargo.toml` (better) or add `tests` to `members` (slower `anchor build`), or add empty `[workspace]` to `tests/Cargo.toml`.
+  - **Why exclude:** we don't want `anchor build` to compile LiteSVM tests (slow, extra dependencies).
+- **Check exact LiteSVM API** by reading `~/.cargo/registry/src/index.crates.io-*/litesvm-0.16.0/src/` after `cargo fetch`. Do not write from memory — the API changes between minor versions.
+- **`tests/Cargo.toml` updated with LiteSVM 0.16 and `solana-*` versions.** Confirm compatibility via `cargo tree`.
 
 ### How to find exact signatures for the installed crate version
 
@@ -336,7 +363,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 ```
 zkpool-solana/
 ├── .checkpoints/            ← gitignored
-├── .secrets/                ← gitignored (keypair backup)
+├── .secrets/                ← gitignored
 ├── docs/
 │   ├── notes/               ← Russian, committed, PORTFOLIO MATERIAL
 │   │   ├── 00-checkpoints.md
@@ -355,7 +382,7 @@ zkpool-solana/
 ├── circuits/{poseidon,hash2,hashes,withdrawal}/
 ├── onchain/
 │   ├── Anchor.toml
-│   ├── Cargo.toml
+│   ├── Cargo.toml           ← workspace root (excludes tests)
 │   ├── rust-toolchain.toml
 │   ├── programs/zk_pool/
 │   │   ├── Cargo.toml
@@ -368,7 +395,15 @@ zkpool-solana/
 │   │       ├── instructions/{deposit,pool,withdraw}.rs
 │   │       ├── lib.rs
 │   │       └── state.rs
-│   └── tests/               ← not in workspace members yet
+│   └── tests/               ← LiteSVM tests (excluded from workspace)
+│       ├── Cargo.toml
+│       └── src/
+│           ├── lib.rs
+│           ├── helpers.rs
+│           ├── test_pool.rs
+│           ├── test_deposit.rs
+│           ├── test_withdraw.rs
+│           └── test_double_spend.rs
 ├── services/{backend,merkle,prover}/
 ├── web/
 ├── scripts/{validate-spec,sync-circuits}/
@@ -397,16 +432,12 @@ zkpool-solana/
 docker compose -f infra/docker-compose.yml exec solana bash
 ```
 
-### validate-spec
+### validate-spec / sync-circuits
 
 ```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu && cargo run --manifest-path scripts/validate-spec/Cargo.toml --release'
-```
 
-### sync-circuits
-
-```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- check'
 ```
@@ -422,6 +453,13 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic \
 
 docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu/onchain && anchor program deploy --provider.cluster devnet'
+```
+
+### LiteSVM tests (from `onchain/tests/`)
+
+```bash
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu/onchain/tests && cargo test'
 ```
 
 ### Full Sunspot pipeline (from `circuits/withdrawal/`)
@@ -442,18 +480,13 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 ## 12. Current state
 
 **Last completed stage:** Stage 4.1.9 (zk_pool deployed to devnet).
-**Next stage:** Stage 4.5 — LiteSVM E2E test.
+**Next stage:** Stage 4.5.1 — workspace config for LiteSVM tests.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
 **Deployed programs on devnet:**
-- Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B, balance 0.444 SOL).
-- zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, balance 1.068 SOL).
-
-**Instruction discriminators:**
-- `pool`: `[134, 215, 119, 168, 28, 199, 193, 127]`
-- `withdraw`: `[183, 18, 70, 156, 148, 109, 161, 34]`
-- `deposit`: see IDL
+- Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
+- zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
 **Tests:** 41 (circuits) + 37 (on-chain unit) = **78**.
 
@@ -461,15 +494,6 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
 - `hashes.json` — `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`
 - `withdrawal.json` — `29ac2e677229f4518944c76161933416e2a083dee83da638a9dfd01226cc91db`
-
-**Sunspot artifacts:**
-- `withdrawal.ccs` — `a2baffa46b1b3e04631c68d58069d0909bb535297972ed466a29b14b1ee2fa0f`
-- `withdrawal.pk` — `1e7a66426f613ff51e356023ae3499711b2c7f4259d5eb74c40e036f994f87f7`
-- `withdrawal.vk` — `6279a9e6e434c108869bb9b64c8ff20e66cecd3461a5d8cdd4941b817c9d7aed`
-- `withdrawal.so` — `117fae71a4e6f421a0b31200f98e80d4955474d60080006c22881f9354e908b7`
-- `withdrawal.pw` — `c4ffea4a4f03c123977f3931b548b01f55820840bc144495063798f2acadb07f`
-- `withdrawal.proof` — `d454b20105b339f893b80a64081a76f6f4f9b3fb6927b5eaf9fb1e96e2c05c79`
-- `Prover.toml` — `fb144adb85ea5061c13e89b5d217b4e21a485829cf52149a1bc53571cabc92b2`
 
 **Docs sizes:**
 - `00-glossary.md` — 545 lines.
@@ -483,14 +507,14 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 13. Instructions for a new assistant
 
-1. Read **section 0** first.
+1. Read **section 0** first — especially **0.9** (document non-obvious actions).
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
 5. Last completed stage: **Stage 4.1.9**.
-6. Next task: **Stage 4.5 — LiteSVM E2E test**.
+6. Next task: **Stage 4.5.1 — workspace config**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
-8. **Give files in full — always.** Never "find section X and replace".
+8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
 10. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
 
@@ -505,25 +529,25 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 `docs/notes/*.md` is:
 
 1. **Raw material** for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
-2. **Part of the GitHub portfolio** — shown to potential employers and collaborators.
+2. **Part of the GitHub portfolio.**
 3. **Teaching material** for readers from beginners to professional engineers.
 
 ### 14.2. Structure requirements for every note
 
-1. **TL;DR** at the top: what, why, how many steps, prerequisites, next stage.
-2. **Glossary links** at the top and inline.
+1. **TL;DR** at the top.
+2. **Glossary links.**
 3. **"Why" block** before each command.
 4. **"Expected result" block** after each command.
-5. **ASCII diagrams** for architecture, data flow.
-6. **Screenshots** for Medium, in `docs/notes/assets/NN-<name>/`.
-7. **Cross-references** to related notes.
-8. **"Common errors" section** with full message, root cause, fix, lesson.
-9. **"Reproduction" section** at the end.
+5. **ASCII diagrams.**
+6. **Screenshots** in `docs/notes/assets/NN-<name>/`.
+7. **Cross-references.**
+8. **"Common errors" section.**
+9. **"Reproduction" section.**
 10. **"What's next" section.**
 
 ### 14.3. Glossary
 
-**Status:** ✅ done. 545 lines, 76 terms, 7 sections.
+**Status:** ✅ done. 545 lines, 76 terms.
 
 ### 14.4. ZK-primer
 
@@ -538,7 +562,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ### 14.6. Enrichment procedure
 
-After each stage: write technical note → enrich with TL;DR, why-blocks, expected results, common errors, what's next → capture screenshots → update glossary.
+After each stage: write technical note → enrich → capture screenshots → update glossary.
 
 ### 14.7. Enrichment of stages 01–03 — DONE
 
@@ -547,5 +571,5 @@ After each stage: write technical note → enrich with TL;DR, why-blocks, expect
 ### 14.9. Ongoing
 
 - Screenshots captured as we go.
-- `04-anchor.md` — 813 lines, complete for 4.1.1–4.1.8.
+- `04-anchor.md` — 813 lines.
 - Glossary updated when new terms appear.
