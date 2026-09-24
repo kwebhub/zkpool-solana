@@ -1,12 +1,12 @@
 //! LiteSVM integration tests for zk_pool.
 //!
+//! This is a standalone crate (not in the `onchain/` workspace). It uses
+//! a newer Rust toolchain (1.98.1) because `litesvm` requires Agave 4.2+.
+//!
 //! Tests run entirely in-process against a local Solana VM. They do not
 //! require a validator, devnet, or SOL. Two programs are loaded:
 //!   - `zk_pool` (the pool itself),
 //!   - `sunspot_verifier` (the Groth16 verifier, compiled in stage 3.3).
-//!
-//! The `withdraw` test uses a real proof produced by `sunspot prove` in
-//! stage 3.5. See `proofs/` for the fixtures.
 
 #[cfg(test)]
 mod helpers;

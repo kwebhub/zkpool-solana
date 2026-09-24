@@ -9,21 +9,23 @@
 
 ## TL;DR
 
-**Что делаем:** пишем on-chain программу `zk_pool` на Rust + Anchor. Три инструкции: `pool` (инициализация пула), `deposit` (внести SOL), `withdraw` (вывести SOL с ZK-proof).
+**Что делаем:** пишем on-chain программу `zk_pool` на Rust + Anchor. Три инструкции: `pool`, `deposit`, `withdraw`. Плюс — LiteSVM интеграционные тесты.
 
 **Зачем:** центральная часть проекта — связывает circuit (этап 2), verifier (этап 3) и клиент (этап 8) через **единый формат** публичных входов.
 
-**Сколько шагов:** 9 под-этапов (4.1.1 – 4.1.9).
+**Сколько шагов:** 9 под-этапов (4.1.1 – 4.1.9) + 7 под-этапов (4.5.1 – 4.5.7).
 
 **Что понадобится:** `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, devnet-кошелёк.
 
-**Что получится:** программа `zk_pool` на devnet, IDL для Codama, LiteSVM E2E-тест (4.5).
+**Что получится:** программа `zk_pool` на devnet, IDL для Codama, LiteSVM E2E-тест.
 
 **Следующий этап:** `05-backend.md`.
 
 ---
 
 ## Разбиение этапа
+
+### Stage 4.1 — Anchor program
 
 | # | Что делаем | Статус |
 |---|---|---|
@@ -34,8 +36,20 @@
 | 4.1.5 | Инструкция `pool` | ✅ |
 | 4.1.6 | Инструкция `deposit` | ✅ |
 | 4.1.7 | Инструкция `withdraw` | ✅ |
-| 4.1.8 | Тесты | ✅ |
-| 4.1.9 | Деплой на devnet | ← следующий |
+| 4.1.8 | Unit-тесты (37) | ✅ |
+| 4.1.9 | Деплой на devnet | ✅ |
+
+### Stage 4.5 — LiteSVM E2E test
+
+| # | Что делаем | Статус |
+|---|---|---|
+| 4.5.1 | Реорганизация `tests/` (вынос из `onchain/`) | ✅ |
+| 4.5.2 | `helpers.rs` | ← следующий |
+| 4.5.3 | `test_pool.rs` | ⏳ |
+| 4.5.4 | `test_deposit.rs` | ⏳ |
+| 4.5.5 | `test_withdraw.rs` | ⏳ |
+| 4.5.6 | `test_double_spend.rs` | ⏳ |
+| 4.5.7 | Финальный чекпоинт | ⏳ |
 
 ---
 
@@ -43,7 +57,7 @@
 
 ### Зачем
 
-Создать **каркас** Anchor-программы. На этом под-этапе — **никакой** логики, только структура. Цель — убедиться, что `anchor build` **работает** в нашем окружении, до того как писать код.
+Создать **каркас** Anchor-программы. На этом под-этапе — **никакой** логики, только структура. Цель — убедиться, что `anchor build` **работает** в нашем окружении.
 
 ### Что делаем
 
@@ -71,7 +85,7 @@ cd /tmp
 anchor init zk_pool --no-git --test-template rust
 ```
 
-**Флаг `--test-template rust`** — генерирует **Rust-тесты** вместо Mocha/Jest. Нам нужен Rust: LiteSVM-тесты на TypeScript **нельзя** написать.
+**Флаг `--test-template rust`** — генерирует **Rust-тесты** вместо Mocha/Jest.
 
 **2. Скопировать нужное в `onchain/`.**
 
@@ -84,45 +98,19 @@ cp -r programs /home/ubuntu/onchain/
 cp -r tests /home/ubuntu/onchain/
 ```
 
-**Что НЕ копируем:**
-- `app/` — пустая.
-- `migrations/` — не нужна.
-- `target/` — скомпилированное.
-- `.gitignore`, `.prettierignore` — у нас **свой** корневой.
+**Что НЕ копируем:** `app/`, `migrations/`, `target/`, `.gitignore`, `.prettierignore`.
 
 **3. Настроить workspace `Cargo.toml`.**
 
 Убрать `tests` из members **временно** (вернём на 4.5).
 
-```toml
-[workspace]
-members = ["programs/*"]
-resolver = "2"
-
-[workspace.package]
-edition = "2021"
-rust-version = "1.89.0"
-
-[profile.release]
-overflow-checks = true
-lto = "fat"
-codegen-units = 1
-
-[profile.release.build-override]
-opt-level = 3
-incremental = false
-codegen-units = 1
-```
-
-**4. Настроить `Anchor.toml`.**
-
-Cluster = devnet, `[programs.devnet]` блок.
+**4. Настроить `Anchor.toml`.** Cluster = devnet, `[programs.devnet]`.
 
 **5. Настроить `programs/zk_pool/Cargo.toml`.**
 
 **⚠️ Ошибка №2:** `invalid --check-cfg argument`.
 
-**Что не так:** нельзя «разрешить» `cfg(anchor-debug)` через `[lints.rust]`. Rust ожидает **или** `cfg(name)`, **или** `cfg(name, values("v1"))` — произвольные строки не работают.
+**Что не так:** нельзя «разрешить» `cfg(anchor-debug)` через `[lints.rust]`. Rust ожидает **или** `cfg(name)`, **или** `cfg(name, values("v1"))`.
 
 **Решение:** **объявить** `anchor-debug`, `custom-heap`, `custom-panic` как **features**:
 
@@ -148,57 +136,19 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 **Результат:** ноль warnings.
 
-**Урок:** если макрос обращается к `cfg(feature = "X")` — объяви `X` в `[features]`. Не борись с линтером.
-
 **6. Упростить `lib.rs`.**
 
-Попытка с заглушкой:
+**⚠️ Ошибка №3:** `E0107` — `struct takes 0 lifetime arguments but 1 was given`. `#[derive(Accounts)]` **не работает** с пустыми структурами.
 
-```rust
-#[program]
-pub mod zk_pool {
-    use super::*;
-    pub fn noop(_ctx: Context<Noop>) -> Result<()> { Ok(()) }
-}
+**Решение:** убрать заглушку. Anchor **позволяет** программу **без** инструкций.
 
-#[derive(Accounts)]
-pub struct Noop {}
-```
-
-**⚠️ Ошибка №3:** `E0107` — `struct takes 0 lifetime arguments but 1 was given`.
-
-**Что не так:** `#[derive(Accounts)]` **не работает** с пустыми структурами. Anchor генерирует код с lifetime, а пустая структура его **не имеет**.
-
-**Решение:** **убрать** заглушку. Anchor **позволяет** программу **без** инструкций.
-
-```rust
-use anchor_lang::prelude::*;
-
-declare_id!("EDzVvstsabPPHYx6QLgw1J8ZRFhJrGv2fiz2a6o9Kym9");
-
-pub mod constants;
-pub mod error;
-pub mod instructions;
-pub mod state;
-
-#[program]
-pub mod zk_pool {
-    // No instructions yet — added in stages 4.1.5 – 4.1.7.
-}
-```
-
-**Результат:** сборка проходит, IDL пустой (356 байт).
-
-**⚠️ Ошибка №4:** `unused import: super::*`.
-
-**Решение:** убрать строку.
+**⚠️ Ошибка №4:** `unused import: super::*`. Убрать строку.
 
 ### Итоги 4.1.1
 
 **Program ID:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
 **Артефакты:** `.so` 57 480 B, keypair 292 B, IDL 356 B.
-**Коммит:** `b8f6fdf`.
-**Чекпоинт:** `.checkpoints/04.1.1-anchor-init/`.
+**Коммит:** `b8f6fdf`. **Чекпоинт:** `.checkpoints/04.1.1-anchor-init/`.
 
 ---
 
@@ -224,12 +174,10 @@ pub mod zk_pool {
 
 | Константа | Значение | Совпадает с |
 |---|---|---|
-| `TREE_DEPTH` | 20 | `spec.json` → `circuit.tree_depth`, `withdrawal/src/main.nr` → `global TREE_DEPTH` |
+| `TREE_DEPTH` | 20 | `spec.json` → `circuit.tree_depth` |
 | `MAX_LEAVES` | 2^20 = 1 048 576 | — |
 | `ROOT_HISTORY_SIZE` | 10 | — |
 | `EMPTY_ROOT` | `[0u8; 32]` | — |
-
-**`ROOT_HISTORY_SIZE = 10`** — окно для подтверждения proof'а: root меняется на каждом депозите, храним 10 последних. Если пользователь подготовил proof по старому root'у, а за это время прошёл **новый** депозит — proof бы **не прошёл**. 10 последних — **достаточное** окно.
 
 **ZK proof:**
 
@@ -248,7 +196,7 @@ pub mod zk_pool {
 |---|---|
 | `MIN_DEPOSIT_AMOUNT` | 1 000 000 lamports (0.001 SOL) |
 
-**Зачем:** предотвратить спам-депозиты, которые заполнят Merkle tree **мусором**.
+**Зачем:** предотвратить спам-депозиты.
 
 ### Итоги 4.1.2
 
@@ -336,10 +284,7 @@ pub struct NullifierRecord {
 
 **Самая ответственная функция.** Именно здесь в v2 **сломалось**: байты программы **не совпали** с байтами, ожидаемыми verifier'ом.
 
-**Что делает:** из **5 публичных входов** собирает **172-байтный** блоб в **точно том же формате**, что:
-- `withdrawal.pw` (из `sunspot prove`, этап 3.5),
-- `spec.json` → `witness_layout`,
-- будет генерировать frontend (этап 8).
+**Что делает:** из **5 публичных входов** собирает **172-байтный** блоб в **точно том же формате**, что `withdrawal.pw`, `spec.json`, frontend.
 
 ### Формат
 
@@ -392,9 +337,7 @@ pub struct NullifierRecord {
 
 ### Зачем
 
-Инициализация пула. Создаются **два** PDA:
-1. **`PoolState`** — метаданные пула.
-2. **`vault`** — аккаунт, хранящий SOL.
+Инициализация пула. Создаются **два** PDA: `PoolState` и `vault`.
 
 ### Структура accounts
 
@@ -467,8 +410,6 @@ warning: ambiguous glob re-exports
 - `deposit::handler` → `deposit::handler_deposit`.
 - `withdraw::handler` → `withdraw::handler_withdraw`.
 
-**Урок:** когда два модуля экспортируются через glob и имеют **одинаковые** имена — компилятор ругается. Уникальные имена решают проблему.
-
 ### Итоги 4.1.5
 
 **69 строк.** Discriminator: `[134, 215, 119, 168, 28, 199, 193, 127]`.
@@ -480,15 +421,13 @@ warning: ambiguous glob re-exports
 
 ### Зачем
 
-Принять SOL в vault. Клиент передаёт **commitment** и **new_root** — новый Merkle root после добавления commitment'а в дерево.
+Принять SOL в vault. Клиент передаёт **commitment** и **new_root**.
 
 ### ⚠️ Trust model — важное замечание
 
-**Инструкция НЕ проверяет** on-chain, что `new_root` — правильный результат вставки `commitment` в дерево. **Злоумышленник** может прислать **мусорный** `new_root` и **сломать** дерево для всех.
+**Инструкция НЕ проверяет** on-chain, что `new_root` — правильный результат вставки `commitment` в дерево. **Злоумышленник** может прислать **мусорный** `new_root` и **сломать** дерево.
 
-**Это — известное ограничение**, унаследованное из v2. Исправление требует **полного** Merkle tree on-chain или **дополнительного** ZK-proof корректности root'а — и то, и другое **вне** scope v3.
-
-**Для production** — см. `docs/DEMO-NOTICE.md`.
+**Известное ограничение**, унаследованное из v2. См. `docs/DEMO-NOTICE.md`.
 
 ### Структура accounts
 
@@ -498,7 +437,7 @@ pub struct Deposit<'info> {
     #[account(mut)] pub depositor: Signer<'info>,
     #[account(mut, seeds = [POOL_SEED], bump)] pub pool: Account<'info, PoolState>,
     #[account(mut, seeds = [VAULT_SEED, pool.key().as_ref()], bump)]
-    /// CHECK: ... 
+    /// CHECK: ...
     pub vault: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
@@ -513,32 +452,25 @@ pub fn handler_deposit(
     new_root: [u8; 32],
     amount: u64,
 ) -> Result<()> {
-    // 1. Validate amount
     require!(amount >= MIN_DEPOSIT_AMOUNT, ZkPoolError::DepositBelowMinimum);
-    // 2. Validate tree has room
     require!(pool.has_room(), ZkPoolError::TreeFull);
-    // 3. Validate new_root differs from current
     require!(new_root != pool.current_root(), ZkPoolError::RootUnchanged);
-    // 4. Transfer SOL (CPI)
     let cpi_ctx = CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts);
     transfer(cpi_ctx, amount)?;
-    // 5. Update pool state
     pool.next_leaf_index = leaf_index.checked_add(1).ok_or(...)?;
     pool.total_deposits = pool.total_deposits.checked_add(1).unwrap();
     pool.add_root(new_root);
-    // 6. Emit event
     emit!(DepositEvent { commitment, leaf_index, new_root, timestamp: ... });
     Ok(())
 }
 ```
 
-### ⚠️ Ошибка: `E0308: mismatched types` в `CpiContext::new`
+### ⚠️ Ошибка: `E0308` в `CpiContext::new`
 
 **Симптом:**
 
 ```
 error[E0308]: mismatched types
-  --> programs/zk_pool/src/instructions/deposit.rs:91:35
    |
 91 |     let cpi_ctx = CpiContext::new(ctx.accounts.system_program.to_account_info(), cpi_accounts);
    |                   --------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Pubkey`, found `AccountInfo`
@@ -550,7 +482,7 @@ error[E0308]: mismatched types
 pub fn new(program_id: Pubkey, accounts: T) -> Self
 ```
 
-**Первый аргумент — `Pubkey`, не `AccountInfo`.** В **старых** версиях Anchor было `AccountInfo`. Мы писали по памяти из v2 — а там была **другая** версия.
+**Первый аргумент — `Pubkey`, не `AccountInfo`.** В **старых** версиях Anchor было `AccountInfo`.
 
 **Решение:** использовать `.key()`:
 
@@ -562,11 +494,11 @@ CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts)
 
 ### ⚠️ Ошибка: `E0432: unresolved import crate`
 
-**Симптом:** после замены glob re-exports на явные (`pub use deposit::Deposit;`) — компилятор выдал `unresolved import crate` в `#[program]`.
+**Симптом:** после замены glob re-exports на явные — компилятор выдал `unresolved import crate` в `#[program]`.
 
 **Причина:** Anchor-макрос **требует** видимости `__client_accounts_*` — генерируемых структур для CPI. Их экспортирует **glob** `pub use deposit::*;`.
 
-**Решение:** **вернуть** glob re-exports. Проблема `ambiguous` решается **переименованием** handler'ов.
+**Решение:** **вернуть** glob re-exports.
 
 **Урок:** Anchor-макрос **неявно** использует glob-reexport'ы. Не «оптимизируй» их.
 
@@ -585,10 +517,10 @@ CpiContext::new(ctx.accounts.system_program.key(), cpi_accounts)
 ### Что делает
 
 1. Проверяет длину proof.
-2. Проверяет, что `recipient` в инструкции **совпадает** с аккаунтом `to`.
-3. Проверяет, что `root` **известен**.
-4. **Кодирует** 172-байтный блоб из публичных входов.
-5. **Вызывает verifier** через CPI с **правильным** порядком.
+2. Проверяет, что `recipient` совпадает с аккаунтом `to`.
+3. Проверяет, что `root` известен.
+4. Кодирует 172-байтный блоб из публичных входов.
+5. Вызывает verifier через CPI с **правильным** порядком.
 6. Создаёт `NullifierRecord` PDA.
 7. Переводит SOL из vault в recipient.
 8. Эмитит `WithdrawEvent`.
@@ -633,8 +565,6 @@ let public_witness_bytes = &instruction_data[proof_len..];
 
 **Proof ПЕРВЫМ**, public witness **ВТОРЫМ**.
 
-**Мой черновик был неверным** — я написал `[public_inputs || proof]`. **Переписал** после просмотра исходника.
-
 ### Правильный CPI
 
 ```rust
@@ -651,8 +581,6 @@ let ix = Instruction {
 invoke_signed(&ix, &[ctx.accounts.verifier_program.to_account_info()], &[])?;
 ```
 
-**Никаких accounts у verifier'а** — он самодостаточен, читает только `instruction_data`.
-
 ### ⚠️ Ошибка: `E0277: #[instruction] type mismatch`
 
 **Симптом:**
@@ -662,124 +590,245 @@ error[E0277]: instruction handler argument type `Vec<u8>` does not match
               `#[instruction(...)]` attribute type `[u8; 32]`
 ```
 
-**Причина:** атрибут `#[instruction(nullifier_hash: [u8; 32])]` — **перечисляет** аргументы **в порядке**, в котором они идут в handler'е. Но **первый** аргумент — `proof: Vec<u8>`.
+**Причина:** атрибут `#[instruction(nullifier_hash: [u8; 32])]` **не совпадает** с первым аргументом handler'а (`proof: Vec<u8>`).
 
-**Решение:** указать **все** аргументы **в правильном порядке**:
+**Решение:**
 
 ```rust
 #[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]
 ```
 
-**Урок:** `#[instruction(...)]` **не** выбирает «нужный» аргумент из списка. Он **сверяет** **весь** список по порядку.
+**Урок:** `#[instruction(...)]` **не** выбирает «нужный» аргумент. Он **сверяет** **весь** список по порядку.
 
 ### Перевод SOL из vault
 
-Vault — PDA, без приватного ключа. **Нельзя** использовать `system_program::transfer`. Используем **прямую** манипуляцию lamports:
+Vault — PDA, без приватного ключа. **Прямая** манипуляция lamports:
 
 ```rust
 **ctx.accounts.vault.try_borrow_mut_lamports()? = vault_lamports - amount;
 **ctx.accounts.to.try_borrow_mut_lamports()? = to_lamports + amount;
 ```
 
-**Почему безопасно:** vault принадлежит **нашей** программе, seeds валидированы, `require!(vault_lamports >= amount)`.
-
 ### Итоги 4.1.7
 
 **216 строк.** Discriminator: `[183, 18, 70, 156, 148, 109, 161, 34]`.
-**IDL args:** `proof: bytes`, `nullifier_hash: [u8; 32]`, `root: [u8; 32]`, `recipient: pubkey`, `amount: u64`, `recipient_binding: [u8; 32]`.
 **Коммит:** `ce71a47`. **Чекпоинт:** `.checkpoints/04.1.7-withdraw/`.
 
 ---
 
-## 4.1.8. Тесты
+## 4.1.8. Unit-тесты
 
-### Зачем
+**37 unit-тестов** в `zk_pool`. Коммит `8261530`.
 
-Юнит-тесты для on-chain программы. Проверяют то, что **не** зависит от сети: значения констант, размеры аккаунтов и событий, логика ring-buffer'а, дискриминаторы.
-
-**Что НЕ тестируется:** полный E2E deposit → withdraw — задача **4.5** (LiteSVM).
-
-### Что тестируется
-
-**`constants.rs` — 10 тестов:**
-
-| Тест | Проверяет |
-|---|---|
-| `test_tree_depth` | `TREE_DEPTH == 20` |
-| `test_max_leaves` | `MAX_LEAVES == 2^20 == 1 048 576` |
-| `test_root_history_size` | `ROOT_HISTORY_SIZE == 10` |
-| `test_nr_public_inputs` | `NR_PUBLIC_INPUTS == 5` |
-| `test_public_inputs_bytes` | `PUBLIC_INPUTS_BYTES == 12 + 5×32 == 172` |
-| `test_proof_len` | `PROOF_LEN == 324` |
-| `test_min_deposit_amount` | `MIN_DEPOSIT_AMOUNT == 1_000_000` |
-| `test_empty_root` | `EMPTY_ROOT == [0; 32]` |
-| `test_seeds_are_distinct` | Три seed'а **разные** |
-| `test_verifier_program_id_parses` | Program ID парсится в строку |
-
-**`state.rs` — 10 тестов:**
-
-| Тест | Проверяет |
-|---|---|
-| `test_pool_state_init_space` | `INIT_SPACE == 376` |
-| `test_nullifier_record_init_space` | `INIT_SPACE == 112` |
-| `test_is_known_root_empty` | Пустой root не найден |
-| `test_add_root_and_is_known` | После `add_root` root известен |
-| `test_add_multiple_roots_ring_buffer` | После 15 добавлений — только 10 последних |
-| `test_current_root_after_add` | `current_root` обновляется |
-| `test_has_room_empty` | Есть место |
-| `test_has_room_at_limit` | При `MAX_LEAVES` — нет места |
-| `test_has_room_just_below_limit` | При `MAX_LEAVES - 1` — есть место |
-| `test_is_known_root_rejects_zero` | Zero-root **не** считается известным |
-
-**`events.rs` — 4 теста:**
-
-| Тест | Проверяет |
-|---|---|
-| `test_deposit_event_size` | Payload `DepositEvent == 80` байт |
-| `test_withdraw_event_size` | Payload `WithdrawEvent == 80` байт |
-| `test_deposit_event_constructible` | Событие создаётся с полями |
-| `test_withdraw_event_constructible` | Событие создаётся с полями |
-
-**`lib.rs` — 4 теста:**
-
-| Тест | Проверяет |
-|---|---|
-| `test_program_id_parses` | Program ID парсится |
-| `test_pool_discriminator` | `[134, 215, 119, 168, 28, 199, 193, 127]` |
-| `test_withdraw_discriminator` | `[183, 18, 70, 156, 148, 109, 161, 34]` |
-| `test_verifier_program_id_matches_constant` | `VERIFIER_PROGRAM_ID` совпадает |
-
-### Итого
-
-**37 unit-тестов** в `zk_pool`:
-- 9 (`encoding.rs`, stage 4.1.4)
-- 10 (`constants.rs`, stage 4.1.8)
-- 10 (`state.rs`, stage 4.1.8)
-- 4 (`events.rs`, stage 4.1.8)
-- 4 (`lib.rs`, stage 4.1.8)
+Разбито по файлам:
+- `constants.rs` — 10 тестов.
+- `state.rs` — 10 тестов.
+- `events.rs` — 4 теста.
+- `lib.rs` — 4 теста.
+- `encoding.rs` — 9 тестов.
 
 **Результат:** 37 / 37 passed.
 
-### Как запускать```bash
+---
+
+## 4.1.9. Деплой на devnet
+
+Коммит `3f6dcd6`.
+
+**Program Id:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm`.
+**ProgramData:** `FaLqLdL1FVLcwZPpJTw2ugG67KKnEbZRuUJmqvyNtCeA`.
+**Data Length:** 210 000 B.
+**Rent:** 1.068 SOL.
+**IDL metadata:** `C931NVVbVKu4mjh1wjgh7bmFx6j6TfML89ut1GsRQHXk`.
+
+### ⚠️ Замечания
+
+- `anchor deploy` — **deprecated**. Использовать `anchor program deploy`.
+- `.so` **вырос** с 57 KB (пустая) до 210 KB (3 инструкции).
+
+---
+
+## 4.5. LiteSVM E2E test
+
+### Зачем LiteSVM
+
+- **Быстро** — миллисекунды вместо секунд.
+- **Детерминированно** — никаких сетевых проблем.
+- **Без SOL** — не нужен balance.
+- **Ловит регрессии** — если что-то сломается, узнаём **сразу**.
+- **Полный E2E** — реальный proof, реальный CPI в verifier.
+
+### 4.5.1. Реорганизация `tests/` — вынос из `onchain/`
+
+**Начальная попытка:** держать `tests/` **внутри** `onchain/tests/`, как это сделал `anchor init`.
+
+**⚠️ Первая проблема:** `cargo fetch` в `onchain/tests/` падает с:
+
+```
+error: current package believes it's in a workspace when it's not:
+current:   /home/ubuntu/onchain/tests/Cargo.toml
+workspace: /home/ubuntu/onchain/Cargo.toml
+```
+
+**Причина:** `onchain/Cargo.toml` — workspace root. `members = ["programs/*"]` **не покрывает** `tests/`.
+
+**Первое решение:** добавить `tests` в `workspace.exclude`:
+
+```toml
+[workspace]
+members = ["programs/*"]
+exclude = ["tests"]
+```
+
+**Помогло:** `cargo fetch` **запустился**.
+
+**⚠️ Вторая проблема:** `cargo check` в `onchain/tests/` упал с:
+
+```
+error[E0658]: use of unstable library feature `maybe_uninit_write_slice`
+  --> solana-syscalls-4.2.2/src/lib.rs:2531
+```
+
+**Причина:** `litesvm 0.16` тянет **Agave 4.2**, где `solana-syscalls 4.2.2` использует **нестабильную** функцию Rust. Требуется Rust ≥ 1.90.
+
+**Но** `onchain/rust-toolchain.toml` фиксирует **1.89.0**, и `tests/` **подчиняется** ему, потому что **внутри** `onchain/`.
+
+**Третья попытка:** откатить `litesvm` до **0.14.0**.
+
+**Результат:** `litesvm 0.14.0` тянет **Agave 4.3.0**, требующий **Rust 1.97.1**. **Хуже.**
+
+**Итог:** проблема **не** в версии litesvm, а в **подчинении** `tests/` toolchain'у от `onchain/`.
+
+**Проверка:**
+
+```bash
 docker compose -f infra/docker-compose.yml exec solana bash -ic '
-  cd /home/ubuntu/onchain
-  cargo test -p zk_pool --lib
+  cd /home/ubuntu && rustc --version       # 1.98.1
+  cd /home/ubuntu/onchain && rustc --version # 1.89.0
 '
 ```
 
-**Ожидаемый результат:** `test result: ok. 37 passed; 0 failed`.
+**Финальное решение — вынести `tests/` из `onchain/` в корень проекта.**
 
-### ⚠️ Замечание про размеры
+```
+zkpool-solana/
+├── onchain/                 ← Rust 1.89.0 (rust-toolchain.toml)
+│   └── programs/zk_pool/
+└── tests/                   ← Rust 1.98.1 (свой rust-toolchain.toml)
+    └── Cargo.toml           ← standalone crate
+```
 
-В комментариях к `PoolState` в `state.rs` написано «384 bytes» — но `INIT_SPACE` = **376**. Разница — **8-байтный** Anchor discriminator. Тест проверяет **`INIT_SPACE`**, не общий размер аккаунта.
+**Что сделали:**
+1. Удалили `onchain/tests/`.
+2. Убрали `exclude = ["tests"]` из `onchain/Cargo.toml`.
+3. Создали `tests/` в корне проекта.
+4. Добавили `tests/rust-toolchain.toml` с `channel = "1.98.1"`.
+5. Создали `tests/Cargo.toml` с `zk_pool = { path = "../onchain/programs/zk_pool" }`.
+6. Добавили volume `../tests:/home/ubuntu/tests` в `infra/docker-compose.yml`.
+7. Пересоздали контейнер: `docker compose up -d --force-recreate solana`.
 
-**Для читателя:** `space = 8 + PoolState::INIT_SPACE` в `pool.rs` — 8 байт под discriminator, 376 под данные. **Итого 384**.
+**Результат:** `cargo check` в `tests/` **прошёл** за 1m 15s, **без** `E0658`. `cargo test --no-run` упал **только** на отсутствующих модулях (`E0583`) — ожидаемо.
 
-### Коммит
+**Урок:** когда крейт требует **более новый** Rust, чем workspace — **выносите** его **из** workspace. Не боритесь с `rust-toolchain.toml` — **изолируйте**.
 
-`8261530` — test(onchain): add 28 unit tests for constants, state, events, discriminators.
+### Процесс подбора зависимостей
 
-**Чекпоинт:** `.checkpoints/04.1.8-tests/`.
+**Проблема:** разные версии `solana-*` крейтов **несовместимы**. `litesvm 0.16` требует **конкретные** версии — с **тильдой** (`~4.5.0`), что означает «**только** 4.5.x».
+
+**Пример ошибки:**
+
+```
+error: failed to select a version for `solana-hash`.
+  ... required by package `solana-message v5.0.0`
+  versions that meet the requirements `^4.6.0` are: 4.7.0, 4.6.0
+
+  previously selected package `solana-hash v4.5.0`
+  ... required by `litesvm v0.16.0`
+```
+
+`solana-message 5.0.0` требует `solana-hash >= 4.6.0`, а `litesvm 0.16.0` — **только** 4.5.0. **Совместимых** версий **нет**.
+
+**Процесс подбора:**
+
+**1. Проверить, какие версии требует litesvm.**
+
+```bash
+find ~/.cargo/registry/src -type d -name "litesvm-0.16.0"
+grep -A 2 "^\[dependencies.solana-" \
+  ~/.cargo/registry/src/index.crates.io-*/litesvm-0.16.0/Cargo.toml \
+  | grep -E "dependencies.solana-|version"
+```
+
+**2. Использовать ровно эти версии.**
+
+| Крейт | Версия (для litesvm 0.16) |
+|---|---|
+| `solana-account` | `4.3.0` |
+| `solana-hash` | `~4.5.0` → используем `4.5.0` |
+| `solana-instruction` | `~3.4.0` → используем `3.4.0` |
+| `solana-keypair` | `3.1.2` |
+| `solana-message` | `4.2.4` |
+| `solana-sdk-ids` | `3.1.0` |
+| `solana-signer` | `3.0.1` |
+| `solana-transaction` | `4.1.5` |
+| `solana-transaction-error` | `3.3.1` |
+
+**3. Не пытаться «угадать» версии.**
+
+**Не работает:**
+```toml
+solana-message = "5"
+solana-hash = "4"
+```
+
+**Работает:**
+```toml
+solana-message = "4.2.4"
+solana-hash = "4.5.0"
+```
+
+**4. Проверять `cargo tree` перед написанием кода.**
+
+```bash
+cd tests
+cargo tree -p litesvm 2>&1 | head -20
+```
+
+Если `cargo tree` **прошёл** — зависимости **разрешились**.
+
+**5. Проверять, какой Rust требуется.**
+
+```bash
+grep "rust-version" ~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/Cargo.toml
+```
+
+Если требуется **новее**, чем в текущем toolchain — **изолировать** крейт.
+
+**Урок:** при работе с `solana-*` крейтами **всегда** смотрите **точные** версии в исходниках `litesvm`. **Не** полагайтесь на semver.
+
+**6. Итоговая рабочая комбинация для нашего проекта.**
+
+```toml
+[dependencies]
+litesvm = "0.16"
+solana-account = "4.3.0"
+solana-hash = "4.5.0"
+solana-instruction = "3.4.0"
+solana-keypair = "3.1.2"
+solana-message = "4.2.4"
+solana-sdk-ids = "3.1.0"
+solana-signer = "3.0.1"
+solana-transaction = "4.1.5"
+solana-transaction-error = "3.3.1"
+zk_pool = { path = "../onchain/programs/zk_pool" }
+```
+
+**Rust toolchain:** `1.98.1`.
+
+### Коммиты
+
+- `bf04b7d` — set up workspace config; document `workspace.exclude` pitfall.
+- Восстановление `tests/` в корне — будет в следующем коммите.
 
 ---
 
@@ -787,27 +836,39 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic '
 
 | # | Симптом | Под-этап | Решение |
 |---|---|---|---|
-| 1 | `Anchor workspace name must be a valid Rust identifier` | 4.1.1 | Инициализировать во временной папке |
-| 2 | `invalid --check-cfg argument` | 4.1.1 | Объявить `anchor-debug`, `custom-heap`, `custom-panic` как features |
-| 3 | `E0107: struct takes 0 lifetime arguments` | 4.1.1 | Убрать заглушку с `#[derive(Accounts)]` |
-| 4 | `unused import: super::*` | 4.1.1 | Убрать строку |
-| 5 | `test_reduce_to_field_max` FAILED | 4.1.4 | Цикл `0..4` → `0..5` |
-| 6 | `ambiguous glob re-exports` | 4.1.5 | Переименовать `handler` → `handler_pool`, `handler_deposit`, `handler_withdraw` |
-| 7 | `E0308: mismatched types` в `CpiContext::new` | 4.1.6 | `Pubkey` в 1.2.0, а не `AccountInfo` |
-| 8 | `E0432: unresolved import crate` | 4.1.6 | Вернуть glob re-exports |
-| 9 | `E0277: #[instruction] type mismatch` | 4.1.7 | `#[instruction(proof: Vec<u8>, nullifier_hash: [u8; 32])]` |
-| 10 | **Неправильный порядок CPI** | 4.1.7 | `[proof \|\| public_witness]`, а не наоборот |
+| 1 | `Anchor workspace name must be a valid Rust identifier` | 4.1.1 | Temp dir. |
+| 2 | `invalid --check-cfg argument` | 4.1.1 | Объявить features. |
+| 3 | `E0107: struct takes 0 lifetime arguments` | 4.1.1 | Убрать заглушку. |
+| 4 | `unused import: super::*` | 4.1.1 | Убрать строку. |
+| 5 | `test_reduce_to_field_max` FAILED | 4.1.4 | `0..4` → `0..5`. |
+| 6 | `ambiguous glob re-exports` | 4.1.5 | Переименовать handlers. |
+| 7 | `E0308` в `CpiContext::new` | 4.1.6 | `Pubkey`, не `AccountInfo`. |
+| 8 | `E0432: unresolved import crate` | 4.1.6 | Вернуть glob re-exports. |
+| 9 | `E0277: #[instruction] type mismatch` | 4.1.7 | Все аргументы в порядке. |
+| 10 | **Неправильный порядок CPI** | 4.1.7 | `[proof \|\| public_witness]`. |
 
-**Ошибка №10 — критичная.** Именно она привела бы к `InvalidInstructionData` в v2. Поймали на этапе **проектирования**, посмотрев исходник verifier'а.
+**Ошибка №10 — критичная.**
+
+---
+
+## Ошибки Stage 4.5 — сводка
+
+| # | Симптом | Решение |
+|---|---|---|
+| 1 | `current package believes it's in a workspace when it's not` | Вынести `tests/` из `onchain/`. |
+| 2 | `E0658: maybe_uninit_write_slice` | Rust 1.98.1, изолировать крейт. |
+| 3 | `failed to select a version for solana-hash` | Точные версии из `Cargo.toml` litesvm. |
+| 4 | `/home/ubuntu/tests: No such file or directory` | Volume в `docker-compose.yml`, пересоздать контейнер. |
+| 5 | `E0583: file not found for module` (5 модулей) | Ожидаемо — модули не написаны. |
 
 ---
 
 ## Что дальше
 
-**Следующий под-этап:** 4.1.9 — деплой на devnet.
+**Следующий под-этап:** 4.5.2 — `helpers.rs`.
 
 **Что будет:**
-- `anchor deploy --provider.cluster devnet`.
-- Проверка `solana program show` для `zk_pool`.
-- Создание `.secrets/zk_pool-keypair.json` для стабильного Program ID.
-- Обновление `PROJECT_CONTEXT.md` с задеплоенной программой.
+- Функции для **загрузки** `zk_pool.so` и `verifier.so` в LiteSVM.
+- Функции для **создания** аккаунтов (payer, recipient).
+- Функции для **вызова** инструкций.
+- Функции для **чтения** состояния.
