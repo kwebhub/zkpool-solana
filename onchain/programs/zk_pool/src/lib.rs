@@ -1,7 +1,7 @@
 //! zk_pool — private SOL transfers on Solana using ZK proofs.
 //!
-//! Stage 4.1.5: `pool` instruction — initialize the pool.
-//! Remaining instructions (`deposit`, `withdraw`) are added in 4.1.6 – 4.1.7.
+//! Stage 4.1.6: `pool` and `deposit` instructions.
+//! `withdraw` is added in 4.1.7.
 
 use anchor_lang::prelude::*;
 
@@ -26,9 +26,25 @@ pub mod zk_pool {
     ///   - `PoolState` (seeds `[POOL_SEED]`),
     ///   - `vault`     (seeds `[VAULT_SEED, pool]`).
     ///
-    /// Can be called only once. Subsequent calls fail with
-    /// `AccountAlreadyInUse` (from the `init` constraint).
+    /// Can be called only once.
     pub fn pool(ctx: Context<Pool>) -> Result<()> {
-        instructions::pool::handler(ctx)
+        instructions::pool::handler_pool(ctx)
+    }
+
+    /// Deposit SOL into the pool.
+    ///
+    /// The depositor provides a commitment and the new Merkle root after
+    /// inserting it. The instruction transfers SOL to the vault and updates
+    /// the tree metadata.
+    ///
+    /// **Trust model:** does NOT verify that `new_root` is the correct
+    /// result of inserting `commitment`. See `docs/DEMO-NOTICE.md`.
+    pub fn deposit(
+        ctx: Context<Deposit>,
+        commitment: [u8; 32],
+        new_root: [u8; 32],
+        amount: u64,
+    ) -> Result<()> {
+        instructions::deposit::handler_deposit(ctx, commitment, new_root, amount)
     }
 }

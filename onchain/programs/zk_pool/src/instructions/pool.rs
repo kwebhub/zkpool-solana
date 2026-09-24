@@ -35,7 +35,6 @@ pub struct Pool<'info> {
     ///
     /// Seeds: `[VAULT_SEED, pool]`.
     /// Not initialized with data — used only to hold lamports.
-    /// `init` with zero space: creates an empty account owned by this program.
     #[account(
         init,
         payer = authority,
@@ -50,7 +49,8 @@ pub struct Pool<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<Pool>) -> Result<()> {
+/// Handler for the `pool` instruction.
+pub fn handler_pool(ctx: Context<Pool>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
 
     pool.authority = ctx.accounts.authority.key();
