@@ -1,11 +1,57 @@
 //! Program errors.
-//!
-//! Stage 4.1.1: placeholder — real errors are added in stage 4.1.3.
 
 use anchor_lang::prelude::*;
 
 #[error_code]
 pub enum ZkPoolError {
-    #[msg("Placeholder error")]
-    Placeholder,
+    // ============================================================
+    // Pool
+    // ============================================================
+    #[msg("Pool is already initialized")]
+    PoolAlreadyInitialized,
+
+    #[msg("Pool is not initialized")]
+    PoolNotInitialized,
+
+    // ============================================================
+    // Deposit
+    // ============================================================
+    #[msg("Deposit amount is below the minimum")]
+    DepositBelowMinimum,
+
+    #[msg("Merkle tree is full")]
+    TreeFull,
+
+    #[msg("New root must differ from the current root")]
+    RootUnchanged,
+
+    // ============================================================
+    // Withdraw
+    // ============================================================
+    #[msg("Unknown Merkle root: must be in the recent roots history")]
+    UnknownRoot,
+
+    #[msg("Nullifier has already been used")]
+    NullifierAlreadyUsed,
+
+    #[msg("Recipient in instruction does not match recipient in proof")]
+    RecipientMismatch,
+
+    #[msg("Amount in instruction does not match amount in proof")]
+    AmountMismatch,
+
+    #[msg("Vault balance is insufficient")]
+    InsufficientVaultBalance,
+
+    // ============================================================
+    // ZK proof / verifier
+    // ============================================================
+    #[msg("Proof verification failed")]
+    ProofVerificationFailed,
+
+    #[msg("Invalid proof length")]
+    InvalidProofLength,
+
+    #[msg("Invalid public inputs length")]
+    InvalidPublicInputsLength,
 }
