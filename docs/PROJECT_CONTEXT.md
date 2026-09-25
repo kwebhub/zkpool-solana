@@ -469,7 +469,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 4.1 — Anchor program ✅
 - Stage 4.5 — LiteSVM E2E test ✅
 - Stage 5 — Backend ✅
-- **Stage 6 — Merkle service (Node.js) ← next**
+- **Stage 6 — Merkle service (Node.js) ← in progress (6.1, 6.2 done)**
 - Stage 7 — Prover (Rust + Sunspot)
 - Stage 8 — Frontend (Vue 3)
 - Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
@@ -783,8 +783,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.12 (final checkpoint for Stage 5).
-**Next stage:** Stage 6 — Merkle service (Node.js + Fastify, port 4003).
+**Last completed stage:** Stage 6.2 (poseidon2Hash verified against Stage 3.5 fixture).
+**Next stage:** Stage 6.3 — `src/merkle.js` (build tree, root, proof).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -883,8 +883,8 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 **Circuits needed in `services/merkle/circuits/`:** `hash2.json`, `hashes.json`, `withdrawal.json` — already copied by `sync-circuits` at Stage 2.3, and the folder is gitignored.
 
 **Sub-stages planned:**
-- 6.1 — `package.json` + dependencies + folder structure. ✅
-- 6.2 — `src/poseidon.js` — Noir instance caching, `poseidon2Hash(left, right)`.
+- 6.1 — `package.json` + dependencies + folder structure. ✅ (`4142789`)
+- 6.2 — `src/poseidon.js` — Noir instance caching, `poseidon2Hash(left, right)`. ✅ (`d021210`)
 - 6.3 — `src/merkle.js` — build tree, root, proof.
 - 6.4 — `src/server.js` — Fastify routes.
 - 6.5 — tests (`node --test`).
