@@ -294,6 +294,23 @@ All 9 sub-stages complete:
 
 **Known limitation:** E2E withdraw with a real proof is not feasible in LiteSVM (see section 8, "From Stage 4.5"). Full E2E is deferred to devnet + frontend (stage 8).
 
+### 🚧 Stage 5. Backend (in progress)
+
+| # | Sub-stage | Status |
+|---|---|---|
+| 5.1 | Project skeleton | ✅ commit `7ed961a` |
+| 5.2 | `config.rs` | ✅ commit `ee668ab` |
+| 5.3 | `db.rs` + migration | ✅ commit `1e08827` |
+| 5.4 | `cache.rs` (Redis) | ← next |
+| 5.5 | `tree.rs` (Merkle tree) | ⏳ |
+| 5.6 | Metrics + logging | ⏳ |
+| 5.7 | Rate limiting | ⏳ |
+| 5.8 | Indexer | ⏳ |
+| 5.9 | HTTP handlers | ⏳ |
+| 5.10 | Docker compose additions | ⏳ |
+| 5.11 | Smoke test | ⏳ |
+| 5.12 | Final checkpoint | ⏳ |
+
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -358,7 +375,7 @@ All 9 sub-stages complete:
 - Stage 3.7 — Documentation enrichment ✅
 - Stage 4.1 — Anchor program ✅
 - Stage 4.5 — LiteSVM E2E test ✅
-- **Stage 5 — Backend ← next**
+- **Stage 5 — Backend 🚧**
 - Stage 6 — Merkle service
 - Stage 7 — Prover
 - Stage 8 — Frontend
@@ -519,7 +536,18 @@ zkpool-solana/
 │       ├── test_deposit.rs  ← placeholder
 │       ├── test_withdraw.rs ← placeholder
 │       └── test_double_spend.rs ← placeholder
-├── services/{backend,merkle,prover}/
+├── services/
+│   ├── backend/             ← Rust + axum (Stage 5, in progress)
+│   │   ├── Cargo.toml
+│   │   ├── migrations/
+│   │   │   └── 001_init.sql
+│   │   └── src/
+│   │       ├── config.rs
+│   │       ├── db.rs
+│   │       ├── lib.rs
+│   │       └── main.rs
+│   ├── merkle/              ← Node.js + Fastify (Stage 6)
+│   └── prover/              ← Rust + Sunspot (Stage 7)
 ├── web/
 ├── scripts/{validate-spec,sync-circuits}/
 ├── solana/                  ← gitignored
@@ -594,8 +622,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 4.5 (LiteSVM E2E test).
-**Next stage:** Stage 5 — Backend.
+**Last completed stage:** Stage 5.3 (`db.rs` + migration).
+**Next stage:** Stage 5.4 — `cache.rs` (Redis wrapper).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -616,7 +644,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `01-setup.md` — 762 lines.
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
-- `04-anchor.md` — 1014 lines.
+- `04-anchor.md` — 1014+ lines.
+- `05-backend.md` — 234 lines.
 
 ---
 
@@ -626,8 +655,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 4.5**.
-6. Next task: **Stage 5 — Backend**.
+5. Last completed stage: **Stage 5.3**.
+6. Next task: **Stage 5.4 — `cache.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
