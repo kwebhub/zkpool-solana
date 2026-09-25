@@ -18,4 +18,48 @@ services:
       - ../solana:/home/ubuntu/.config/solana
     environment:
       - CARGO_TERM_COLOR=always
+    # `network_mode: host` is NOT used. The solana container needs to reach
+    # Postgres and Redis by their service names on the default bridge network.
+    # For local dev, the backend (running inside `solana`) connects to
+    # `postgres:5432` and `redis:6379` — see `.env.example`.
+    depends_on:
+      - postgres
+      - redis
     restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: zkpool-postgres
+    environment:
+      POSTGRES_USER: zkpool
+      POSTGRES_PASSWORD: zkpool_dev_password
+      POSTGRES_DB: zkpool
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zkpool -d zkpool"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: zkpool-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
