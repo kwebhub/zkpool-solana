@@ -800,6 +800,94 @@ note: required by a bound in `reqwest::Response::json`
 
 ---
 
+## 5.10. Docker compose additions
+
+Добавлены два сервиса в `infra/docker-compose.yml`:
+
+### `postgres`
+
+- **Image:** `postgres:16-alpine`.
+- **Container:** `zkpool-postgres`.
+- **Env:** `POSTGRES_USER=zkpool`, `POSTGRES_PASSWORD=zkpool_dev_password`, `POSTGRES_DB=zkpool`.
+- **Port:** `5432:5432`.
+- **Volume:** `postgres_data:/var/lib/postgresql/data`.
+- **Healthcheck:** `pg_isready -U zkpool -d zkpool`.
+- **Restart:** `unless-stopped`.
+
+### `redis`
+
+- **Image:** `redis:7-alpine`.
+- **Container:** `zkpool-redis`.
+- **Port:** `6379:6379`.
+- **Volume:** `redis_data:/data`.
+- **Healthcheck:** `redis-cli ping`.
+- **Command:** `redis-server --appendonly yes` (персистентность AOF).
+- **Restart:** `unless-stopped`.
+
+### `solana` — изменения
+
+Добавлен **`depends_on: [postgres, redis]`** — контейнер `solana` **не** стартует раньше БД и Redis.
+
+**⚠️ `network_mode: host` НЕ используется.** Все три сервиса — на **default bridge** сети. `solana` видит `postgres` и `redis` **по именам** сервисов (`postgres:5432`, `redis:6379`).
+
+### Volumes
+
+```yaml
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+Persist между перезапусками `docker compose down` (но **не** между `docker compose down -v`).
+
+### Применение миграции
+
+```bash
+docker exec -i zkpool-postgres psql -U zkpool -d zkpool < services/backend/migrations/001_init.sql
+```
+
+**Идемпотентно** — `CREATE TABLE IF NOT EXISTS`. Второй запуск — только `NOTICE: relation already exists, skipping`.
+
+### Проверка
+
+```bash
+docker compose ps
+docker exec zkpool-postgres psql -U zkpool -d zkpool -c "\dt"
+docker exec zkpool-redis redis-cli ping
+```
+
+Ожидаемо:
+- `zkpool-postgres ... (healthy)`.
+- Три таблицы: `commitments`, `nullifiers`, `roots`.
+- `PONG`.
+
+### ⚠️ Возможная проблема: `NOTICE: relation already exists`
+
+**Симптом:** при **первом** применении миграции в **новом** окружении видим `NOTICE: relation "commitments" already exists, skipping`.
+
+**Причина:** таблицы **уже** были созданы **ранее** (возможно, при первом запуске проекта или эксперименте). Миграция **идемпотентна**, поэтому **не падает**.
+
+**Что делать:** **ничего**. Если хотим **чистый** старт — `docker compose down -v` (удаляет volumes) и заново поднять контейнеры, потом применить миграцию.
+
+### Ограничения (для production)
+
+- **Пароли** — plaintext в `docker-compose.yml`. Для production — **secrets** (Docker secrets, Vault, SOPS).
+- **Порт 5432 и 6379 — выставлены наружу** — для локальной разработки. В production — только **внутренняя** сеть Docker.
+- **Один инстанс** Postgres/Redis — без репликации, без failover.
+- **Нет бэкапов** — ни Postgres, ни Redis.
+
+См. `docs/DEMO-NOTICE.md`.
+
+### Итоги 5.10
+
+- `infra/docker-compose.yml` — 44 строки добавлено.
+- Postgres healthy, Redis healthy.
+- Миграция применена, 3 таблицы.
+- **Коммит:** `a260475`.
+- **Чекпоинт:** `.checkpoints/05.10-docker-compose/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
