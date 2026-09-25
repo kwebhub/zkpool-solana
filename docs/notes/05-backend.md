@@ -1123,3 +1123,40 @@ ports:
 - 5 unit + 2 ignored integration tests.
 - 3 таблицы Postgres, 2 Docker-контейнера (postgres, redis) — healthy.
 - Бэкенд готов к интеграции с Merkle service (Stage 6).
+
+---
+
+## Находка после Stage 5.12: устаревшие ACIR в `services/merkle/circuits/`
+
+**Дата:** 2026-09-25 (обнаружено перед началом Stage 6)
+
+### Симптом
+
+При проверке ACIR-ов перед стартом Stage 6:
+
+| Файл | Ожидалось | Фактически | Статус |
+|---|---|---|---|
+| `hash2.json` | `27c1937b…37c6` | `27c1937b…37c6` | ✅ |
+| `hashes.json` | `ca81b137…be9` | `ca81b137…be9` | ✅ |
+| `withdrawal.json` | `29ac2e67…91db` | `f154aca0…2050` | ❌ |
+
+### Причина
+
+`sync-circuits` последний раз запускался на Stage 2.3 (Sep 23 11:27). После этого withdrawal-схема была пересобрана на Stage 3 (Sep 24 06:37), но копии в `services/merkle/circuits/` и `web/public/circuits/` не обновились.
+
+### Исправление
+
+```bash
+cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- apply
+```
+
+Вывод показал 2 расхождения, оба перезаписаны:
+
+- services/merkle/circuits/withdrawal.json
+- web/public/circuits/withdrawal.json
+
+Урок
+
+Запускать sync-circuits --check в начале каждого этапа, который использует ACIR-ы. Если находит расхождение — apply до продолжения.
+
+Это ровно тот класс багов («mismatch между слоями»), против которого построен v3. Обнаружение здесь — валидация принципа №2 (contract checks at every boundary) и принципа №1 (single source of truth через spec.json).
