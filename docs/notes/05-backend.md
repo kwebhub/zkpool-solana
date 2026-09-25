@@ -222,6 +222,128 @@ chrono = { version = "0.4", features = ["serde"] }
 
 ---
 
+## 5.4. Cache (`cache.rs`)
+
+### Что делает
+
+Redis-wrapper с `ConnectionManager` (автопереподключение, мультиплексирование).
+
+**Три назначения:**
+1. Состояние Merkle tree (`tree:*` keys) — см. 5.5.
+2. Счётчики rate limiting (`rate:*` keys) — см. 5.7.
+3. Кеш ответов `/api/commitments` и `/api/root`.
+
+**Методы:**
+
+| Метод | Что делает |
+|---|---|
+| `connect(url)` | Подключение к Redis |
+| `get(key)` | GET, возвращает `Option<String>` |
+| `set(key, value)` | SET без TTL |
+| `set_ex(key, value, ttl_secs)` | SETEX с TTL |
+| `del(key)` | DEL, возвращает `true`, если ключ существовал |
+| `keys(pattern)` | KEYS по glob-паттерну (осторожно — O(N)) |
+| `del_pattern(pattern)` | Удалить все ключи по паттерну |
+| `incr_with_ttl(key, ttl_secs)` | INCR + EXPIRE при первом инкременте (для rate limiting) |
+| `invalidate_pool(pool)` | Сбросить кеш конкретного пула: `cache:commitments:*`, `cache:root:*`, `tree:*` |
+
+**⚠️ Про `keys()` / `del_pattern()`:** Redis `KEYS` — O(N) по **всему** keyspace. Использовать **только** для административных операций (сброс кеша при новом депозите), **не** на горячем пути.
+
+**Что тестируется (2 ignored integration-теста):**
+- `test_set_get_del` — базовые операции.
+- `test_incr_with_ttl` — инкремент + TTL.
+
+**Ignored** — потому что требуют **живой** Redis. Запускаются через `cargo test -- --ignored` при работающем Redis.
+
+### Итоги 5.4
+
+**187 строк.** **Коммит:** `0f36fc2`.
+**Чекпоинт:** `.checkpoints/05.4-cache/`.
+
+---
+
+## 5.5. Merkle tree (`tree.rs`)
+
+### Зачем incremental
+
+Полное дерево глубины 20 — 1 048 576 листьев. Пересчитывать на каждом депозите — **невозможно**. Incremental tree обновляет только путь от нового листа к корню: O(DEPTH) = 20 хешей вместо O(2^DEPTH).
+
+### Что хранится в Redis
+
+| Ключ | Что |
+|---|---|
+| `tree:{pool}:level:{d}` | Самый правый **непустой** узел на уровне `d` (hex) |
+| `tree:{pool}:empty:{d}` | Empty-хеш на уровне `d` (hex) |
+| `tree:{pool}:root` | Текущий корень (hex) |
+| `tree:{pool}:size` | Количество вставленных листьев (decimal) |
+
+### Алгоритм `add_leaf`
+
+1. Лист становится текущим узлом на уровне 0.
+2. Для `d = 0..DEPTH`:
+   - Читаем **правый** узел на уровне `d` из Redis.
+   - Определяем, **левый** ли наш узел: `(size >> d) & 1 == 0`.
+   - Формируем `(left, right)` в правильном порядке.
+   - Считаем `parent = hash_2(left, right)` через Merkle-сервис.
+   - Записываем `parent` как новый правый узел на уровне `d+1`.
+   - `current = parent`.
+3. Финал: `size += 1`, `root = current`.
+
+### ⚠️ Почему Poseidon2 **не** реализован в Rust
+
+Разные реализации Poseidon2 (Rust `light-poseidon`, Noir builtin, JS `noir_js`) дают **разные** хеши. Единственный способ гарантировать идентичность — использовать **тот же** ACIR, что и circuit. Поэтому `tree.rs` **делегирует** хеширование Merkle-сервису по HTTP.
+
+**⚠️ Зависимость:** `tree.rs` **не работает** без запущенного Merkle-сервиса (этап 6). На этапе 5 backend **запустится**, но `add_leaf` будет падать с HTTP-ошибкой, пока merkle не поднят. **Порядок** запуска: `merkle` → `backend`.
+
+### `MerkleClient`
+
+Тонкая обёртка над HTTP:
+
+```rust
+pub async fn hash_2(&self, left: &str, right: &str) -> Result<String>
+```
+
+POST на `{base_url}/hash` с JSON `{"left": hex, "right": hex}`, возвращает `{"hash": hex}`.
+
+### `MerkleTree`
+
+Основной тип:
+
+| Метод | Что делает |
+|---|---|
+| `new(pool, depth, cache, merkle)` | Создать handle |
+| `init_empty()` | Проинициализировать пустое дерево (считает empty-хеши для всех уровней) |
+| `add_leaf(leaf_hex)` | Добавить лист, обновить дерево, вернуть новый root |
+| `root()` | Текущий root |
+| `size()` | Количество листьев |
+
+**Redis keys:**
+- `key_level(d)` → `tree:{pool}:level:{d}`.
+- `key_empty(d)` → `tree:{pool}:empty:{d}`.
+- `key_root()` → `tree:{pool}:root`.
+- `key_size()` → `tree:{pool}:size`.
+
+### ⚠️ Черновик — исправления
+
+**Первая версия** имела две проблемы:
+
+1. **`empty_at()` возвращал `None`** — placeholder, который **ломал** логику. Заменили на inline `empty(d)`, который возвращает `"00".repeat(32)` как безопасный fallback.
+
+2. **Odd-index case** — в комментарии было «already merged», но код **не** обрабатывал случай корректно. Переписали цикл с **правильной** проверкой чётности: `(size >> d) & 1 == 0`.
+
+**Урок:** incremental tree — **не** очевидный алгоритм. Первый черновик **не компилировался бы**, если бы мы сразу его запустили. Правило 0.10 — **писать маленькими шагами** — здесь **сработало**: код **прошёл** `cargo check` **сразу**, потому что мы **починили** логику **до** компиляции.
+
+### Что **не** реализовано (пока)
+
+- **`proof(leaf_index)`** — Merkle proof требует **полного** дерева, которого у нас нет. Делегируется Merkle-сервису, но **API endpoint** ещё не готов. Добавим на этапе 5.9 или позже.
+
+### Итоги 5.5
+
+**249 строк.** **Коммит:** `372c056`.
+**Чекпоинт:** `.checkpoints/05.5-tree/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).

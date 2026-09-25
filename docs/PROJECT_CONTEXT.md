@@ -109,6 +109,19 @@ Russian is used **only** for files in `docs/ru/*.md` (translations for the Russi
 
 **Rationale:** Russian tokens are 2–3× more expensive than English tokens in the model's tokenizer. The chat history has been growing fast; English-only chat preserves context.
 
+### 0.13. "record" means record it in notes and context
+
+When the user writes just **"record"** (or Russian "зафиксируй"), the assistant must:
+
+1. Update `docs/notes/NN-name.md` — add a section for the current sub-stage.
+2. Update `docs/PROJECT_CONTEXT.md`:
+   - The Stage NN table (mark current sub-stage as done, next as `← next`).
+   - Section 12 "Current state" — last completed, next, commit hashes, docs sizes.
+   - Section 13 "Instructions for a new assistant" — Last completed stage, next task.
+3. Commit both files together.
+
+Do **not** ask "should I record it?" — just do it.
+
 ---
 
 ## 1. What this project is
@@ -301,9 +314,9 @@ All 9 sub-stages complete:
 | 5.1 | Project skeleton | ✅ commit `7ed961a` |
 | 5.2 | `config.rs` | ✅ commit `ee668ab` |
 | 5.3 | `db.rs` + migration | ✅ commit `1e08827` |
-| 5.4 | `cache.rs` (Redis) | ← next |
-| 5.5 | `tree.rs` (Merkle tree) | ⏳ |
-| 5.6 | Metrics + logging | ⏳ |
+| 5.4 | `cache.rs` (Redis) | ✅ commit `0f36fc2` |
+| 5.5 | `tree.rs` (Merkle tree) | ✅ commit `372c056` |
+| 5.6 | Metrics + logging | ← next |
 | 5.7 | Rate limiting | ⏳ |
 | 5.8 | Indexer | ⏳ |
 | 5.9 | HTTP handlers | ⏳ |
@@ -622,8 +635,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.3 (`db.rs` + migration).
-**Next stage:** Stage 5.4 — `cache.rs` (Redis wrapper).
+**Last completed stage:** Stage 5.5 (`tree.rs`).
+**Next stage:** Stage 5.6 — `metrics.rs` + `logging.rs`.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -645,7 +658,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
 - `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 234 lines.
+- `05-backend.md` — 234+ lines.
 
 ---
 
@@ -655,8 +668,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 5.3**.
-6. Next task: **Stage 5.4 — `cache.rs`**.
+5. Last completed stage: **Stage 5.5**.
+6. Next task: **Stage 5.6 — `metrics.rs` + `logging.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
