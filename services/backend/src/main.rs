@@ -1,13 +1,6 @@
 //! zkpool_backend — HTTP API + indexer.
 //!
-//! Stage 5.9.2: add read endpoints:
-//!   - GET /api/health
-//!   - GET /api/commitments?pool_address=X
-//!   - GET /api/root?pool_address=X
-//!   - GET /api/proof?pool_address=X&leaf_index=N  (stub)
-//!   - GET /metrics
-//!
-//! POST /api/withdraw + rate limiting added in 5.9.3.
+//! Stage 5.9.3: full endpoint set.
 
 use std::sync::Arc;
 
@@ -15,20 +8,24 @@ use anyhow::Result;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
+    middleware,
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{error, info};
 
+use zkpool_backend::api_types::{WithdrawRequest, WithdrawResponse};
 use zkpool_backend::cache::Cache;
 use zkpool_backend::config::Config;
 use zkpool_backend::db::Db;
+use zkpool_backend::indexer::Indexer;
 use zkpool_backend::logging;
 use zkpool_backend::metrics;
+use zkpool_backend::rate_limit::{self, RateLimiter};
 use zkpool_backend::tree::{MerkleClient, MerkleTree};
 
 /// Shared application state.
@@ -42,27 +39,19 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // 1. Config
     let config = Arc::new(Config::from_env()?);
-
-    // 2. Logging
     logging::init_logging()?;
     info!("logging initialized");
-
-    // 3. Metrics
     metrics::init_metrics()?;
     info!("metrics initialized");
 
-    // 4. Postgres
     let db = Db::connect(&config.database_url).await?;
     info!("connected to Postgres");
 
-    // 5. Redis
     let cache = Cache::connect(&config.redis_url).await?;
     info!("connected to Redis");
     let cache = Arc::new(Mutex::new(cache));
 
-    // 6. Merkle tree
     let merkle_client = MerkleClient::new(config.merkle_url.clone());
     let tree = MerkleTree::new(
         config.pool_address.clone(),
@@ -71,26 +60,59 @@ async fn main() -> Result<()> {
         merkle_client,
     )?;
     let tree = Arc::new(Mutex::new(tree));
-    info!("Merkle tree handle created (not initialized yet)");
+    info!("Merkle tree handle created");
 
-    // 7. App state
     let state = AppState {
         config: config.clone(),
-        db,
-        cache,
-        tree,
+        db: db.clone(),
+        cache: cache.clone(),
+        tree: tree.clone(),
     };
 
-    // 8. Router
-    let app = Router::new()
-        .route("/api/health", get(health))
+    let rate_limiter = RateLimiter::new(
+        (*cache.lock().await).clone(),
+        config.rate_limit_withdraw_per_min,
+        config.rate_limit_read_per_min,
+    );
+
+    // Spawn indexer.
+    {
+        let indexer_config = config.clone();
+        let indexer_db = db.clone();
+        let indexer_cache = cache.clone();
+        let indexer_tree = tree.clone();
+        tokio::spawn(async move {
+            let indexer = Indexer::new(indexer_config, indexer_db, indexer_cache, indexer_tree);
+            if let Err(e) = indexer.run().await {
+                error!("indexer terminated: {:#}", e);
+            }
+        });
+        info!("indexer spawned");
+    }
+
+    let read_routes = Router::new()
         .route("/api/commitments", get(get_commitments))
         .route("/api/root", get(get_root))
         .route("/api/proof", get(get_proof))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            rate_limit::read_middleware,
+        ));
+
+    let withdraw_routes = Router::new()
+        .route("/api/withdraw", post(post_withdraw))
+        .layer(middleware::from_fn_with_state(
+            rate_limiter.clone(),
+            rate_limit::withdraw_middleware,
+        ));
+
+    let app = Router::new()
+        .route("/api/health", get(health))
         .route("/metrics", get(metrics_endpoint))
+        .merge(read_routes)
+        .merge(withdraw_routes)
         .with_state(state);
 
-    // 9. Bind and serve
     let addr = format!("0.0.0.0:{}", config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     info!("server listening on {}", addr);
@@ -106,20 +128,17 @@ async fn main() -> Result<()> {
 // Handlers
 // ============================================================
 
-/// `GET /api/health` — health check.
 async fn health(State(state): State<AppState>) -> impl IntoResponse {
     let db_ok = state
         .db
         .next_leaf_index(&state.config.pool_address)
         .await
         .is_ok();
-
     let status = if db_ok {
         StatusCode::OK
     } else {
         StatusCode::SERVICE_UNAVAILABLE
     };
-
     (
         status,
         Json(json!({
@@ -136,10 +155,6 @@ struct PoolQuery {
     pool_address: Option<String>,
 }
 
-/// `GET /api/commitments?pool_address=X` — list all commitments.
-///
-/// If `pool_address` is not provided, uses the configured pool address.
-/// Cached in Redis for 30 seconds.
 async fn get_commitments(
     State(state): State<AppState>,
     Query(q): Query<PoolQuery>,
@@ -149,7 +164,6 @@ async fn get_commitments(
         .unwrap_or_else(|| state.config.pool_address.clone());
     let cache_key = format!("cache:commitments:{}", pool);
 
-    // Try cache first.
     {
         let mut cache = state.cache.lock().await;
         if let Ok(Some(cached)) = cache.get(&cache_key).await {
@@ -159,11 +173,10 @@ async fn get_commitments(
         }
     }
 
-    // Query DB.
     let rows = match state.db.list_commitments(&pool).await {
         Ok(rows) => rows,
         Err(e) => {
-            tracing::error!("list_commitments failed: {:#}", e);
+            error!("list_commitments failed: {:#}", e);
             metrics::record_db_error();
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -193,7 +206,6 @@ async fn get_commitments(
         "commitments": items,
     });
 
-    // Cache for 30 seconds.
     {
         let mut cache = state.cache.lock().await;
         if let Ok(s) = serde_json::to_string(&response) {
@@ -204,14 +216,12 @@ async fn get_commitments(
     (StatusCode::OK, Json(response)).into_response()
 }
 
-/// `GET /api/root?pool_address=X` — current Merkle root.
 async fn get_root(State(state): State<AppState>, Query(q): Query<PoolQuery>) -> impl IntoResponse {
     let pool = q
         .pool_address
         .unwrap_or_else(|| state.config.pool_address.clone());
     let cache_key = format!("cache:root:{}", pool);
 
-    // Try cache first.
     {
         let mut cache = state.cache.lock().await;
         if let Ok(Some(cached)) = cache.get(&cache_key).await {
@@ -221,11 +231,10 @@ async fn get_root(State(state): State<AppState>, Query(q): Query<PoolQuery>) -> 
         }
     }
 
-    // Query DB.
     let root = match state.db.latest_root(&pool).await {
         Ok(r) => r,
         Err(e) => {
-            tracing::error!("latest_root failed: {:#}", e);
+            error!("latest_root failed: {:#}", e);
             metrics::record_db_error();
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -246,7 +255,6 @@ async fn get_root(State(state): State<AppState>, Query(q): Query<PoolQuery>) -> 
         }),
     };
 
-    // Cache for 30 seconds.
     {
         let mut cache = state.cache.lock().await;
         if let Ok(s) = serde_json::to_string(&response) {
@@ -264,11 +272,6 @@ struct ProofQuery {
     leaf_index: u64,
 }
 
-/// `GET /api/proof?pool_address=X&leaf_index=N` — Merkle proof.
-///
-/// **STUB:** not implemented yet. Requires the full Merkle tree, which
-/// lives in the Merkle service. Implementation is deferred until we have
-/// the Merkle service running (Stage 6).
 async fn get_proof(
     State(_state): State<AppState>,
     Query(q): Query<ProofQuery>,
@@ -284,7 +287,6 @@ async fn get_proof(
     )
 }
 
-/// `GET /metrics` — Prometheus exposition.
 async fn metrics_endpoint() -> impl IntoResponse {
     let body = metrics::render_metrics();
     (
@@ -292,4 +294,61 @@ async fn metrics_endpoint() -> impl IntoResponse {
         [("Content-Type", "text/plain; version=0.0.4")],
         body,
     )
+}
+
+/// `POST /api/withdraw` — proxy the witness to the prover service.
+async fn post_withdraw(
+    State(state): State<AppState>,
+    Json(req): Json<WithdrawRequest>,
+) -> impl IntoResponse {
+    let url = format!("{}/prove", state.config.prover_url);
+
+    let resp = reqwest::Client::new().post(&url).json(&req).send().await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            error!("prover request failed: {:#}", e);
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "prover unreachable"})),
+            )
+                .into_response();
+        }
+    };
+
+    let status = resp.status();
+    if status.is_success() {
+        let parsed: Result<WithdrawResponse, _> = resp.json().await;
+        match parsed {
+            Ok(out) => (StatusCode::OK, Json(out)).into_response(),
+            Err(e) => {
+                error!("prover response parse error: {:#}", e);
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": "prover returned invalid response"})),
+                )
+                    .into_response()
+            }
+        }
+    } else if status.is_client_error() {
+        let body: String = resp.text().await.unwrap_or_default();
+        (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": "invalid witness",
+                "prover_status": status.as_u16(),
+                "prover_body": body,
+            })),
+        )
+            .into_response()
+    } else {
+        let body: String = resp.text().await.unwrap_or_default();
+        error!("prover 5xx: status={}, body={}", status, body);
+        (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": "prover internal error"})),
+        )
+            .into_response()
+    }
 }

@@ -1,6 +1,7 @@
 //! zkpool_backend library.
 //!
 //! Modules:
+//!   - `api_types`  — shared types between bin and lib.
 //!   - `config`     — environment configuration.
 //!   - `db`         — Postgres database wrapper.
 //!   - `cache`      — Redis cache wrapper.
@@ -9,9 +10,8 @@
 //!   - `metrics`    — custom Prometheus metrics.
 //!   - `rate_limit` — Redis-based rate limiting middleware.
 //!   - `indexer`    — background worker: Solana RPC → DB + tree.
-//!
-//! Additional modules (HTTP handlers) are added in the next sub-stage.
 
+pub mod api_types;
 pub mod cache;
 pub mod config;
 pub mod db;
