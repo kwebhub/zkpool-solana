@@ -1,12 +1,25 @@
 //! zkpool_backend — HTTP API + indexer.
 //!
-//! Stage 5.9.1: minimal server with `/api/health` only.
-//! Read endpoints and `/api/withdraw` are added in the next sub-stages.
+//! Stage 5.9.2: add read endpoints:
+//!   - GET /api/health
+//!   - GET /api/commitments?pool_address=X
+//!   - GET /api/root?pool_address=X
+//!   - GET /api/proof?pool_address=X&leaf_index=N  (stub)
+//!   - GET /metrics
+//!
+//! POST /api/withdraw + rate limiting added in 5.9.3.
 
 use std::sync::Arc;
 
 use anyhow::Result;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
+use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::info;
@@ -49,7 +62,7 @@ async fn main() -> Result<()> {
     info!("connected to Redis");
     let cache = Arc::new(Mutex::new(cache));
 
-    // 6. Merkle tree (lazy — depends on Merkle service)
+    // 6. Merkle tree
     let merkle_client = MerkleClient::new(config.merkle_url.clone());
     let tree = MerkleTree::new(
         config.pool_address.clone(),
@@ -68,9 +81,13 @@ async fn main() -> Result<()> {
         tree,
     };
 
-    // 8. Router (only /api/health for now)
+    // 8. Router
     let app = Router::new()
         .route("/api/health", get(health))
+        .route("/api/commitments", get(get_commitments))
+        .route("/api/root", get(get_root))
+        .route("/api/proof", get(get_proof))
+        .route("/metrics", get(metrics_endpoint))
         .with_state(state);
 
     // 9. Bind and serve
@@ -85,9 +102,12 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+// ============================================================
+// Handlers
+// ============================================================
+
 /// `GET /api/health` — health check.
 async fn health(State(state): State<AppState>) -> impl IntoResponse {
-    // Simple DB check: try to fetch next_leaf_index.
     let db_ok = state
         .db
         .next_leaf_index(&state.config.pool_address)
@@ -107,5 +127,169 @@ async fn health(State(state): State<AppState>) -> impl IntoResponse {
             "db": db_ok,
             "version": env!("CARGO_PKG_VERSION"),
         })),
+    )
+}
+
+#[derive(Debug, Deserialize)]
+struct PoolQuery {
+    #[serde(default)]
+    pool_address: Option<String>,
+}
+
+/// `GET /api/commitments?pool_address=X` — list all commitments.
+///
+/// If `pool_address` is not provided, uses the configured pool address.
+/// Cached in Redis for 30 seconds.
+async fn get_commitments(
+    State(state): State<AppState>,
+    Query(q): Query<PoolQuery>,
+) -> impl IntoResponse {
+    let pool = q
+        .pool_address
+        .unwrap_or_else(|| state.config.pool_address.clone());
+    let cache_key = format!("cache:commitments:{}", pool);
+
+    // Try cache first.
+    {
+        let mut cache = state.cache.lock().await;
+        if let Ok(Some(cached)) = cache.get(&cache_key).await {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&cached) {
+                return (StatusCode::OK, Json(parsed)).into_response();
+            }
+        }
+    }
+
+    // Query DB.
+    let rows = match state.db.list_commitments(&pool).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!("list_commitments failed: {:#}", e);
+            metrics::record_db_error();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "db query failed"})),
+            )
+                .into_response();
+        }
+    };
+
+    let items: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|c| {
+            json!({
+                "id": c.id,
+                "leaf_index": c.leaf_index,
+                "commitment": hex::encode(&c.commitment),
+                "pool_address": c.pool_address,
+                "tx_signature": c.tx_signature,
+                "created_at": c.created_at.to_rfc3339(),
+            })
+        })
+        .collect();
+
+    let response = json!({
+        "pool_address": pool,
+        "count": items.len(),
+        "commitments": items,
+    });
+
+    // Cache for 30 seconds.
+    {
+        let mut cache = state.cache.lock().await;
+        if let Ok(s) = serde_json::to_string(&response) {
+            let _ = cache.set_ex(&cache_key, &s, 30).await;
+        }
+    }
+
+    (StatusCode::OK, Json(response)).into_response()
+}
+
+/// `GET /api/root?pool_address=X` — current Merkle root.
+async fn get_root(State(state): State<AppState>, Query(q): Query<PoolQuery>) -> impl IntoResponse {
+    let pool = q
+        .pool_address
+        .unwrap_or_else(|| state.config.pool_address.clone());
+    let cache_key = format!("cache:root:{}", pool);
+
+    // Try cache first.
+    {
+        let mut cache = state.cache.lock().await;
+        if let Ok(Some(cached)) = cache.get(&cache_key).await {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&cached) {
+                return (StatusCode::OK, Json(parsed)).into_response();
+            }
+        }
+    }
+
+    // Query DB.
+    let root = match state.db.latest_root(&pool).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!("latest_root failed: {:#}", e);
+            metrics::record_db_error();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "db query failed"})),
+            )
+                .into_response();
+        }
+    };
+
+    let response = match root {
+        Some(root_bytes) => json!({
+            "pool_address": pool,
+            "root": hex::encode(&root_bytes),
+        }),
+        None => json!({
+            "pool_address": pool,
+            "root": null,
+        }),
+    };
+
+    // Cache for 30 seconds.
+    {
+        let mut cache = state.cache.lock().await;
+        if let Ok(s) = serde_json::to_string(&response) {
+            let _ = cache.set_ex(&cache_key, &s, 30).await;
+        }
+    }
+
+    (StatusCode::OK, Json(response)).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct ProofQuery {
+    #[serde(default)]
+    pool_address: Option<String>,
+    leaf_index: u64,
+}
+
+/// `GET /api/proof?pool_address=X&leaf_index=N` — Merkle proof.
+///
+/// **STUB:** not implemented yet. Requires the full Merkle tree, which
+/// lives in the Merkle service. Implementation is deferred until we have
+/// the Merkle service running (Stage 6).
+async fn get_proof(
+    State(_state): State<AppState>,
+    Query(q): Query<ProofQuery>,
+) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(json!({
+            "error": "not implemented",
+            "reason": "requires the Merkle service (Stage 6)",
+            "pool_address": q.pool_address,
+            "leaf_index": q.leaf_index,
+        })),
+    )
+}
+
+/// `GET /metrics` — Prometheus exposition.
+async fn metrics_endpoint() -> impl IntoResponse {
+    let body = metrics::render_metrics();
+    (
+        StatusCode::OK,
+        [("Content-Type", "text/plain; version=0.0.4")],
+        body,
     )
 }
