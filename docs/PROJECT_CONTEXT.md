@@ -596,7 +596,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Cause: `sync-circuits` was last run at Stage 2.3 (Sep 23). The withdrawal circuit was recompiled later (Stage 3, Sep 24), but the copies were never re-synced.
   - Fix: `cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- apply`.
   - Lesson: **run `sync-circuits --check` at the start of any stage that consumes ACIRs.** If it reports a mismatch, re-run with `apply` before proceeding. This is exactly the "mismatch between layers" class of bug v3 exists to prevent.
-  
+
 ### How to find exact signatures for the installed crate version
 
 - Rust crate sources: `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`.
@@ -883,7 +883,7 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 **Circuits needed in `services/merkle/circuits/`:** `hash2.json`, `hashes.json`, `withdrawal.json` — already copied by `sync-circuits` at Stage 2.3, and the folder is gitignored.
 
 **Sub-stages planned:**
-- 6.1 — `package.json` + dependencies + folder structure.
+- 6.1 — `package.json` + dependencies + folder structure. ✅
 - 6.2 — `src/poseidon.js` — Noir instance caching, `poseidon2Hash(left, right)`.
 - 6.3 — `src/merkle.js` — build tree, root, proof.
 - 6.4 — `src/server.js` — Fastify routes.
@@ -891,7 +891,13 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 - 6.6 — run + smoke test with `curl`.
 - 6.7 — final checkpoint.
 
-**Key constraint:** the response format must match exactly what `tree.rs` expects — `{"hash": "<hex>"}`.
+**6.1 findings (2026-09-25):**
+- `@noir-lang/noir_js@1.0.0-rc.2` exists on npm; pulls `acvm_js@1.0.0-rc.2`, `types@1.0.0-rc.2`, `noirc_abi@1.0.0-rc.2`, `pako@^3.0.1`.
+- `fastify@5.12.5`, `@fastify/cors@11.3.0` — latest stable.
+- `Noir` API: `new Noir(circuit)` → `execute(inputs) → { witness, returnValue }`.
+- `returnValue` is a `0x`-prefixed hex string (single output) or an **array** of hex strings (tuple output).
+- **Cross-check passed:** `noir_js` recomputed `nullifier_hash` and `root` from the Stage 3.5 `Prover.toml` witness and matched byte-for-byte. This validates the entire premise of using JS for Poseidon2.
+- **Pitfall caught:** stale ACIR copies in `services/merkle/circuits/` (see section 8). Run `sync-circuits --check` at the start of every ACIR-consuming stage.
 
 ---
 
