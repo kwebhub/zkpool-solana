@@ -317,8 +317,8 @@ All 9 sub-stages complete:
 | 5.4 | `cache.rs` (Redis) | ✅ commit `0f36fc2` |
 | 5.5 | `tree.rs` (Merkle tree) | ✅ commit `372c056` |
 | 5.6 | Metrics + logging | ✅ commit `af219cd` |
-| 5.7 | Rate limiting | ← next |
-| 5.8 | Indexer | ⏳ |
+| 5.7 | Rate limiting | ✅ commit `7d85c29` |
+| 5.8 | Indexer | ← next |
 | 5.9 | HTTP handlers | ⏳ |
 | 5.10 | Docker compose additions | ⏳ |
 | 5.11 | Smoke test | ⏳ |
@@ -635,8 +635,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.6 (`metrics.rs` + `logging.rs`).
-**Next stage:** Stage 5.7 — `rate_limit.rs` (Redis-based middleware).
+**Last completed stage:** Stage 5.7 (`rate_limit.rs`).
+**Next stage:** Stage 5.8 — `indexer.rs` (background Solana RPC polling).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -658,7 +658,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
 - `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 380+ lines.
+- `05-backend.md` — 460+ lines.
 
 ---
 
@@ -668,8 +668,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 5.6**.
-6. Next task: **Stage 5.7 — `rate_limit.rs`**.
+5. Last completed stage: **Stage 5.7**.
+6. Next task: **Stage 5.8 — `indexer.rs`**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.

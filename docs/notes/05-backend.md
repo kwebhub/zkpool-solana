@@ -413,6 +413,79 @@ Custom Prometheus-метрики. Используется `metrics` facade + `m
 
 ---
 
+## 5.7. Rate limiting (`rate_limit.rs`)
+
+Redis-based rate limiting middleware для axum.
+
+### Алгоритм
+
+Для каждого запроса:
+1. Извлечь IP клиента из `X-Forwarded-For`, `X-Real-IP` или `ConnectInfo<SocketAddr>`.
+2. Построить ключ: `rate:{endpoint}:{ip}`.
+3. `INCR key` → count. Если `count == 1`, установить `EXPIRE key 60`.
+4. Если `count > limit` → `429 Too Many Requests` с `Retry-After: 60`.
+5. Иначе — пропустить дальше.
+
+### Два уровня
+
+| Tier | Endpoint | Default limit |
+|---|---|---|
+| `Withdraw` | `POST /api/withdraw` | 5/min |
+| `Read` | `GET /api/commitments`, `/api/root`, `/api/proof` | 60/min |
+
+Endpoints `/api/health` и `/metrics` — **не** лимитируются.
+
+### Компоненты
+
+**`Tier`** — enum: `Withdraw` | `Read`. Метод `endpoint_label()` → строка для ключа.
+
+**`RateLimiter`** — shared state (axum `State`):
+- `cache: Arc<Mutex<Cache>>` — Redis-клиент.
+- `withdraw_limit: u64`, `read_limit: u64` — из config.
+
+**Метод `check(tier, ip)`** → `Ok(remaining)` или `Err(retry_after)`.
+
+### Middleware
+
+Два axum-middleware:
+- **`withdraw_middleware`** — для `POST /api/withdraw`.
+- **`read_middleware`** — для `GET /api/commitments|root|proof`.
+
+Оба используют один `RateLimiter`, отличаются только `Tier`.
+
+### Извлечение IP
+
+```rust
+fn client_ip(req: &Request) -> String
+```
+
+Приоритет:
+1. `X-Forwarded-For` (первое значение) — за обратным прокси.
+2. `X-Real-IP`.
+3. `ConnectInfo<SocketAddr>` — от axum.
+4. `"unknown"` — fallback.
+
+### ⚠️ Fail-open на ошибке Redis
+
+Если Redis **недоступен** — `check()` возвращает `Ok(limit)` и **пропускает** запрос. Это **сознательное** решение:
+- **Fail-open** — сервис **продолжает** работать при падении Redis.
+- **Альтернатива (fail-close)** — блокирует **все** запросы при падении Redis, что **опаснее** для UX.
+
+Для production можно **изменить** на fail-close через отдельную конфигурацию, но для demo — fail-open.
+
+### Что НЕ тестируется (пока)
+
+Интеграционные тесты для rate limiting требуют **живого** Redis. Добавим в **smoke test** (этап 5.11) через реальный HTTP-запрос с превышением лимита.
+
+### Итоги 5.7
+
+- `rate_limit.rs` — **181 строка**.
+- Компилируется чисто.
+- **Коммит:** `7d85c29`.
+- **Чекпоинт:** `.checkpoints/05.7-rate-limit/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
