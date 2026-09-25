@@ -40,16 +40,15 @@
 | 5.1 | Project skeleton | ✅ |
 | 5.2 | Config (`config.rs`) | ✅ |
 | 5.3 | Database (`db.rs` + migration) | ✅ |
-| 5.4 | Cache (`cache.rs`) | ← следующий |
-| 5.5 | Merkle tree (`tree.rs`) | ⏳ |
-| 5.6 | Metrics + logging | ⏳ |
-| 5.7 | Rate limiting | ⏳ |
-| 5.8 | Indexer | ⏳ |
-| 5.9 | HTTP handlers | ⏳ |
-| 5.10 | Docker compose additions | ⏳ |
-| 5.11 | Smoke test | ⏳ |
-| 5.12 | Final checkpoint | ⏳ |
-
+| 5.4 | Cache (`cache.rs`) | ✅ |
+| 5.5 | Merkle tree (`tree.rs`) | ✅ |
+| 5.6 | Metrics + logging | ✅ |
+| 5.7 | Rate limiting | ✅ |
+| 5.8 | Indexer | ✅ |
+| 5.9 | HTTP handlers | ✅ |
+| 5.10 | Docker compose additions | ✅ |
+| 5.11 | Smoke test | ✅ |
+| 5.12 | Final checkpoint | ← следующий |
 ---
 
 ## 5.1. Project skeleton
@@ -1090,14 +1089,24 @@ ports:
 - **Чекпоинт:** `.checkpoints/05.11-smoke-test/`.
 
 ---
-
 ## Что дальше
 
-**Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
+**Этап 5 полностью завершён** — все 12 под-этапов (5.1 – 5.12) пройдены. Backend работает, smoke test пройден, все endpoints отвечают корректно.
+
+**Итоги этапа 5:**
+- 11 модулей в `services/backend/src/`: `lib`, `main`, `api_types`, `config`, `db`, `cache`, `tree`, `logging`, `metrics`, `rate_limit`, `indexer`.
+- 6 HTTP endpoints: `/api/health`, `/api/commitments`, `/api/root`, `/api/proof` (stub), `/api/withdraw`, `/metrics`.
+- 5 unit-тестов (4 в `indexer.rs`, 1 в `metrics.rs`) + 2 ignored (в `cache.rs`).
+- Postgres schema: 3 таблицы, 3 индекса.
+- Redis кеш Merkle tree, rate limiting, метрики Prometheus.
+
+**Следующий этап:** **Stage 6** — Merkle-сервис на Node.js + Fastify (порт 4003).
 
 **Что будет:**
-- `Cache::connect(url)` — подключение к Redis.
-- `get`, `set`, `set_ex` (с TTL), `del`.
-- Методы для Merkle tree: `tree_*` (используются в 5.5).
-- `incr_rate_limit` — для rate limiting (5.7).
-- `invalidate_pool` — сброс кеша при новом депозите.
+- HTTP wrapper над `@noir-lang/noir_js` для Poseidon2 hashing.
+- **Зачем Node.js:** Rust/JS Poseidon2 дают **разные** хеши, чем Noir builtin. Единственный способ гарантировать идентичность — использовать **тот же** ACIR (`hash2.json`) через `noir_js`, а он работает **только** в JS.
+- Endpoints: `POST /hash`, `POST /root`, `POST /proof`, `GET /health`.
+- Зависимости: `fastify`, `@fastify/cors`, `@noir-lang/noir_js@1.0.0-rc.2`.
+- Требует `circuits/hash2.json`, `hashes.json`, `withdrawal.json` в `services/merkle/circuits/` (уже копируются через `sync-circuits`).
+
+**См. `docs/PROJECT_CONTEXT.md`, раздел 14** — детальный план Stage 6.

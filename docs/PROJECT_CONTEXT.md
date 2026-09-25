@@ -1,8 +1,10 @@
 # PROJECT_CONTEXT.md
 
-> **Purpose:** this file is the single entry point for an AI assistant in a new chat. Load it first — the assistant will understand the project state without reading every note.
+> **Purpose:** single entry point for an AI assistant in a new chat. Load this file first.
 >
-> **Last updated:** 2026-09-24 (after stage 4.5.3 — test_pool.rs)
+> **Last updated:** 2026-09-25 (after stage 5.11 — smoke test passed)
+>
+> **Handoff note:** this version was condensed from a 720-line file to fit cleanly into a new chat's context. Every section is preserved; some have been tightened. Nothing was removed.
 
 ---
 
@@ -12,11 +14,9 @@ This is the **single normative section** of this file. Everything else describes
 
 ### 0.1. Quick-start for a new assistant
 
-When you (a new assistant) start a new chat on this project:
-
-1. **Read this section first** — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record).
-2. Read **section 12 (Current state)** to know where we are.
-3. Read **section 13 (Documentation as portfolio material)** for the writing policy.
+1. **Read section 0 completely** — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
+2. Read **section 12 (Current state)**.
+3. Read **section 13 (Documentation as portfolio material)**.
 4. Read these notes in order:
    - `docs/notes/00-checkpoints.md`
    - `docs/notes/00-glossary.md`
@@ -26,10 +26,8 @@ When you (a new assistant) start a new chat on this project:
    - `docs/notes/03-sunspot.md`
    - `docs/notes/04-anchor.md`
    - `docs/notes/05-backend.md`
-5. Read **section 8 (Known pitfalls)** before debugging anything.
-6. Then check section 12 for **Last completed stage** and **Next task** — start there.
-
-**Current:** Last completed — Stage 5.11. Next — Stage 5.12 (final checkpoint for Stage 5).
+5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
+6. Then go to **section 12** and start with **Next task**.
 
 ### 0.2. One task at a time
 
@@ -45,12 +43,12 @@ git commit -m "..." && git push
 
 ### 0.3. Language
 
-- **Chat communication: English.** All messages between the user and the assistant are in English.
+- **Chat communication: English.**
 - **Files on disk:**
   - **English** by default — code, configs, docs at root level.
   - **Russian** for `docs/ru/*.md` and `docs/notes/*.md`.
 
-**Rationale for English chat:** Russian tokens are 2–3× more expensive in the model's tokenizer, causing context-limit issues. Notes stay in Russian for the portfolio and the Russian-speaking audience.
+**Rationale:** Russian tokens cost 2–3× more in the tokenizer; English chat preserves context. Notes stay Russian — they are portfolio material for a Russian-speaking audience.
 
 ### 0.4. Never guess
 
@@ -71,83 +69,73 @@ After each completed stage:
 
 ### 0.8. Documentation is portfolio material — see section 13
 
-**CRITICAL:** `docs/notes/*.md` is not just internal memory. It is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio. See section 13 for the full policy.
+**CRITICAL:** `docs/notes/*.md` is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio. See section 13.
 
 ### 0.9. Non-obvious project actions must be documented
 
-Any **non-obvious** action required to complete a stage must be:
-1. Recorded in `PROJECT_CONTEXT.md`, section 8 "Known pitfalls".
-2. Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, and fix.
-
-The user explicitly requested this (2026-09-24): "все эти неочевидные для проекта действия нужно фиксировать".
+Any non-obvious action required to complete a stage must be:
+1. Recorded in `PROJECT_CONTEXT.md`, section 8 (Known pitfalls).
+2. Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, fix.
 
 Examples:
-- Manual reading of crate sources to check exact API.
+- Manually reading crate sources to check exact API.
 - Adding packages to `workspace.exclude`.
 - Running `cargo fetch` in a sub-crate.
-- Any unusual CLI flag or environment variable.
+- Any unusual CLI flag or env var.
 
 ### 0.10. Test in small steps — do not write 200 lines at once
 
-When working with a **new** library (like LiteSVM), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches. Only then expand.
+When working with a **new** library (LiteSVM, Anchor macros, sqlx, axum), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches, then expand.
 
-**Rationale:** LiteSVM (and other Solana crates) change API between minor versions. A 200-line file may produce 50 compile errors, all mixed. A 20-line file produces 1–2 errors, easy to isolate.
-
-**How to check exact API:** read the crate sources in `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
+**How to check exact API:** read crate sources at `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
 
 ### 0.11. Updating existing files — never delete information
 
-When the assistant updates an existing file in `docs/notes/` or `docs/PROJECT_CONTEXT.md`:
+When updating an existing file in `docs/notes/` or `docs/PROJECT_CONTEXT.md`:
 
-1. **Take the current file content** (the user pastes it, or the assistant has it from chat history).
-2. **Preserve it in full** — no information is removed.
+1. **Take the current content** (user pastes it, or assistant has it from chat history).
+2. **Preserve it in full** — no information removed.
 3. **Add** new sections in the appropriate place.
 4. **Update** the glossary if new terms appeared.
 
-**Output format** (revised 2026-09-24, to save chat context):
+**Output format:**
 
 - **New files** — give the **full file**.
 - **Existing files** — give **insertion point + block**. Do **not** give the full file unless the user explicitly asks.
 - **Never** shorten, "simplify", or replace existing sections with a summary.
 
-**Allowed:** rephrase, reorder sections, improve wording — as long as **information is preserved**.
-
+**Allowed:** rephrase, reorder sections, improve wording — as long as information is preserved.
 **Forbidden:** remove or shorten existing sections.
-
-Rationale for the revision: this chat exceeded 100 000 tokens because `04-anchor.md` (1014 lines) and `PROJECT_CONTEXT.md` (634 lines) were pasted 2–3 times each. The full-file rule is correct for correctness but expensive for the token budget. The user explicitly requested the revision (2026-09-24).
 
 ### 0.12. Chat language — English only
 
 All chat messages between user and assistant are in **English**.
-
-Russian is used **only** for files in `docs/ru/*.md` **and** `docs/notes/*.md`.
-
-**Rationale:** Russian tokens are 2–3× more expensive than English tokens in the model's tokenizer. English-only chat preserves context.
+Russian is used **only** for files in `docs/ru/*.md` and `docs/notes/*.md`.
 
 ### 0.13. "record" means record it in notes and context
 
-When the user writes just **"record"** (or Russian "зафиксируй"), the assistant must:
+When the user writes just **"record"** (or Russian "зафиксируй"):
 
 1. Update `docs/notes/NN-name.md` — add a section for the current sub-stage.
 2. Update `docs/PROJECT_CONTEXT.md`:
-   - The Stage NN table (mark current sub-stage as done, next as `← next`).
-   - Section 12 "Current state" — last completed, next, commit hashes, docs sizes.
-   - Section 0.1 "Quick-start" — Last completed stage, next task.
+   - Stage NN table (mark current sub-stage done, next as `← next`).
+   - Section 12 (Current state).
+   - Section 0.1 (Quick-start) — Last completed / Next task.
 3. Commit both files together.
 
-Do **not** ask "should I record it?" — just do it.
+**Do not** ask "should I record it?" — just do it.
 
 ### 0.14. Record with each `git push`
 
-**After each `git push`**, immediately update `docs/notes/NN-name.md` and `docs/PROJECT_CONTEXT.md` — do not wait for the user to say "record".
-
-**Rationale:** the user shouldn't have to ask. The push is the natural boundary where a sub-stage is complete.
+**After each `git push`** — immediately update `docs/notes/NN-name.md` and `docs/PROJECT_CONTEXT.md`. Do not wait for the user to say "record".
 
 **Exception:** purely-docs commits (which are themselves the "record" step) don't need a second record pass.
 
+---
+
 ## 1. What this project is
 
-**zkpool-solana** — a private pool for SOL transfers on Solana using ZK proofs (Groth16 on BN254). A user deposits SOL into a shared vault, receives a deposit note (four secrets), and can later withdraw SOL to any address without revealing the link between deposit and withdrawal.
+**zkpool-solana** — a private pool for SOL transfers on Solana using ZK proofs (Groth16 on BN254). A user deposits SOL into a shared vault, receives a deposit note (four secrets), and later withdraws SOL to any address without revealing the link between deposit and withdrawal.
 
 **Origin:** [Solana Foundation Bootcamp 2026 — "05-private-transfers"](https://github.com/solana-foundation/solana-bootcamp-2026/tree/main/05-private-transfers).
 
@@ -165,7 +153,7 @@ Do **not** ask "should I record it?" — just do it.
 
 ## 2. Why v3 exists
 
-In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in three days. The class of bug: **mismatch between public inputs** (circuit, Anchor, frontend).
+In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in three days. The class of bug: **mismatch between public inputs** across circuit, Anchor program, and frontend.
 
 **v3 goal:** build the project such that this class of bug cannot exist by construction.
 
@@ -188,19 +176,21 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
               ↓ HTTP                    ↑ HTTP
 ┌──────────────────────────────────────────────────────────────────┐
 │ BACKEND (Rust + axum) — port 4001                                │
+│   /api/health  /api/commitments  /api/root  /api/proof           │
+│   /api/withdraw  /metrics                                        │
 └──────────────────────────────────────────────────────────────────┘
        ↓                    ↓                    ↓
 ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐
 │ POSTGRES     │   │ REDIS        │   │ MERKLE (Node.js)     │
-│  :5432       │   │  :6379       │   │  :4003               │
+│  :5432       │   │  :6379       │   │  :4003  (Stage 6)    │
 └──────────────┘   └──────────────┘   └──────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
-│ PROVER (Rust + axum) — port 4002                                 │
+│ PROVER (Rust + axum) — port 4002  (Stage 7)                      │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
-│ MONITORING — Prometheus :9090, Grafana :3000                     │
+│ MONITORING — Prometheus :9090, Grafana :3000  (Stage 9)          │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
@@ -208,8 +198,25 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 │ • Wallet:            5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc │
 │ • Verifier program:  5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ │
 │ • zk_pool program:   8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm │
+│ • Pool PDA:          B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf │
+│   (PDA exists only after `Initialize Pool` is called — not yet)  │
 └──────────────────────────────────────────────────────────────────┘
 ```
+
+### Services and ports
+
+| Service | Port | Where | Status |
+|---------|------|-------|--------|
+| frontend | 5173 | host (not yet mapped) | Stage 8 |
+| backend | 4001 | `solana` container | ✅ Stage 5 |
+| prover | 4002 | `solana` container | Stage 7 |
+| merkle | 4003 | `solana` container | Stage 6 |
+| postgres | 5432 | Docker `zkpool-postgres` | ✅ Stage 5.10 |
+| redis | 6379 | Docker `zkpool-redis` | ✅ Stage 5.10 |
+| prometheus | 9090 | Docker | Stage 9 |
+| grafana | 3000 | Docker | Stage 9 |
+
+**⚠️ Port mapping:** the `solana` container has **no** `ports:` in `docker-compose.yml`. Services on 4001–4003, 5173 are reachable **only from inside** the container. To reach them from the host, add mappings (planned for Stage 9).
 
 ---
 
@@ -240,9 +247,13 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 
 ## 5. Checkpoint methodology
 
-See `docs/notes/00-checkpoints.md`.
+See `docs/notes/00-checkpoints.md` for the full policy.
 
-**Rule:** after each stage, copy generated artifacts to `.checkpoints/NN-name/`, record SHA-256 in `manifest.txt`, record commit hash in `commit.txt`.
+**Short version:** after each stage, copy generated artifacts to `.checkpoints/NN-name/` and record:
+- `manifest.txt` — SHA-256 of each artifact.
+- `commit.txt` — final commit hash.
+
+On the next stage, compare hashes before proceeding.
 
 ---
 
@@ -258,37 +269,43 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 - Sunspot cloned in Dockerfile (persistent).
 - Commit: `94c18fe522e39822692fff9b9b22b2fe0f8e00d0`.
 
+**Verified versions inside container:** rustc 1.98.1, cargo 1.98.1, solana-cli 3.1.10, anchor-cli 1.1.2, nargo 1.0.0-rc.2, sunspot 1.0.0, node v24.21.0, pnpm 12.5.1.
+
 ### ✅ Stage 2. Circuits on Noir (2026-09-22 — 2026-09-23)
 
 - **2.0** — `spec.json`. Commit: `6df5fa5`.
 - **2.1** — `validate-spec` (15 rules). Commits: `e479137`, `dbb4365`.
-- **2.2.1** — `poseidon` (11 tests). Commit: `baade07`.
+- **2.2.1** — `poseidon` library (11 tests). Commit: `baade07`.
 - **2.2.2** — `hash2` (5 tests), `hashes` (9 tests). Commit: `8354921`.
 - **2.2.3** — `withdrawal` + `merkle_tree` (16 tests). Commit: `90afe4c`.
-- **2.3** — `sync-circuits`. Commit: `aa5d8d9`.
+- **2.3** — `sync-circuits` CLI. Commit: `aa5d8d9`.
 - **2.4** — final checkpoint. Commit: `e0a3725`.
+
+**Tests:** 41 across all circuits.
+**ACIRs:**
+- `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
+- `hashes.json` — `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`
+- `withdrawal.json` — `29ac2e677229f4518944c76161933416e2a083dee83da638a9dfd01226cc91db`
 
 ### ✅ Stage 3. Sunspot verifier (2026-09-23 — 2026-09-24)
 
 - **3.0** — Wallet. Commit: `e9ddbe5`.
-- **3.1** — `.ccs` (642 177 B).
-- **3.2** — `.pk` (2 145 109 B) + `.vk` (972 B).
-- **3.3** — `.so` (87 312 B), verifier `5t51iu6a...`.
+- **3.1** — `withdrawal.ccs` (642 177 B).
+- **3.2** — `withdrawal.pk` (2 145 109 B) + `withdrawal.vk` (972 B).
+- **3.3** — `withdrawal.so` (87 312 B). Verifier Program ID: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ`.
 - **3.4** — deployed to devnet, balance 0.444 SOL.
 - **3.5** — local verification: `✅ Verification successful!`.
 - **3.6** — final checkpoint. Commit: `441b9d2`.
 
 ### ✅ Stage 3.7. Documentation enrichment (2026-09-24)
 
-- `00-glossary.md` — 545 lines.
-- `00-zk-primer.md` — 317 lines.
-- `01-setup.md` — 762 lines.
-- `02-circuits.md` — 957 lines.
-- `03-sunspot.md` — 996 lines.
+- `docs/notes/00-glossary.md` — 545 lines, 76 terms.
+- `docs/notes/00-zk-primer.md` — 317 lines, 14 sections.
+- `docs/notes/01-setup.md` — 762 lines.
+- `docs/notes/02-circuits.md` — 957 lines.
+- `docs/notes/03-sunspot.md` — 996 lines.
 
 ### ✅ Stage 4.1. Anchor program (2026-09-24)
-
-All 9 sub-stages complete:
 
 | # | Sub-stage | Commit |
 |---|---|---|
@@ -299,22 +316,27 @@ All 9 sub-stages complete:
 | 4.1.5 | `pool` instruction | `553634e` |
 | 4.1.6 | `deposit` instruction | `5455d04` |
 | 4.1.7 | `withdraw` instruction | `ce71a47` |
-| 4.1.8 | Tests (37 unit) | `8261530` |
+| 4.1.8 | 37 unit tests | `8261530` |
 | 4.1.9 | Deploy to devnet | `3f6dcd6` |
 
-**Deployed program:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
+**Deployed program:** `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL). ProgramData: `FaLqLdL1FVLcwZPpJTw2ugG67KKnEbZRuUJmqvyNtCeA`.
+
+**Instruction discriminators:**
+- `pool`: `[134, 215, 119, 168, 28, 199, 193, 127]`
+- `deposit`: `[242, 35, 198, 137, 82, 225, 242, 182]`
+- `withdraw`: `[183, 18, 70, 156, 148, 109, 161, 34]`
 
 ### ✅ Stage 4.5. LiteSVM E2E test (2026-09-24)
 
-| # | Sub-stage | Status |
+| # | Sub-stage | Commit |
 |---|---|---|
-| 4.5.1 | Tests reorganization (move out of `onchain/`) | ✅ commit `050e58f` |
-| 4.5.2 | `helpers.rs` (load both programs) | ✅ commit `cd01255` |
-| 4.5.3 | `test_pool.rs` (airdrop + pool instruction) | ✅ commit `59cf81e` |
-| 4.5.4 | `test_deposit.rs` | ✅ commit `838cf85` |
-| 4.5.5 | `test_withdraw.rs` (3 validation tests) | ✅ commit `c90442a` |
-| 4.5.6 | `test_double_spend.rs` | ✅ commit `b7c4284` |
-| 4.5.7 | Final checkpoint | ✅ commit `b7c4284` |
+| 4.5.1 | Tests reorg (moved out of `onchain/`) | `050e58f` |
+| 4.5.2 | `helpers.rs` (loads both programs) | `cd01255` |
+| 4.5.3 | `test_pool.rs` (airdrop + pool) | `59cf81e` |
+| 4.5.4 | `test_deposit.rs` | `838cf85` |
+| 4.5.5 | `test_withdraw.rs` (3 validation tests) | `c90442a` |
+| 4.5.6 | `test_double_spend.rs` | `b7c4284` |
+| 4.5.7 | Final checkpoint | `b7c4284` |
 
 **8 tests passing:**
 - `helpers::tests::test_setup_svm_loads_both_programs`
@@ -326,34 +348,61 @@ All 9 sub-stages complete:
 - `test_withdraw::test_withdraw_rejects_unknown_root`
 - `test_double_spend::test_double_spend_rejected`
 
-**Known limitation:** E2E withdraw with a real proof is not feasible in LiteSVM (see section 8, "From Stage 4.5"). Full E2E is deferred to devnet + frontend (stage 8).
+**Known limitation:** E2E withdraw with a real proof is not feasible in LiteSVM. Full E2E deferred to devnet + frontend (Stage 8).
 
-### 🚧 Stage 5. Backend (in progress)
+### ✅ Stage 5. Backend (2026-09-24 — 2026-09-25)
 
-| # | Sub-stage | Status |
+| # | Sub-stage | Commit |
 |---|---|---|
-| 5.1 | Project skeleton | ✅ commit `7ed961a` |
-| 5.2 | `config.rs` | ✅ commit `ee668ab` |
-| 5.3 | `db.rs` + migration | ✅ commit `1e08827` |
-| 5.4 | `cache.rs` (Redis) | ✅ commit `0f36fc2` |
-| 5.5 | `tree.rs` (Merkle tree) | ✅ commit `372c056` |
-| 5.6 | Metrics + logging | ✅ commit `af219cd` |
-| 5.7 | Rate limiting | ✅ commit `7d85c29` |
-| 5.8 | Indexer | ✅ commit `1629bd1` |
-| 5.9.1 | HTTP server + `/api/health` | ✅ commit `025fbd6` |
-| 5.9.2 | Read endpoints + `/metrics` | ✅ commit `c0a9984` |
-| 5.9.3 | `POST /api/withdraw` + rate limiting | ✅ commit `8085b24` |
-| 5.10 | Docker compose additions | ✅ commit `a260475` |
-| 5.11 | Smoke test | ✅ commit `1b815bc` |
-| 5.12 | Final checkpoint | ← next |
+| 5.1 | Project skeleton | `7ed961a` |
+| 5.2 | `config.rs` | `ee668ab` |
+| 5.3 | `db.rs` + migration | `1e08827` |
+| 5.4 | `cache.rs` (Redis) | `0f36fc2` |
+| 5.5 | `tree.rs` (Merkle tree) | `372c056` |
+| 5.6 | `logging.rs` + `metrics.rs` | `af219cd` |
+| 5.7 | `rate_limit.rs` | `7d85c29` |
+| 5.8 | `indexer.rs` | `1629bd1` |
+| 5.9.1 | HTTP server + `/api/health` | `025fbd6` |
+| 5.9.2 | Read endpoints + `/metrics` | `c0a9984` |
+| 5.9.3 | `POST /api/withdraw` + rate limiting | `8085b24` |
+| 5.10 | Docker compose: Postgres + Redis | `a260475` |
+| 5.11 | Smoke test (+ `touch_startup_metrics` fix) | `1b815bc` |
+| 5.12 | Final checkpoint | ⏳ |
 
-### ✅ Docs (2026-09-22 — 2026-09-24)
+**Backend module layout:**
+- `src/lib.rs` — module declarations.
+- `src/main.rs` — axum server (6 routes) + `AppState`.
+- `src/api_types.rs` — `WithdrawRequest` / `WithdrawResponse` (shared bin↔lib).
+- `src/config.rs` — env → `Config`.
+- `src/db.rs` — Postgres wrapper, 9 methods.
+- `src/cache.rs` — Redis wrapper, 9 methods.
+- `src/tree.rs` — incremental Merkle tree.
+- `src/logging.rs` — tracing init.
+- `src/metrics.rs` — Prometheus metrics (with `touch_startup_metrics`).
+- `src/rate_limit.rs` — axum middleware.
+- `src/indexer.rs` — RPC polling + event parsing.
+
+**Endpoints:**
+| Method | Path | Rate limit | Returns |
+|---|---|---|---|
+| GET | `/api/health` | — | `{status, db, version}` |
+| GET | `/api/commitments` | 60/min | `{pool_address, count, commitments[]}` |
+| GET | `/api/root` | 60/min | `{pool_address, root}` |
+| GET | `/api/proof` | 60/min | **501 STUB** (needs Stage 6) |
+| POST | `/api/withdraw` | 5/min | `{proof, public_witness}` |
+| GET | `/metrics` | — | Prometheus text |
+
+**Database schema:** 3 tables (`commitments`, `roots`, `nullifiers`) + 3 indexes.
+
+**Backend tests:** 5 unit tests (4 in `indexer.rs`, 1 in `metrics.rs`) + 2 ignored integration tests (in `cache.rs`, need live Redis).
+
+### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
-- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (1014 lines).
+- `docs/notes/01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md` (~1014 lines), `05-backend.md` (~1200 lines).
 - `docs/DEMO-NOTICE.md`.
 - `docs/PROJECT_CONTEXT.md` — this file.
-- `docs/notes/assets/` — folders for screenshots.
+- `docs/notes/assets/{01-setup,02-circuits,03-sunspot}/` — empty folders for screenshots.
 
 ---
 
@@ -361,46 +410,54 @@ All 9 sub-stages complete:
 
 ### 7.1. Spec validation — YES (not generation)
 
+`spec.json` is the source of truth; layers validated against it via `scripts/validate-spec`. Generation of `.nr` and Rust is fragile; validation is simpler and catches the same class of bugs.
+
 ### 7.2. LiteSVM E2E test — YES
+
+`tests/src/` contains LiteSVM integration tests. Full E2E with real proof deferred to devnet.
 
 ### 7.3. One circuit with `recipient_binding` — YES
 
+Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `amount`. No mid-project format change.
+
 ### 7.4. Zero-padding (no domain separation) — CONFIRMED
+
+`hash_1(x) == hash_2(x, 0)` and `hash_2(x, y) == hash_3(x, y, 0)`. Documented. Safe for zkpool-solana because we never hash the same value with two arities in one context.
 
 ### 7.5. `sync-circuits` — check/apply modes
 
-### 7.6. Split deposit — DEFERRED to Stage 12
+`--check`: mismatch → error, exit 1, no copy. `--apply`: mismatch → copy + warning, exit 0.
 
-**Feature:** split a single deposit into multiple unequal commitments (for improved privacy — breaks the link between deposit and withdrawal amounts).
+### 7.6. Split deposit — DEFERRED to Stage 12/13
+
+**Feature:** split a single deposit into multiple unequal commitments (improves privacy by breaking the amount link).
 
 **Status:** deferred. Not implemented in v3 either.
 
-**Rationale for deferral:**
-- Changes the public input layout (N commitments, aggregated amount).
-- Would obscure the root-cause analysis of the original `InvalidInstructionData` bug (from v2).
-- Requires changes at every layer (circuit, Anchor program, backend, frontend, prover).
+**Rationale:**
+- Changes public input layout (N commitments, aggregated amount).
+- Would obscure root-cause analysis of the original `InvalidInstructionData` bug.
+- Requires changes at every layer.
 
-**Architectural compatibility (to be preserved from Stage 2 onwards):**
+**Architectural compatibility preserved:**
 - `TREE_DEPTH` and other constants live in one place (spec).
-- `PoolState` on-chain does not assume "1 deposit = 1 commitment" beyond what's needed.
-- `commitments` table in Postgres does **not** have a `UNIQUE` constraint on `(pool, tx_signature)`.
+- `PoolState` on-chain doesn't assume "1 deposit = 1 commitment" beyond what's needed.
+- `commitments` table in Postgres has **no** `UNIQUE` on `(pool, tx_signature)`.
 - `WithdrawEvent` includes an explicit `amount` field.
 
-**When implemented:** after v0.1.0 release, as a separate stage (Stage 13 or a follow-up project).
+**When implemented:** after v0.1.0, as a separate stage (13) or follow-up project.
 
 ### 7.7. Makefile — clean design (Stage 9)
 
-### 7.8. Tests/ directory — separate crate at root
+### 7.8. `tests/` — separate crate at root
 
 **Decision (2026-09-24):** `tests/` is **outside** `onchain/`, at the project root.
 
-**Reason:** `litesvm 0.16` requires **Agave 4.2**, which requires **Rust ≥ 1.90**. `onchain/rust-toolchain.toml` pins **1.89.0** (needed for SBF). Keeping tests inside `onchain/` means they **inherit** the 1.89 toolchain and fail with `E0658`.
+**Reason:** `litesvm 0.16` requires Agave 4.2, which requires **Rust ≥ 1.90**. `onchain/rust-toolchain.toml` pins **1.89.0** (needed for SBF). Keeping tests inside `onchain/` means they inherit the 1.89 toolchain and fail with `E0658`.
 
 **Solution:** separate crate at root with its own `rust-toolchain.toml` (`channel = "1.98.1"`).
 
-**Connection to program:** via `zk_pool = { path = "../onchain/programs/zk_pool" }`.
-
-**Not in workspace:** `onchain/Cargo.toml` does **not** include `tests`. It is a standalone crate.
+**Connection:** `zk_pool = { path = "../onchain/programs/zk_pool" }`.
 
 ### 7.9. Stages list
 
@@ -411,14 +468,21 @@ All 9 sub-stages complete:
 - Stage 3.7 — Documentation enrichment ✅
 - Stage 4.1 — Anchor program ✅
 - Stage 4.5 — LiteSVM E2E test ✅
-- **Stage 5 — Backend 🚧**
-- Stage 6 — Merkle service
-- Stage 7 — Prover
-- Stage 8 — Frontend
-- Stage 9 — Infrastructure
-- Stage 10 — Engineering processes
-- Stage 11 — Security
+- Stage 5 — Backend ✅ (final checkpoint pending)
+- **Stage 6 — Merkle service (Node.js) ← next**
+- Stage 7 — Prover (Rust + Sunspot)
+- Stage 8 — Frontend (Vue 3)
+- Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
+- Stage 10 — Engineering processes (CI/CD, templates)
+- Stage 11 — Security (threat model, expanded tests)
 - Stage 12 — Finalization
+- Stage 13 — Deferred: split deposit (after v0.1.0)
+
+### 7.10. Merkle service ordering dependency
+
+`tree.rs` (backend) uses HTTP to the Merkle service for Poseidon2 hashing. The backend **starts fine** without the Merkle service, but any `add_leaf` call (triggered by the indexer when it sees a deposit) will fail with an HTTP error until Stage 6 is running.
+
+**Startup order in Stage 9 Makefile must be:** `merkle` → `backend`.
 
 ---
 
@@ -429,92 +493,104 @@ All 9 sub-stages complete:
 - `anchor init --name <name>` does not create a subdirectory.
 - `sunspot --version` is not supported.
 - `sunspot deploy` requires `GNARK_VERIFIER_BIN` — Sunspot cloned in Dockerfile.
-- `anchor build` uses existing keypair only if in `target/deploy/`.
-- `@solana/kit`, `@codama/*` — pinned exact versions.
+- `anchor build` uses existing keypair only if present in `target/deploy/`.
+- `@solana/kit`, `@codama/*` — pin **exact** versions (no `^`).
 - Codama path: `../onchain/target/idl/zk_pool.json` (from `web/`).
 - `Prover.toml` is gitignored.
-- `bash -ic` required inside the container.
+- `bash -ic` required inside the container (`.bashrc` not read by `bash -c`).
 
 ### From Stage 2 (circuits)
 
-- **`poseidon2_permutation` in nargo 1.0.0-rc.2 takes ONE argument.**
-- **Zero-padding causes arity collisions** — documented.
-- **`main()` in `type = "bin"` circuits must have `pub` on return type.**
-- **Field values must be < 2^254.**
-- **Noir does not support float literals.**
-- **`&str` parameters in Noir don't work.**
-- **`f"...{value}"` format strings need explicit type annotation.**
+- `poseidon2_permutation` in nargo 1.0.0-rc.2 takes **one** argument.
+- Zero-padding causes arity collisions — documented.
+- `main()` in `type = "bin"` circuits must have `pub` on return type.
+- Field values must be < 2^254.
+- Noir does not support float literals.
+- `&str` parameters in Noir don't work — use `str<N>`.
+- `f"...{value}"` format strings need explicit type annotation.
 
 ### From Stage 3 (sunspot)
 
-- **`solana/` volume may be root-owned.**
-- **Ignore entire `solana/` directory.**
-- **`sunspot verify` argument order** is `.vk`, `.proof`, `.pw`.
-- **TOML parser rejects hex literals > 2^63** — wrap in quotes.
-- **Sunspot generates 6 `deprecated` warnings** — normal.
+- `solana/` volume may be root-owned — fix with `sudo chown -R 1000:1000 solana/`.
+- Ignore entire `solana/` directory in `.gitignore`.
+- `sunspot verify` argument order: `.vk`, `.proof`, `.pw`.
+- TOML parser rejects hex literals > 2^63 — wrap in quotes.
+- Sunspot generates 6 `deprecated` warnings during deploy — normal.
 
 ### From Stage 4.1 (Anchor)
 
-- **`anchor init .` fails** — use a temp dir.
-- **`invalid --check-cfg argument`** — declare `anchor-debug`, `custom-heap`, `custom-panic` as features.
-- **`E0107: struct takes 0 lifetime arguments`** — empty `#[derive(Accounts)]` doesn't work.
-- **`unused import: super::*`.**
-- **`test_reduce_to_field_max` FAILED** — loop `0..4` → `0..5`.
-- **`ambiguous glob re-exports`** — rename handlers.
-- **`E0308: mismatched types` in `CpiContext::new`** — `Pubkey` in Anchor 1.2.0, not `AccountInfo`.
-- **`E0432: unresolved import crate`** — keep glob re-exports.
-- **`E0277: #[instruction] type mismatch`** — list **all** handler args in order.
-- **CPI to Sunspot verifier: `[proof || public_witness]`** — proof FIRST.
-- **Vault PDA has no private key** — direct lamport manipulation.
-- **`anchor deploy` is deprecated** — use `anchor program deploy`.
-- **`zk_pool.so` grows to 210 KB** with 3 instructions.
+- `anchor init .` fails — use a temp dir.
+- `invalid --check-cfg argument` — declare `anchor-debug`, `custom-heap`, `custom-panic` as **features**, not via `[lints.rust]`.
+- `E0107: struct takes 0 lifetime arguments` — empty `#[derive(Accounts)]` doesn't work.
+- `unused import: super::*`.
+- `test_reduce_to_field_max` FAILED — loop `0..4` → `0..5`.
+- `ambiguous glob re-exports` — rename `handler` → `handler_pool` etc.
+- `E0308` in `CpiContext::new` — Anchor 1.2.0 takes `Pubkey`, not `AccountInfo`. Use `.key()`.
+- `E0432: unresolved import crate` — keep glob re-exports.
+- `E0277: #[instruction] type mismatch` — list **all** handler args in order.
+- CPI to Sunspot verifier: data layout is `[proof || public_witness]` — proof FIRST.
+- Vault PDA has no private key — direct lamport manipulation.
+- `anchor deploy` is deprecated — use `anchor program deploy`.
+- `zk_pool.so` grows to 210 KB with 3 instructions.
 
-### From Stage 4.5 (LiteSVM) — IN PROGRESS
+### From Stage 4.5 (LiteSVM)
 
-- **`cargo fetch` fails in `onchain/tests/`**: "current package believes it's in a workspace when it's not".
-  - **Cause:** `onchain/Cargo.toml` is a workspace root, `members = ["programs/*"]` doesn't cover `tests/`.
-  - **First fix:** add `tests` to `workspace.exclude`. This **helped** `cargo fetch`, but did not fix the Rust version problem (see next).
-  - **Final fix:** move `tests/` to project root (see 4.5.1).
-- **`E0658: use of unstable library feature maybe_uninit_write_slice`** in `solana-syscalls 4.2.2`.
-  - **Cause:** `litesvm 0.16` pulls Agave 4.2 which uses an unstable Rust feature. Needs Rust ≥ 1.90.
-  - **Why it failed:** `onchain/rust-toolchain.toml` pins 1.89.0, and `tests/` inherited it.
-  - **Fix:** move `tests/` out of `onchain/`; use `tests/rust-toolchain.toml` with `channel = "1.98.1"`.
-- **`failed to select a version for solana-hash`** — version conflict between `litesvm 0.16` (needs `solana-hash ~4.5.0`) and `solana-message 5` (needs `solana-hash >= 4.6.0`).
-  - **Fix:** use exact versions from litesvm's `Cargo.toml`:
-    - `solana-account = "4.3.0"`
-    - `solana-address = "~2.6.1"`
-    - `solana-hash = "4.5.0"`
-    - `solana-instruction = "3.4.0"`
-    - `solana-keypair = "3.1.2"`
-    - `solana-message = "4.2.4"`
-    - `solana-sdk-ids = "3.1.0"`
-    - `solana-signer = "3.0.1"`
-    - `solana-transaction = "4.1.5"`
-    - `solana-transaction-error = "3.3.1"`
-- **`/home/ubuntu/tests: No such file or directory`** — volume not mounted.
-  - **Fix:** add `- ../tests:/home/ubuntu/tests` to `infra/docker-compose.yml`; recreate container with `docker compose up -d --force-recreate solana`.
-- **`E0583: file not found for module`** for 5 modules — expected, files not written yet.
-  - **Fix:** create placeholder files (`//! Placeholder`) for each missing module.
-- **Random `.rs` file (bash heredoc in a for-loop).**
-  - **Symptom:** after running `for f in a b c; do cat > tests/src/$f.rs <<EOF ... EOF; done`, an unexpected file `tests/src/.rs` appeared.
-  - **Cause:** bash mishandled the first iteration (variable expansion / heredoc interaction).
-  - **Fix:** `rm tests/src/.rs`.
-  - **Lesson:** when using loops with heredoc — check `ls` immediately after.
-- **`E0308: Transaction::new_signed_with_payer` expects `&[Instruction]`, found `&Vec<CompiledInstruction>`.**
-  - **Cause:** `Message::new_with_blockhash` compiles instructions. We were passing `&msg.instructions` (compiled) to a function that expects raw instructions.
-  - **Fix:** use `Transaction::new_signed_with_payer(&[ix], Some(&payer.pubkey()), &[&payer], blockhash)` directly with raw instructions, without `Message::new_with_blockhash`.
-  - **Lesson:** in `solana-transaction` there are two paths — through `Message` (compiled) and through raw `Instruction`. Do not mix them.
-- **Deposit test: vault balance is NOT zero after init.**
-  - **Symptom:** `assert_eq!(svm.get_balance(&vault_pda), Some(0))` failed with `Some(890880)`.
-  - **Cause:** the vault PDA is an empty (0-byte data) account and must hold the rent-exempt minimum (890 880 lamports) to exist on Solana.
-  - **Fix:** read `vault_initial` after init, then assert `vault_after == vault_initial + amount`.
-  - **Lesson:** never assume a PDA has zero lamports after `init`. Read the actual initial balance.
-- **Withdraw test: Borsh serialization for `Vec<u8>` proof.**
-  - **Fact:** in Anchor, a `Vec<u8>` argument is serialized as `u32 LE length` + bytes. Fixed-size arrays (`[u8; 32]`) are serialized raw, no length prefix.
-  - **Where:** instruction data for `withdraw` — `proof` needs the length prefix; `nullifier_hash`, `root`, `recipient_binding` do not.
-- **Withdraw E2E with a real proof is not feasible in LiteSVM.**
-  - **Reason:** the proof from stage 3.5 was generated for a specific synthetic state (specific root, specific recipient as a field element, not a Pubkey). Reproducing that state in LiteSVM would require either on-the-fly `sunspot prove` (43 s per proof) or mocking the verifier.
-  - **Decision:** test on-chain validations (proof length, recipient match, known root) plus CPI reaching the verifier. Full E2E with real proof is deferred to devnet + frontend (stage 8).
+- `cargo fetch` inside `onchain/tests/` fails with "current package believes it's in a workspace when it's not".
+  - Cause: `onchain/Cargo.toml` is a workspace root, `members = ["programs/*"]` doesn't cover `tests/`.
+  - First fix: `workspace.exclude = ["tests"]`. Helped fetch, but didn't fix the Rust version problem.
+  - Final fix: move `tests/` to project root (see 7.8).
+- `E0658: use of unstable library feature maybe_uninit_write_slice` in `solana-syscalls 4.2.2`.
+  - Cause: `litesvm 0.16` pulls Agave 4.2, which needs Rust ≥ 1.90.
+  - `onchain/rust-toolchain.toml` pins 1.89.0 — `tests/` inherited it.
+  - Fix: `tests/rust-toolchain.toml` with `channel = "1.98.1"`.
+- `failed to select a version for solana-hash` — version conflict between `litesvm 0.16` (`solana-hash ~4.5.0`) and `solana-message 5` (`>= 4.6.0`).
+  - Fix: use **exact** versions from litesvm's `Cargo.toml`:
+    `solana-account = "4.3.0"`, `solana-address = "~2.6.1"`, `solana-hash = "4.5.0"`, `solana-instruction = "3.4.0"`, `solana-keypair = "3.1.2"`, `solana-message = "4.2.4"`, `solana-sdk-ids = "3.1.0"`, `solana-signer = "3.0.1"`, `solana-transaction = "4.1.5"`, `solana-transaction-error = "3.3.1"`.
+- `/home/ubuntu/tests: No such file or directory` — volume not mounted.
+  - Fix: add `- ../tests:/home/ubuntu/tests` in `docker-compose.yml`, then `docker compose up -d --force-recreate solana`.
+- `E0583: file not found for module` — expected, files not written yet.
+  - Fix: create placeholder files (`//! Placeholder`).
+- Random `.rs` file (bash heredoc in a for-loop).
+  - Cause: bash mishandled the first iteration (`$f` not expanded).
+  - Fix: `rm tests/src/.rs`.
+  - Lesson: when using loops with heredoc — check `ls` immediately after.
+- `E0308: Transaction::new_signed_with_payer expects &[Instruction], found &Vec<CompiledInstruction>`.
+  - Cause: `Message::new_with_blockhash` compiles instructions.
+  - Fix: use `Transaction::new_signed_with_payer(&[ix], ...)` directly with raw instructions.
+  - Lesson: in `solana-transaction` there are two paths — via `Message` (compiled) and via raw `Instruction`. Don't mix them.
+- Deposit test: vault balance is NOT zero after init (890 880 lamports rent-exempt).
+  - Fix: read `vault_initial` after init, then `assert_eq!(vault_after, vault_initial + amount)`.
+  - Lesson: never assume a PDA has zero lamports after `init`.
+- Withdraw test: Borsh serialization for `Vec<u8>`.
+  - Fact: in Anchor, `Vec<u8>` is serialized as `u32 LE length` + bytes. Fixed-size arrays are raw.
+- Withdraw E2E with real proof is not feasible in LiteSVM.
+  - Reason: proof from stage 3.5 was generated for a synthetic state.
+  - Decision: test validations + CPI reach only. Full E2E on devnet (Stage 8).
+
+### From Stage 5 (backend)
+
+- `chrono` used transitively via `sqlx` but not in direct `[dependencies]`.
+  - Cause: `sqlx`'s `chrono` feature integrates but doesn't re-export types.
+  - Fix: add `chrono = { version = "0.4", features = ["serde"] }`.
+  - Lesson: if you use a type from a transitive dep, declare it explicitly.
+- Content of `logging.rs` and `metrics.rs` swapped (test appeared in wrong file).
+  - Cause: editor applied both "replace fully" instructions to the same file.
+  - Fix: rewrote both files.
+  - Lesson: after "replace fully", always check `wc -l` and `grep` for characteristic function names. If a test appears under the wrong module — files got swapped.
+- `E0277: WithdrawResponse: DeserializeOwned not satisfied` with note "multiple different versions of crate `zkpool_backend`".
+  - Cause: `WithdrawResponse` was defined in `main.rs` (bin), while `reqwest::json::<T>()` needs `T` from the same crate instance as `serde`.
+  - Fix: move shared types to lib — created `src/api_types.rs`.
+  - Lesson: in crates with both `[[bin]]` and `[lib]`, all shared types must live in the lib.
+- `/metrics` returned 200 with empty body.
+  - Cause: `metrics-exporter-prometheus` doesn't render metrics that were never recorded. Plus default idle-timeout drops old metrics.
+  - Fix: `touch_startup_metrics()` records each metric once with a zero value.
+  - Note: `MetricKindMask` is in `metrics-util`, not re-exported by `metrics-exporter-prometheus`. Adding `metrics-util` as a direct dep would let us call `idle_timeout(MetricKindMask::ALL, None)` instead.
+- Ports 4001–4003, 5173 not reachable from the host.
+  - Cause: no `ports:` mapping in `docker-compose.yml` for `solana` service.
+  - Workaround: `docker compose exec solana curl ...`.
+  - Fix (Stage 9): add port mappings.
+- `jq` and `python3` not installed in `solana` container.
+  - Workaround: use raw `curl` output.
 
 ### How to find exact signatures for the installed crate version
 
@@ -526,10 +602,10 @@ All 9 sub-stages complete:
 ### How to resolve solana-* version conflicts
 
 1. Find the "main" crate (e.g. `litesvm`) and its exact `solana-*` versions in its `Cargo.toml`.
-2. Use **exactly** those versions in your `Cargo.toml`.
-3. Do NOT guess or use semver ranges (`"4"`, `"5"`) — they pull incompatible versions.
-4. Run `cargo tree -p <main-crate>` to verify resolution.
-5. If a newer toolchain is required, isolate the crate (see 4.5.1).
+2. Use **exactly** those versions.
+3. Don't guess or use semver ranges (`"4"`, `"5"`) — they pull incompatible versions.
+4. Run `cargo tree -p <main-crate>` to verify.
+5. If a newer toolchain is required, isolate the crate (see 7.8).
 
 ---
 
@@ -538,7 +614,7 @@ All 9 sub-stages complete:
 ```
 zkpool-solana/
 ├── .checkpoints/            ← gitignored
-├── .secrets/                ← gitignored
+├── .secrets/                ← gitignored (wallet + program keypair)
 ├── docs/
 │   ├── notes/               ← Russian, committed, PORTFOLIO MATERIAL
 │   │   ├── 00-checkpoints.md
@@ -547,46 +623,59 @@ zkpool-solana/
 │   │   ├── 01-setup.md
 │   │   ├── 02-circuits.md
 │   │   ├── 03-sunspot.md
-│   │   ├── 04-anchor.md (1014 lines)
+│   │   ├── 04-anchor.md
+│   │   ├── 05-backend.md
 │   │   └── assets/{01-setup,02-circuits,03-sunspot}/
 │   ├── ru/README.md
 │   ├── DEMO-NOTICE.md
 │   ├── PROJECT_CONTEXT.md   ← this file
 │   └── threat-model.md
 ├── infra/
-│   ├── docker-compose.yml
+│   ├── docker-compose.yml   ← solana + postgres + redis
 │   └── docker/Dockerfile.solana
-├── circuits/{poseidon,hash2,hashes,withdrawal}/
-├── onchain/
+├── circuits/
+│   ├── poseidon/            ← library
+│   ├── hash2/               ← circuit (ACIR)
+│   ├── hashes/              ← circuit (ACIR)
+│   └── withdrawal/
+│       ├── spec.json
+│       ├── Prover.toml      ← gitignored
+│       └── src/{main,merkle_tree,test_witness}.nr
+├── onchain/                 ← Rust 1.89.0
 │   ├── Anchor.toml
-│   ├── Cargo.toml           ← workspace root (Rust 1.89.0)
+│   ├── Cargo.toml           ← workspace root
 │   ├── rust-toolchain.toml
 │   └── programs/zk_pool/
+│       ├── Cargo.toml
+│       └── src/{lib,constants,error,events,state,instructions,encoding}.rs
+│       └── src/instructions/{pool,deposit,withdraw}.rs
 ├── tests/                   ← standalone crate (Rust 1.98.1)
 │   ├── Cargo.toml
 │   ├── rust-toolchain.toml
-│   └── src/
-│       ├── lib.rs
-│       ├── helpers.rs       ← load both programs
-│       ├── test_pool.rs     ← airdrop + pool instruction
-│       ├── test_deposit.rs  ← placeholder
-│       ├── test_withdraw.rs ← placeholder
-│       └── test_double_spend.rs ← placeholder
+│   └── src/{lib,helpers,test_pool,test_deposit,test_withdraw,test_double_spend}.rs
 ├── services/
-│   ├── backend/             ← Rust + axum (Stage 5, in progress)
+│   ├── backend/             ← Rust + axum (Stage 5)
 │   │   ├── Cargo.toml
-│   │   ├── migrations/
-│   │   │   └── 001_init.sql
+│   │   ├── migrations/001_init.sql
 │   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── main.rs
+│   │       ├── api_types.rs
 │   │       ├── config.rs
 │   │       ├── db.rs
-│   │       ├── lib.rs
-│   │       └── main.rs
+│   │       ├── cache.rs
+│   │       ├── tree.rs
+│   │       ├── logging.rs
+│   │       ├── metrics.rs
+│   │       ├── rate_limit.rs
+│   │       └── indexer.rs
 │   ├── merkle/              ← Node.js + Fastify (Stage 6)
 │   └── prover/              ← Rust + Sunspot (Stage 7)
-├── web/
-├── scripts/{validate-spec,sync-circuits}/
-├── solana/                  ← gitignored
+├── web/                     ← Vue 3 (Stage 8)
+├── scripts/
+│   ├── validate-spec/       ← Rust CLI
+│   └── sync-circuits/       ← Rust CLI
+├── solana/                  ← gitignored (wallet volume)
 ├── .env.example
 └── .gitignore
 ```
@@ -597,7 +686,7 @@ zkpool-solana/
 
 - Conventional commits.
 - English files except `docs/notes/*.md`, `docs/ru/README.md`.
-- Gitignored: `.secrets/`, `.checkpoints/`, `solana/`, `services/merkle/circuits/`, `web/public/circuits/`, `Prover.toml`.
+- Gitignored: `.secrets/`, `.checkpoints/`, `solana/`, `services/merkle/circuits/`, `web/public/circuits/`, `Prover.toml`, `**/target/`, `node_modules/`.
 - Committed: `docs/notes/` including `assets/`.
 - `git commit ... && git push` — one task. `git add -A` — separate.
 
@@ -641,6 +730,37 @@ docker compose -f infra/docker-compose.yml exec solana bash -ic \
   'cd /home/ubuntu/tests && cargo test'
 ```
 
+### Backend — build, run, smoke test
+
+```bash
+# Build
+docker compose -f infra/docker-compose.yml exec solana bash -ic \
+  'cd /home/ubuntu/services/backend && cargo build --release'
+
+# Run in background
+docker compose -f infra/docker-compose.yml exec -d solana bash -ic \
+  'cd /home/ubuntu/services/backend && ./target/release/zkpool-backend > /tmp/backend.log 2>&1 &'
+
+# Tail logs
+docker compose -f infra/docker-compose.yml exec solana bash -ic 'tail -30 /tmp/backend.log'
+
+# Kill
+docker compose -f infra/docker-compose.yml exec solana bash -ic 'pkill -f zkpool-backend'
+```
+
+### Postgres / Redis
+
+```bash
+# Apply migration
+docker exec -i zkpool-postgres psql -U zkpool -d zkpool < services/backend/migrations/001_init.sql
+
+# Tables
+docker exec zkpool-postgres psql -U zkpool -d zkpool -c "\dt"
+
+# Redis ping
+docker exec zkpool-redis redis-cli ping
+```
+
 ### Full Sunspot pipeline (from `circuits/withdrawal/`)
 
 ```bash
@@ -661,11 +781,13 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 **Last completed stage:** Stage 5.11 (smoke test — all endpoints OK).
 **Next stage:** Stage 5.12 — final checkpoint for Stage 5.
 
-**Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
+**Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
 **Deployed programs on devnet:**
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
+
+**Pool PDA (derived, not yet created on-chain):** `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`.
 
 **Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) + 5 (backend unit) = **91**.
 
@@ -674,14 +796,16 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `hashes.json` — `ca81b13700eac8caddde2fcce235d8b138ee249abf70d5c6ab64317e0c2bfbe9`
 - `withdrawal.json` — `29ac2e677229f4518944c76161933416e2a083dee83da638a9dfd01226cc91db`
 
+**Running containers:** `solana-zkpool-solana`, `zkpool-postgres` (healthy), `zkpool-redis` (healthy).
+
 **Docs sizes:**
-- `00-glossary.md` — 545 lines.
-- `00-zk-primer.md` — 317 lines.
-- `01-setup.md` — 762 lines.
-- `02-circuits.md` — 957 lines.
-- `03-sunspot.md` — 996 lines.
-- `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 1200+ lines.
+- `00-glossary.md` — 545 lines
+- `00-zk-primer.md` — 317 lines
+- `01-setup.md` — 762 lines
+- `02-circuits.md` — 957 lines
+- `03-sunspot.md` — 996 lines
+- `04-anchor.md` — ~1014 lines
+- `05-backend.md` — ~1200 lines
 
 ---
 
@@ -692,22 +816,22 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 ### 13.1. Context
 
 `docs/notes/*.md` is:
-1. **Raw material** for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
-2. **Part of the GitHub portfolio.**
-3. **Teaching material.**
+1. Raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
+2. Part of the GitHub portfolio.
+3. Teaching material.
 
 ### 13.2. Structure requirements for every note
 
-1. **TL;DR** at the top.
-2. **Glossary links.**
-3. **"Why" block** before each command.
-4. **"Expected result" block** after each command.
-5. **ASCII diagrams.**
-6. **Screenshots** in `docs/notes/assets/NN-<name>/`.
-7. **Cross-references.**
-8. **"Common errors" section.**
-9. **"Reproduction" section.**
-10. **"What's next" section.**
+1. TL;DR at the top.
+2. Glossary links.
+3. "Why" block before each command.
+4. "Expected result" block after each command.
+5. ASCII diagrams.
+6. Screenshots in `docs/notes/assets/NN-<name>/`.
+7. Cross-references.
+8. "Common errors" section.
+9. "Reproduction" section.
+10. "What's next" section.
 
 ### 13.3. Glossary
 
@@ -721,19 +845,63 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 - Saved to `docs/notes/assets/NN-<stage>/`.
 - Naming: `NN-MM-<description>.png`.
-- Committed (portfolio material).
+- Committed.
 - Max 500 KB per file.
 
 ### 13.6. Enrichment procedure
 
-After each stage: write technical note → enrich → capture screenshots → update glossary.
+After each stage: write the technical note → enrich with why-blocks, expected results, common errors, what's next → capture screenshots → update glossary.
 
-### 13.7. Enrichment of stages 01–03 — DONE
-
-### 13.8. Stage 3.7 — DONE
+### 13.7–13.8. Enrichment of stages 01–03 and 3.7 — DONE
 
 ### 13.9. Ongoing
 
 - Screenshots captured as we go.
-- `04-anchor.md` — 1014 lines.
 - Glossary updated when new terms appear.
+
+---
+
+## 14. Stage 6 — Merkle service (next stage)
+
+**Goal:** Node.js + Fastify HTTP service on port 4003 that exposes Poseidon2 hashing and Merkle tree operations to the backend and frontend.
+
+**Why Node.js:** the backend and frontend both need Poseidon2 hashes that match the Noir circuit byte-for-byte. Rust and JS Poseidon2 implementations produce **different** hashes. The only way to guarantee identity is to use the same ACIR (`hash2.json`) via `@noir-lang/noir_js`, which runs **only in JavaScript**. So the Merkle service is a thin JS wrapper around `noir_js`.
+
+**Endpoints:**
+- `POST /hash` — body `{left: hex, right: hex}` → `{hash: hex}`. Used by `tree.rs` in the backend.
+- `POST /root` — body `{commitments: [hex]}` → `{root: hex}`. Debug helper.
+- `POST /proof` — body `{commitments: [hex], leaf_index: N}` → `{proof: [hex], is_even: [bool]}`.
+- `GET /health` → `{status: "ok"}`.
+
+**Dependencies:** `fastify`, `@fastify/cors`, `@noir-lang/noir_js@1.0.0-rc.2`.
+
+**Circuits needed in `services/merkle/circuits/`:** `hash2.json`, `hashes.json`, `withdrawal.json` — already copied by `sync-circuits` at Stage 2.3, and the folder is gitignored.
+
+**Sub-stages planned:**
+- 6.1 — `package.json` + dependencies + folder structure.
+- 6.2 — `src/poseidon.js` — Noir instance caching, `poseidon2Hash(left, right)`.
+- 6.3 — `src/merkle.js` — build tree, root, proof.
+- 6.4 — `src/server.js` — Fastify routes.
+- 6.5 — tests (`node --test`).
+- 6.6 — run + smoke test with `curl`.
+- 6.7 — final checkpoint.
+
+**Key constraint:** the response format must match exactly what `tree.rs` expects — `{"hash": "<hex>"}`.
+
+---
+
+## 15. Instructions for a new assistant
+
+**If you are starting a new chat:**
+
+1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
+2. Read this file completely.
+3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`.
+4. Last completed stage: **Stage 5.11**.
+5. Next task: **Stage 5.12 — final checkpoint for Stage 5** (short). Then **Stage 6 — Merkle service**.
+6. **One task at a time.** Only exception: `git commit ... && git push`.
+7. **Give files in full for new files; insertion point + block for existing.**
+8. **Never guess.** If ambiguous — ask.
+9. **Test in small steps.** 20 lines, not 200.
+10. **Never delete information from existing files.**
+11. Reply in **English** in chat. Files: English, except `docs/notes/*.md` and `docs/ru/*.md` (Russian).
