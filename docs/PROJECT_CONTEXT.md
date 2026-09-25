@@ -8,23 +8,40 @@
 
 ## 0. Rules for the assistant (READ FIRST)
 
-### 0.1. One task at a time
+This is the **single normative section** of this file. Everything else describes the project. If in doubt — this section wins.
+
+### 0.1. Quick-start for a new assistant
+
+When you (a new assistant) start a new chat on this project:
+
+1. **Read this section first** — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record).
+2. Read **section 12 (Current state)** to know where we are.
+3. Read **section 13 (Documentation as portfolio material)** for the writing policy.
+4. Read these notes in order:
+   - `docs/notes/00-checkpoints.md`
+   - `docs/notes/00-glossary.md`
+   - `docs/notes/00-zk-primer.md`
+   - `docs/notes/01-setup.md`
+   - `docs/notes/02-circuits.md`
+   - `docs/notes/03-sunspot.md`
+   - `docs/notes/04-anchor.md`
+   - `docs/notes/05-backend.md`
+5. Read **section 8 (Known pitfalls)** before debugging anything.
+6. Then check section 12 for **Last completed stage** and **Next task** — start there.
+
+**Current:** Last completed — Stage 5.9.1. Next — Stage 5.9.2 (read endpoints).
+
+### 0.2. One task at a time
 
 The assistant gives **exactly one task** per message. Wait for the user to run it, paste the output, and only then give the next task.
 
 **Do NOT** give multiple commands in one message. **Do NOT** chain "then do X, then do Y".
 
-**Exception — git commit and git push are always grouped** as one task:
+**Exception — `git commit` and `git push` are always grouped** as one task:
 ```bash
 git commit -m "..." && git push
 ```
 `git add -A` is still a **separate** task.
-
-### 0.2. Files are given in full — ALWAYS
-
-When the assistant asks the user to create or modify a file, it gives **the complete file contents**. Not a fragment, not "replace line N", not "find section X".
-
-**Do NOT** say "replace this section". **DO** say "open file X and replace its entire contents with:".
 
 ### 0.3. Language
 
@@ -33,7 +50,7 @@ When the assistant asks the user to create or modify a file, it gives **the comp
   - **English** by default — code, configs, docs at root level.
   - **Russian** for `docs/ru/*.md` and `docs/notes/*.md`.
 
-**Rationale for English chat:** Russian tokens are 2–3× more expensive in the model's tokenizer, which has been causing context-limit issues. Notes stay in Russian for the portfolio and for the Russian-speaking audience.
+**Rationale for English chat:** Russian tokens are 2–3× more expensive in the model's tokenizer, causing context-limit issues. Notes stay in Russian for the portfolio and the Russian-speaking audience.
 
 ### 0.4. Never guess
 
@@ -50,11 +67,11 @@ After each completed stage:
 - Add or update `docs/notes/NN-name.md` (Russian).
 - Commit and push.
 
-### 0.7. No multi-command chains (except git commit && git push)
+### 0.7. No multi-command chains (except `git commit && git push`)
 
-### 0.8. Documentation is portfolio material — see section 14
+### 0.8. Documentation is portfolio material — see section 13
 
-**CRITICAL:** `docs/notes/*.md` is not just internal memory. It is the raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio. See section 14 for the full policy.
+**CRITICAL:** `docs/notes/*.md` is not just internal memory. It is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio. See section 13 for the full policy.
 
 ### 0.9. Non-obvious project actions must be documented
 
@@ -82,9 +99,9 @@ When working with a **new** library (like LiteSVM), **do not** write a large fil
 
 When the assistant updates an existing file in `docs/notes/` or `docs/PROJECT_CONTEXT.md`:
 
-1. **Take the current file content** (the user pastes it, or the assistant has it from the chat history).
+1. **Take the current file content** (the user pastes it, or the assistant has it from chat history).
 2. **Preserve it in full** — no information is removed.
-3. **Add** the new sections in the appropriate place.
+3. **Add** new sections in the appropriate place.
 4. **Update** the glossary if new terms appeared.
 
 **Output format** (revised 2026-09-24, to save chat context):
@@ -93,21 +110,19 @@ When the assistant updates an existing file in `docs/notes/` or `docs/PROJECT_CO
 - **Existing files** — give **insertion point + block**. Do **not** give the full file unless the user explicitly asks.
 - **Never** shorten, "simplify", or replace existing sections with a summary.
 
-**Allowed:** rephrase, reorder sections, improve wording — as long as the **information is preserved**.
+**Allowed:** rephrase, reorder sections, improve wording — as long as **information is preserved**.
 
 **Forbidden:** remove or shorten existing sections.
 
-Rationale for the revision: this chat is 100 000+ tokens because `04-anchor.md` (1014 lines) and `PROJECT_CONTEXT.md` (634 lines) were pasted 2–3 times each. The full-file rule is correct for correctness but expensive for the token budget. The user explicitly requested the revision (2026-09-24).
+Rationale for the revision: this chat exceeded 100 000 tokens because `04-anchor.md` (1014 lines) and `PROJECT_CONTEXT.md` (634 lines) were pasted 2–3 times each. The full-file rule is correct for correctness but expensive for the token budget. The user explicitly requested the revision (2026-09-24).
 
 ### 0.12. Chat language — English only
 
 All chat messages between user and assistant are in **English**.
 
-Russian is used **only** for files in `docs/ru/*.md` (translations for the Russian-speaking audience).
+Russian is used **only** for files in `docs/ru/*.md` **and** `docs/notes/*.md`.
 
-`docs/notes/*.md` are **English** (updated 2026-09-24).
-
-**Rationale:** Russian tokens are 2–3× more expensive than English tokens in the model's tokenizer. The chat history has been growing fast; English-only chat preserves context.
+**Rationale:** Russian tokens are 2–3× more expensive than English tokens in the model's tokenizer. English-only chat preserves context.
 
 ### 0.13. "record" means record it in notes and context
 
@@ -117,12 +132,18 @@ When the user writes just **"record"** (or Russian "зафиксируй"), the 
 2. Update `docs/PROJECT_CONTEXT.md`:
    - The Stage NN table (mark current sub-stage as done, next as `← next`).
    - Section 12 "Current state" — last completed, next, commit hashes, docs sizes.
-   - Section 13 "Instructions for a new assistant" — Last completed stage, next task.
+   - Section 0.1 "Quick-start" — Last completed stage, next task.
 3. Commit both files together.
 
 Do **not** ask "should I record it?" — just do it.
 
----
+### 0.14. Record with each `git push`
+
+**After each `git push`**, immediately update `docs/notes/NN-name.md` and `docs/PROJECT_CONTEXT.md` — do not wait for the user to say "record".
+
+**Rationale:** the user shouldn't have to ask. The push is the natural boundary where a sub-stage is complete.
+
+**Exception:** purely-docs commits (which are themselves the "record" step) don't need a second record pass.
 
 ## 1. What this project is
 
@@ -635,8 +656,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.8 (`indexer.rs`).
-**Next stage:** Stage 5.9 — HTTP handlers (`main.rs`).
+**Last completed stage:** Stage 5.9.1 (HTTP server with `/api/health`).
+**Next stage:** Stage 5.9.2 — read endpoints (`/api/commitments`, `/api/root`, `/api/proof`, `/metrics`).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -662,35 +683,18 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ---
 
-## 13. Instructions for a new assistant
-
-1. Read **section 0** first — especially **0.9** (document non-obvious), **0.10** (test in small steps), **0.11** (never delete information).
-2. Read **section 14** for documentation policy.
-3. Read this file completely.
-4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 5.8**.
-6. Next task: **Stage 5.9 — HTTP handlers (`main.rs`)**.
-7. **One task at a time.** Only exception: `git commit ... && git push`.
-8. **Give files in full — always.**
-9. **Never guess.** If ambiguous — ask.
-10. **Test in small steps.** 20 lines, not 200.
-11. **Never delete information from existing files.**
-12. Reply in Russian. Files: English (except notes and `docs/ru/README.md`).
-
----
-
-## 14. Documentation as portfolio material
+## 13. Documentation as portfolio material
 
 **Set on 2026-09-24.**
 
-### 14.1. Context
+### 13.1. Context
 
 `docs/notes/*.md` is:
 1. **Raw material** for guides, tutorials, and articles on **Medium** and **Mirror.xyz**.
 2. **Part of the GitHub portfolio.**
 3. **Teaching material.**
 
-### 14.2. Structure requirements for every note
+### 13.2. Structure requirements for every note
 
 1. **TL;DR** at the top.
 2. **Glossary links.**
@@ -703,30 +707,30 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 9. **"Reproduction" section.**
 10. **"What's next" section.**
 
-### 14.3. Glossary
+### 13.3. Glossary
 
 **Status:** ✅ done. 545 lines, 76 terms.
 
-### 14.4. ZK-primer
+### 13.4. ZK-primer
 
 **Status:** ✅ done. 317 lines, 14 sections.
 
-### 14.5. Screenshots policy
+### 13.5. Screenshots policy
 
 - Saved to `docs/notes/assets/NN-<stage>/`.
 - Naming: `NN-MM-<description>.png`.
 - Committed (portfolio material).
 - Max 500 KB per file.
 
-### 14.6. Enrichment procedure
+### 13.6. Enrichment procedure
 
 After each stage: write technical note → enrich → capture screenshots → update glossary.
 
-### 14.7. Enrichment of stages 01–03 — DONE
+### 13.7. Enrichment of stages 01–03 — DONE
 
-### 14.8. Stage 3.7 — DONE
+### 13.8. Stage 3.7 — DONE
 
-### 14.9. Ongoing
+### 13.9. Ongoing
 
 - Screenshots captured as we go.
 - `04-anchor.md` — 1014 lines.
