@@ -486,6 +486,129 @@ fn client_ip(req: &Request) -> String
 
 ---
 
+## 5.8. Indexer (`indexer.rs`)
+
+Фоновый воркер, который **связывает** on-chain события с БД и Merkle tree.
+
+### Задача
+
+Каждые `INDEXER_POLL_INTERVAL_SECS` секунд:
+1. `getSignaturesForAddress(program_id, { before?, limit })` — получить новые подписи.
+2. Пагинация назад через `before` до **последней обработанной** подписи (из Redis `indexer:last_signature`).
+3. Разворот — обрабатываем от **старых** к **новым**.
+4. Для каждой подписи: `getTransaction(signature)`.
+5. Парсинг `Program data:` записей из логов — поиск совпадений по дискриминатору события.
+6. При совпадении — сохранить в БД, обновить Merkle tree, эмитить метрику.
+7. Запомнить **новейшую** обработанную подпись в Redis.
+
+### Дискриминаторы событий
+
+Из IDL:
+- **`DepositEvent`:** `[120, 248, 61, 83, 31, 142, 107, 144]`.
+- **`WithdrawEvent`:** `[22, 9, 133, 26, 160, 44, 71, 192]`.
+
+### Layout payload (после 8-байтного дискриминатора)
+
+**`DepositEvent`** (80 байт):
+| Смещение | Размер | Поле |
+|---|---|---|
+| 0 | 32 | `commitment` |
+| 32 | 8 | `leaf_index` (u64 LE) |
+| 40 | 32 | `new_root` |
+| 72 | 8 | `timestamp` (i64 LE) |
+
+**`WithdrawEvent`** (80 байт):
+| Смещение | Размер | Поле |
+|---|---|---|
+| 0 | 32 | `nullifier_hash` |
+| 32 | 32 | `recipient` (Pubkey) |
+| 64 | 8 | `amount` (u64 LE) |
+| 72 | 8 | `timestamp` (i64 LE) |
+
+### Идемпотентность
+
+Indexer **может** переобработать транзакцию (RPC rewind, рестарт). Все DB-записи — `ON CONFLICT DO NOTHING`, tree обновляется **только** при **новом** commitment'е (`commitment_exists` check).
+
+### Обработка DepositEvent
+
+1. Проверить `commitment_exists` — если да, skip.
+2. `save_commitment` + `save_root`.
+3. `tree.add_leaf(hex(commitment))` — обновить инкрементальное дерево.
+4. Обновить метрику `zkpool_indexer_tree_size`.
+5. `record_deposit()`.
+6. Лог `info!("deposit indexed: ...")`.
+
+### Обработка WithdrawEvent
+
+1. Проверить `is_nullifier_used` — если да, skip.
+2. `save_nullifier` с `recipient` (base58), `amount`, `signature`.
+3. `cache.invalidate_pool(pool)` — сбросить кеши `commitments`/`root`/`tree:*`.
+4. `record_withdrawal()`.
+5. Лог `info!("withdraw indexed: ...")`.
+
+### Компоненты
+
+**`DepositEvent`** и **`WithdrawEvent`** — структуры для **парсинга** (не путать с on-chain `DepositEvent`/`WithdrawEvent` из Anchor; там они уходят в логи в **borsh**-формате, здесь — **десериализуются**).
+
+**`Indexer`** — основной тип:
+- `config: Arc<Config>`.
+- `db: Db` (clone).
+- `cache: Arc<Mutex<Cache>>`.
+- `tree: Arc<Mutex<MerkleTree>>`.
+- `http: reqwest::Client` — для RPC.
+
+**Метод `run()`** — бесконечный цикл через `tokio::time::interval`. Ошибки `poll_once()` логируются, метрика `record_indexer_error()`, цикл продолжается.
+
+**`poll_once()`** — один цикл:
+- Пагинация через `getSignaturesForAddress`.
+- Разворот.
+- Обработка каждой подписи.
+- Обновление `LAST_SIGNATURE_KEY`.
+
+**`fetch_signatures(program_id, before)`** — обёртка над JSON-RPC.
+
+**`process_transaction(signature)`** — `getTransaction`, парсинг `logMessages`, поиск `Program data:`.
+
+**`try_parse_event(signature, bytes)`** — разбор дискриминатора, вызов парсера.
+
+**`parse_deposit_event(payload)`** / **`parse_withdraw_event(payload)`** — чистые функции **без** async, легко тестируются.
+
+### Что тестируется (4 unit-теста)
+
+| Тест | Что проверяет |
+|---|---|
+| `test_parse_deposit_event` | Корректный парсинг 80-байтного payload |
+| `test_parse_withdraw_event` | То же для withdraw |
+| `test_parse_deposit_too_short` | 79 байт → ошибка |
+| `test_parse_withdraw_too_short` | 79 байт → ошибка |
+
+**Результат:** 5 passed, 2 ignored (2 ignored — cache integration tests).
+
+### ⚠️ Возможные проблемы (не выявлены при компиляции)
+
+Два места, которые **могли** не скомпилироваться, но **сработали**:
+
+1. **`base64::Engine::decode(...)`** — зависит от версии `base64`. В 0.21 API — `Engine::decode(...)`. Сработало.
+2. **`disc == DEPOSIT_EVENT_DISCRIMINATOR`** — сравнение `&[u8]` с `[u8; 8]`. Rust автоматически разворачивает slice-сравнение. Сработало.
+
+**Урок:** иногда «очевидно проблемные» места **работают**. Не стоит **превентивно** усложнять код (через `.as_slice()`, `into()`), пока компилятор не пожалуется. Это согласуется с правилом 0.10 — **писать просто**, итерировать по необходимости.
+
+### Что НЕ реализовано
+
+- **`INDEXER_POLL_INTERVAL_SECS = 0`** — не поддерживается. Если хочется «без пауз» — задать минимум 1.
+- **Retry на ошибке RPC** — сейчас просто логируется и идёт дальше. В production нужен backoff.
+- **Проверка `commitment` vs `new_root`** — DB этого **не** делает, потому что **on-chain программа тоже не делает**. См. trust model в `docs/DEMO-NOTICE.md`.
+
+### Итоги 5.8
+
+- `indexer.rs` — **518 строк**.
+- Компилируется чисто.
+- 4 новых unit-теста (все passed).
+- **Коммит:** `1629bd1`.
+- **Чекпоинт:** `.checkpoints/05.8-indexer/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).

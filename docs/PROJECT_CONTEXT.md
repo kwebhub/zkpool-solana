@@ -318,8 +318,8 @@ All 9 sub-stages complete:
 | 5.5 | `tree.rs` (Merkle tree) | ✅ commit `372c056` |
 | 5.6 | Metrics + logging | ✅ commit `af219cd` |
 | 5.7 | Rate limiting | ✅ commit `7d85c29` |
-| 5.8 | Indexer | ← next |
-| 5.9 | HTTP handlers | ⏳ |
+| 5.8 | Indexer | ✅ commit `1629bd1` |
+| 5.9 | HTTP handlers | ← next |
 | 5.10 | Docker compose additions | ⏳ |
 | 5.11 | Smoke test | ⏳ |
 | 5.12 | Final checkpoint | ⏳ |
@@ -635,8 +635,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.7 (`rate_limit.rs`).
-**Next stage:** Stage 5.8 — `indexer.rs` (background Solana RPC polling).
+**Last completed stage:** Stage 5.8 (`indexer.rs`).
+**Next stage:** Stage 5.9 — HTTP handlers (`main.rs`).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -644,7 +644,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) = **86**.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) + 5 (backend unit) = **91**.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -658,7 +658,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
 - `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 460+ lines.
+- `05-backend.md` — 620+ lines.
 
 ---
 
@@ -668,8 +668,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 2. Read **section 14** for documentation policy.
 3. Read this file completely.
 4. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`.
-5. Last completed stage: **Stage 5.7**.
-6. Next task: **Stage 5.8 — `indexer.rs`**.
+5. Last completed stage: **Stage 5.8**.
+6. Next task: **Stage 5.9 — HTTP handlers (`main.rs`)**.
 7. **One task at a time.** Only exception: `git commit ... && git push`.
 8. **Give files in full — always.**
 9. **Never guess.** If ambiguous — ask.
