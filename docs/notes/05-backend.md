@@ -708,6 +708,98 @@ match state.db.list_commitments(&pool).await {
 
 **TODO:** создать чекпоинты 5.9.1 и 5.9.2 **перед** переходом к 5.9.3.
 
+---
+
+### 5.9.3. `POST /api/withdraw` + rate limiting
+
+**Что делает `POST /api/withdraw`:**
+1. Принимает JSON `{ witness: "<base64>" }`.
+2. Проксирует запрос в prover: `POST {prover_url}/prove` с тем же телом.
+3. Возвращает ответ prover'а: `{ proof: "<base64>", public_witness: "<base64>" }`.
+
+**Зачем проксировать:** frontend **не может** обращаться к prover'у напрямую (CORS, сетевая изоляция, rate limiting на backend'е). Backend — **тонкая** прослойка.
+
+**Маппинг ошибок:**
+| Prover status | Backend response |
+|---|---|
+| 200 | 200 с `{ proof, public_witness }` |
+| 4xx | 400 с `{ error, prover_status, prover_body }` |
+| 5xx или network error | 502 Bad Gateway |
+
+### Rate limiting middleware
+
+**Два уровня** (см. 5.7):
+- **Read** — `/api/commitments`, `/api/root`, `/api/proof` — 60/min.
+- **Withdraw** — `/api/withdraw` — 5/min.
+
+**Применяется через axum `middleware::from_fn_with_state`:**
+```rust
+let read_routes = Router::new()
+    .route("/api/commitments", get(get_commitments))
+    .route("/api/root", get(get_root))
+    .route("/api/proof", get(get_proof))
+    .layer(middleware::from_fn_with_state(
+        rate_limiter.clone(),
+        rate_limit::read_middleware,
+    ));
+
+let withdraw_routes = Router::new()
+    .route("/api/withdraw", post(post_withdraw))
+    .layer(middleware::from_fn_with_state(
+        rate_limiter.clone(),
+        rate_limit::withdraw_middleware,
+    ));
+
+let app = Router::new()
+    .route("/api/health", get(health))
+    .route("/metrics", get(metrics_endpoint))
+    .merge(read_routes)
+    .merge(withdraw_routes)
+    .with_state(state);
+```
+
+**`/api/health` и `/metrics` не лимитируются** — они вне `read_routes`/`withdraw_routes`.
+
+### Spawn indexer
+
+Indexer запускается как **background tokio task**:
+```rust
+tokio::spawn(async move {
+    let indexer = Indexer::new(indexer_config, indexer_db, indexer_cache, indexer_tree);
+    if let Err(e) = indexer.run().await {
+        error!("indexer terminated: {:#}", e);
+    }
+});
+```
+
+`run()` — **бесконечный** цикл (`loop { ticker.tick().await; poll_once() }`). Если **падает** — логируется, task **завершается**. В production нужен **supervisor** (или `restart: unless-stopped` в Docker Compose).
+
+### ⚠️ Ошибка: "multiple different versions of crate `zkpool_backend`"
+
+**Симптом:**
+```
+error[E0277]: the trait bound `WithdrawResponse: DeserializeOwned` is not satisfied
+    = note: there are multiple different versions of crate `zkpool_backend` in the dependency graph
+    = help: you can use `cargo tree` to explore your dependency tree
+    = note: required for `WithdrawResponse` to implement `DeserializeOwned`
+note: required by a bound in `reqwest::Response::json`
+```
+
+**Причина:** `WithdrawResponse` был определён **в `main.rs`** (bin), а `reqwest::Response::json::<T>()` требует, чтобы `T` был из **того же** инстанса крейта, что и `serde` в `reqwest`. Но bin и lib — **два разных** инстанса `zkpool_backend`. Компилятор видит "два crate" и не может связать типы.
+
+**Решение:** **перенести** общие типы из bin в lib. Создали `src/api_types.rs` с `WithdrawRequest` и `WithdrawResponse`, добавили `pub mod api_types;` в `lib.rs`, а в `main.rs` используем `use zkpool_backend::api_types::{WithdrawRequest, WithdrawResponse};`.
+
+**Урок:** в crate'ах с **одновременно** `[[bin]]` и `[lib]`, **все** типы, разделяемые между ними, **должны** жить в **lib**. Типы, определённые в bin, **невидимы** для lib, и наоборот. `serde`-совместимые типы, используемые с `reqwest`, обязательно должны быть в **lib**.
+
+### Итоги 5.9.3
+
+- `main.rs` — 380+ строк.
+- `api_types.rs` — 26 строк.
+- **Коммит:** `8085b24`.
+- **Чекпоинт:** `.checkpoints/05.9.3-withdraw-rate-limit/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).

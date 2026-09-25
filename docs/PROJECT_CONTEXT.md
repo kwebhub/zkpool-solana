@@ -29,7 +29,7 @@ When you (a new assistant) start a new chat on this project:
 5. Read **section 8 (Known pitfalls)** before debugging anything.
 6. Then check section 12 for **Last completed stage** and **Next task** — start there.
 
-**Current:** Last completed — Stage 5.9.2. Next — Stage 5.9.3 (withdraw + rate limiting).
+**Current:** Last completed — Stage 5.9.3. Next — Stage 5.10 (Docker compose additions).
 
 ### 0.2. One task at a time
 
@@ -342,8 +342,8 @@ All 9 sub-stages complete:
 | 5.8 | Indexer | ✅ commit `1629bd1` |
 | 5.9.1 | HTTP server + `/api/health` | ✅ commit `025fbd6` |
 | 5.9.2 | Read endpoints + `/metrics` | ✅ commit `c0a9984` |
-| 5.9.3 | `POST /api/withdraw` + rate limiting | ← next |
-| 5.10 | Docker compose additions | ⏳ |
+| 5.9.3 | `POST /api/withdraw` + rate limiting | ✅ commit `8085b24` |
+| 5.10 | Docker compose additions | ← next |
 | 5.11 | Smoke test | ⏳ |
 | 5.12 | Final checkpoint | ⏳ |
 
@@ -658,8 +658,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.9.2 (read endpoints + `/metrics`).
-**Next stage:** Stage 5.9.3 — `POST /api/withdraw` + rate limiting.
+**Last completed stage:** Stage 5.9.3 (`POST /api/withdraw` + rate limiting).
+**Next stage:** Stage 5.10 — Docker compose additions (Postgres + Redis + backend).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -681,7 +681,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
 - `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 750+ lines.
+- `05-backend.md` — 900+ lines.
 
 ---
 
