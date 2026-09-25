@@ -609,6 +609,105 @@ Indexer **может** переобработать транзакцию (RPC re
 
 ---
 
+---
+
+## 5.9. HTTP handlers (`main.rs`)
+
+Разбит на **три под-этапа** (правило 0.10 — маленькими шагами):
+
+- **5.9.1** — `AppState` + `/api/health` только.
+- **5.9.2** — read endpoints (`/api/commitments`, `/api/root`, `/api/proof`, `/metrics`).
+- **5.9.3** — `POST /api/withdraw` + rate limiting middleware. ← следующий
+
+### 5.9.1. Server + health
+
+**Что делает `main()`:**
+1. Загружает `Config::from_env()`.
+2. Инициализирует `logging` + `metrics`.
+3. Подключается к Postgres → `Db`.
+4. Подключается к Redis → `Cache` (обёрнутый в `Arc<Mutex<>>`).
+5. Создаёт `MerkleTree` handle (не инициализирует — это ленивая операция).
+6. Собирает `AppState`.
+7. Роутер с одним маршрутом `/api/health`.
+8. `tokio::net::TcpListener::bind("0.0.0.0:{port}")`.
+9. `axum::serve`.
+
+**`AppState`** (Clone):
+- `config: Arc<Config>`.
+- `db: Db` (Clone).
+- `cache: Arc<Mutex<Cache>>`.
+- `tree: Arc<Mutex<MerkleTree>>`.
+
+**`Arc<Mutex<>>` для cache и tree** — потому что `Cache::get/set` требует `&mut self`, а `axum::State` должен быть `Clone + Send + Sync`. `tokio::sync::Mutex` — async-friendly.
+
+**`GET /api/health`** — проверяет `db.next_leaf_index()`. Возвращает:
+```json
+{ "status": "ok", "db": true, "version": "0.1.0" }
+```
+или `503 degraded`, если БД недоступна.
+
+### 5.9.2. Read endpoints
+
+**`GET /api/commitments?pool_address=X`** — список commitments.
+- Если `pool_address` не задан — берётся из config.
+- Кеш Redis: `cache:commitments:{pool}`, TTL 30 сек.
+- Ответ: `{ pool_address, count, commitments: [{ id, leaf_index, commitment (hex), pool_address, tx_signature, created_at (RFC3339) }] }`.
+
+**`GET /api/root?pool_address=X`** — текущий root.
+- Кеш Redis: `cache:root:{pool}`, TTL 30 сек.
+- Ответ: `{ pool_address, root: "hex" | null }`.
+
+**`GET /api/proof?pool_address=X&leaf_index=N`** — Merkle proof.
+- **STUB** — возвращает `501 Not Implemented`.
+- Реализация отложена до этапа 6 (Merkle service), потому что proof требует **полного** дерева, которого у нас нет.
+- Ответ: `{ error: "not implemented", reason: "requires the Merkle service (Stage 6)", pool_address, leaf_index }`.
+
+**`GET /metrics`** — Prometheus exposition.
+- Возвращает `metrics::render_metrics()`.
+- Content-Type: `text/plain; version=0.0.4`.
+
+### Ключевые концепции
+
+**Cache-then-DB pattern:**
+1. Проверить Redis (`cache.get`).
+2. При **hit** — вернуть сразу.
+3. При **miss** — запрос в БД, потом `cache.set_ex(key, value, 30)`.
+
+**Обработка ошибок БД:**
+```rust
+match state.db.list_commitments(&pool).await {
+    Ok(rows) => rows,
+    Err(e) => {
+        tracing::error!("list_commitments failed: {:#}", e);
+        metrics::record_db_error();
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "db query failed"}))).into_response();
+    }
+}
+```
+Логирование + метрика + 500.
+
+**`Query<PoolQuery>` extractor** — `axum::extract::Query` парсит query-параметры через `serde`. `#[serde(default)] pool_address: Option<String>` — если параметр отсутствует, `None`.
+
+**`(StatusCode, Json(...)).into_response()`** — единый тип `Response`, так проще возвращать разные коды из одного хендлера.
+
+### ⚠️ Ошибок при компиляции не возникло
+
+Оба под-этапа **сразу** скомпилировались. Основные места риска:
+- `Arc<Mutex<Cache>>` — правильный тип из `tokio::sync::Mutex`.
+- `axum::extract::Query` — поддерживается в axum 0.7.
+- `into_response()` на `(StatusCode, Json<T>)` — работает через трейт `IntoResponse`.
+
+**Урок:** когда используешь **знакомые** API (axum, serde) — риска меньше. Ошибки были на **новых** крейтах (LiteSVM, Anchor-макросы). Здесь мы шли **по документации** axum — и всё **сразу** собралось.
+
+### Итоги 5.9.1 + 5.9.2
+
+- `main.rs` — 220+ строк (5.9.1: 111 строк, 5.9.2: +190 строк).
+- 5 маршрутов: `/api/health`, `/api/commitments`, `/api/root`, `/api/proof`, `/metrics`.
+- **Коммиты:** `025fbd6` (5.9.1), `c0a9984` (5.9.2).
+- **Чекпоинты:** `.checkpoints/05.9.1-server-health/` (пока нет — создадим в финале), `.checkpoints/05.9.2-read-endpoints/` (тоже).
+
+**TODO:** создать чекпоинты 5.9.1 и 5.9.2 **перед** переходом к 5.9.3.
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
