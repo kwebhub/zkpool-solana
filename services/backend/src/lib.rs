@@ -8,13 +8,14 @@
 //!   - `logging`    — tracing initialization.
 //!   - `metrics`    — custom Prometheus metrics.
 //!   - `rate_limit` — Redis-based rate limiting middleware.
+//!   - `indexer`    — background worker: Solana RPC → DB + tree.
 //!
-//! Additional modules (indexer, HTTP handlers) are added in subsequent
-//! sub-stages of Stage 5.
+//! Additional modules (HTTP handlers) are added in the next sub-stage.
 
 pub mod cache;
 pub mod config;
 pub mod db;
+pub mod indexer;
 pub mod logging;
 pub mod metrics;
 pub mod rate_limit;
