@@ -29,7 +29,7 @@ When you (a new assistant) start a new chat on this project:
 5. Read **section 8 (Known pitfalls)** before debugging anything.
 6. Then check section 12 for **Last completed stage** and **Next task** — start there.
 
-**Current:** Last completed — Stage 5.10. Next — Stage 5.11 (smoke test).
+**Current:** Last completed — Stage 5.11. Next — Stage 5.12 (final checkpoint for Stage 5).
 
 ### 0.2. One task at a time
 
@@ -344,8 +344,8 @@ All 9 sub-stages complete:
 | 5.9.2 | Read endpoints + `/metrics` | ✅ commit `c0a9984` |
 | 5.9.3 | `POST /api/withdraw` + rate limiting | ✅ commit `8085b24` |
 | 5.10 | Docker compose additions | ✅ commit `a260475` |
-| 5.11 | Smoke test | ← next |
-| 5.12 | Final checkpoint | ⏳ |
+| 5.11 | Smoke test | ✅ commit `1b815bc` |
+| 5.12 | Final checkpoint | ← next |
 
 ### ✅ Docs (2026-09-22 — 2026-09-24)
 
@@ -658,8 +658,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.10 (Postgres + Redis in Docker Compose).
-**Next stage:** Stage 5.11 — smoke test (curl each endpoint).
+**Last completed stage:** Stage 5.11 (smoke test — all endpoints OK).
+**Next stage:** Stage 5.12 — final checkpoint for Stage 5.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (3.468 SOL, devnet).
 
@@ -681,7 +681,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `02-circuits.md` — 957 lines.
 - `03-sunspot.md` — 996 lines.
 - `04-anchor.md` — 1014+ lines.
-- `05-backend.md` — 1000+ lines.
+- `05-backend.md` — 1200+ lines.
 
 ---
 

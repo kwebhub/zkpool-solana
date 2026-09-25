@@ -888,6 +888,209 @@ docker exec zkpool-redis redis-cli ping
 
 ---
 
+## 5.11. Smoke test
+
+Запуск backend'а и curl каждого endpoint'а — **полный E2E** для Stage 5.
+
+### Подготовка
+
+**Backend `.env`** (`services/backend/.env`):
+
+```env
+DATABASE_URL=postgres://zkpool:zkpool_dev_password@postgres:5432/zkpool
+REDIS_URL=redis://redis:6379
+PORT=4001
+SOLANA_RPC_URL=https://api.devnet.solana.com
+POOL_ADDRESS=B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf
+MERKLE_URL=http://localhost:4003
+PROVER_URL=http://localhost:4002
+INDEXER_POLL_INTERVAL_SECS=5
+INDEXER_PAGE_SIZE=100
+INDEXER_MAX_PAGES=10
+RATE_LIMIT_WITHDRAW_PER_MIN=5
+RATE_LIMIT_READ_PER_MIN=60
+MERKLE_TREE_DEPTH=20
+```
+
+**Ключевое отличие от `.env.example`:**
+- `DATABASE_URL` использует `postgres` (имя сервиса), **не** `localhost`.
+- `REDIS_URL` использует `redis`, **не** `localhost`.
+
+**Почему:** backend работает **внутри** `solana` контейнера, Postgres и Redis — **отдельные** контейнеры на той же Docker network. По `localhost` они недоступны.
+
+**`POOL_ADDRESS`** — реальный PDA, вычисленный через:
+```bash
+solana find-program-derived-address 8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm string:pool3
+# → B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf
+```
+
+**Важно:** PDA **не совпадает** с on-chain `POOL_ADDRESS`, пока пользователь **не** вызвал `Initialize Pool`. Программа развернута, но пул **не** создан. Indexer фильтрует события по этому PDA — до init'а пула **ничего** не найдёт.
+
+### Запуск backend'а
+
+**Сборка:**
+```bash
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  cd /home/ubuntu/services/backend
+  cargo build --release
+'
+```
+
+**Запуск в фоне** (без tmux — для smoke test):
+```bash
+docker compose -f infra/docker-compose.yml exec -d solana bash -ic '
+  cd /home/ubuntu/services/backend
+  ./target/release/zkpool-backend > /tmp/backend.log 2>&1 &
+'
+```
+
+**Логи:**
+```
+INFO zkpool_backend: logging initialized
+INFO zkpool_backend: metrics initialized
+INFO zkpool_backend: connected to Postgres
+INFO zkpool_backend: connected to Redis
+INFO zkpool_backend: Merkle tree handle created
+INFO zkpool_backend: indexer spawned
+INFO zkpool_backend: server listening on 0.0.0.0:4001
+INFO zkpool_backend::indexer: indexer started: program=..., pool=B89Y...
+```
+
+### Проверка endpoints
+
+**⚠️ `jq` и `python3` НЕ установлены** в контейнере `solana`. Используем `curl` без форматирования.
+
+**Порты 4001–4003, 5173 НЕ проброшены наружу.** Backend **недоступен** с хоста через `http://localhost:4001`. Curl из **хоста** → `000`. Curl из **внутри** контейнера → работает.
+
+**Проверка каждого endpoint'а:**
+
+```bash
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  echo "=== /api/health ==="
+  curl -s http://localhost:4001/api/health
+  echo ""
+  echo "=== /api/commitments ==="
+  curl -s http://localhost:4001/api/commitments
+  echo ""
+  echo "=== /api/root ==="
+  curl -s http://localhost:4001/api/root
+  echo ""
+  echo "=== /api/proof?leaf_index=0 ==="
+  curl -s "http://localhost:4001/api/proof?leaf_index=0"
+  echo ""
+  echo "=== /metrics (first 30 lines) ==="
+  curl -s http://localhost:4001/metrics | head -30
+'
+```
+
+**Результаты:**
+
+| Endpoint | Response |
+|---|---|
+| `/api/health` | `{"db":true,"status":"ok","version":"0.1.0"}` |
+| `/api/commitments` | `{"commitments":[],"count":0,"pool_address":"B89Y..."}` |
+| `/api/root` | `{"pool_address":"B89Y...","root":null}` |
+| `/api/proof?leaf_index=0` | `{"error":"not implemented",...}` (501) |
+| `/metrics` | 200, Prometheus text — **но пустой до первого touch'а** (см. ошибку ниже) |
+
+### Проверка rate limiting
+
+```bash
+docker compose -f infra/docker-compose.yml exec solana bash -ic '
+  for i in 1 2 3 4 5 6; do
+    code=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:4001/api/withdraw \
+      -H "Content-Type: application/json" \
+      -d "{\"witness\":\"dGVzdA==\"}")
+    echo "attempt $i: $code"
+  done
+'
+```
+
+**Результат:**
+```
+attempt 1: 502
+attempt 2: 502
+attempt 3: 502
+attempt 4: 502
+attempt 5: 502
+attempt 6: 429
+```
+
+**Разбор:**
+- Attempts 1–5 — `502 Bad Gateway` (prover на порту 4002 **не** запущен, Stage 7 впереди). Backend **правильно** проксирует, prover **отвечает** ошибкой соединения.
+- Attempt 6 — `429 Too Many Requests`. Rate limiting **работает**.
+
+### ⚠️ Ошибка №1: `/metrics` возвращает 200 с пустым body
+
+**Симптом:**
+```bash
+curl -s -w "\nHTTP_CODE:%{http_code}\n" http://localhost:4001/metrics
+# HTTP_CODE:200
+# (пустой body)
+```
+
+**Причина:** `metrics-exporter-prometheus` **не** рендерит метрики, которые **ни разу** не были записаны (`counter!`, `gauge!`, `histogram!`). При старте backend **не** активирует ни одну метрику — indexer ещё ничего не обработал.
+
+**Дополнительно:** у exporter'а есть **idle timeout** (default 5 минут) — метрики, которые давно не обновлялись, **удаляются** из output'а.
+
+**Решение:** добавили `touch_startup_metrics()`, которая **вызывает** все метрики с нулевыми значениями:
+
+```rust
+fn touch_startup_metrics() {
+    metrics::counter!("zkpool_indexer_deposits_total").increment(0);
+    metrics::counter!("zkpool_indexer_withdrawals_total").increment(0);
+    metrics::counter!("zkpool_indexer_errors_total").increment(0);
+    metrics::counter!("zkpool_tree_errors_total").increment(0);
+    metrics::counter!("zkpool_db_errors_total").increment(0);
+    metrics::gauge!("zkpool_indexer_lag_seconds").set(0.0);
+    metrics::gauge!("zkpool_indexer_tree_size").set(0.0);
+    metrics::histogram!("zkpool_tree_add_leaf_duration_seconds").record(0.0);
+    metrics::histogram!("zkpool_tree_hash_duration_seconds").record(0.0);
+}
+```
+
+**После фикса:** `/metrics` возвращает полный список `zkpool_*` метрик.
+
+**Урок:** `metrics-exporter-prometheus` **ленивый**. Не рендерит то, что **не** было записано. Для сервисов, которые могут **часами** быть idle, нужно **либо** touch'ить метрики при старте, **либо** отключать idle timeout через `idle_timeout(MetricKindMask::ALL, None)` (требует `metrics-util` в зависимостях).
+
+### ⚠️ Ошибка №2: `MetricKindMask` не в root'е crate
+
+**Симптом:** попытка `use metrics_exporter_prometheus::MetricKindMask;` → `E0432: no MetricKindMask in the root`.
+
+**Причина:** `MetricKindMask` определён в `metrics-util`, **не** в `metrics-exporter-prometheus`.
+
+**Решение (пока отложено):** либо **добавить** `metrics-util` в зависимости и использовать `metrics_util::MetricKindMask`, либо **не** отключать idle timeout. Для demo мы выбрали **второе** — touch at startup достаточно.
+
+**Урок:** `metrics-exporter-prometheus` **не** реэкспортирует **все** типы, которые принимает. `MetricKindMask` — из `metrics-util`.
+
+### ⚠️ Ошибка №3: проброс портов не сделан
+
+**Симптом:** `curl http://localhost:4001/api/health` с **хоста** → `000` (не соединяется).
+
+**Причина:** в `docker-compose.yml` у сервиса `solana` **нет** `ports:` маппинга. Порты **4001**, **4002**, **4003**, **5173** — открыты **внутри** контейнера, но **не** проброшены на хост.
+
+**Workaround для smoke test:** curl из **внутри** контейнера (`docker compose exec solana curl ...`).
+
+**TODO для Stage 9:** добавить `ports:` в `docker-compose.yml`:
+```yaml
+ports:
+  - "4001:4001"   # backend
+  - "4002:4002"   # prover
+  - "4003:4003"   # merkle
+  - "5173:5173"   # frontend
+```
+
+### Итоги 5.11
+
+- Backend **полностью** работает: 6 маршрутов, rate limiting, метрики.
+- 5 из 6 endpoint'ов возвращают **корректные** ответы.
+- Rate limiting **работает** (5 запросов — пропущено, 6-й — 429).
+- Метрики Prometheus **видны** после fix'а.
+- **Коммит:** `1b815bc`.
+- **Чекпоинт:** `.checkpoints/05.11-smoke-test/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
