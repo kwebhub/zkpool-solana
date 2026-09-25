@@ -367,7 +367,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 5.9.3 | `POST /api/withdraw` + rate limiting | `8085b24` |
 | 5.10 | Docker compose: Postgres + Redis | `a260475` |
 | 5.11 | Smoke test (+ `touch_startup_metrics` fix) | `1b815bc` |
-| 5.12 | Final checkpoint | ⏳ |
+| 5.12 | Final checkpoint | `78a7bfe` |
 
 **Backend module layout:**
 - `src/lib.rs` — module declarations.
@@ -468,7 +468,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 3.7 — Documentation enrichment ✅
 - Stage 4.1 — Anchor program ✅
 - Stage 4.5 — LiteSVM E2E test ✅
-- Stage 5 — Backend ✅ (final checkpoint pending)
+- Stage 5 — Backend ✅
 - **Stage 6 — Merkle service (Node.js) ← next**
 - Stage 7 — Prover (Rust + Sunspot)
 - Stage 8 — Frontend (Vue 3)
@@ -778,8 +778,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 5.11 (smoke test — all endpoints OK).
-**Next stage:** Stage 5.12 — final checkpoint for Stage 5.
+**Last completed stage:** Stage 5.12 (final checkpoint for Stage 5).
+**Next stage:** Stage 6 — Merkle service (Node.js + Fastify, port 4003).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -897,8 +897,8 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`.
-4. Last completed stage: **Stage 5.11**.
-5. Next task: **Stage 5.12 — final checkpoint for Stage 5** (short). Then **Stage 6 — Merkle service**.
+4. Last completed stage: **Stage 5.12** (final checkpoint for Stage 5).
+5. Next task: **Stage 6 — Merkle service** (Node.js + Fastify, port 4003).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

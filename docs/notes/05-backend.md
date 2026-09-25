@@ -1089,24 +1089,37 @@ ports:
 - **Чекпоинт:** `.checkpoints/05.11-smoke-test/`.
 
 ---
-## Что дальше
 
-**Этап 5 полностью завершён** — все 12 под-этапов (5.1 – 5.12) пройдены. Backend работает, smoke test пройден, все endpoints отвечают корректно.
+## 5.12. Финальный чекпоинт Stage 5
 
-**Итоги этапа 5:**
-- 11 модулей в `services/backend/src/`: `lib`, `main`, `api_types`, `config`, `db`, `cache`, `tree`, `logging`, `metrics`, `rate_limit`, `indexer`.
-- 6 HTTP endpoints: `/api/health`, `/api/commitments`, `/api/root`, `/api/proof` (stub), `/api/withdraw`, `/metrics`.
-- 5 unit-тестов (4 в `indexer.rs`, 1 в `metrics.rs`) + 2 ignored (в `cache.rs`).
-- Postgres schema: 3 таблицы, 3 индекса.
-- Redis кеш Merkle tree, rate limiting, метрики Prometheus.
+**Дата:** 2026-09-25
+**Commit:** `78a7bfe0ada2ca8cc6b043e8cbfbac11f403a3bf`
 
-**Следующий этап:** **Stage 6** — Merkle-сервис на Node.js + Fastify (порт 4003).
+### Что сделано
 
-**Что будет:**
-- HTTP wrapper над `@noir-lang/noir_js` для Poseidon2 hashing.
-- **Зачем Node.js:** Rust/JS Poseidon2 дают **разные** хеши, чем Noir builtin. Единственный способ гарантировать идентичность — использовать **тот же** ACIR (`hash2.json`) через `noir_js`, а он работает **только** в JS.
-- Endpoints: `POST /hash`, `POST /root`, `POST /proof`, `GET /health`.
-- Зависимости: `fastify`, `@fastify/cors`, `@noir-lang/noir_js@1.0.0-rc.2`.
-- Требует `circuits/hash2.json`, `hashes.json`, `withdrawal.json` в `services/merkle/circuits/` (уже копируются через `sync-circuits`).
+Финальный чекпоинт бэкенда: собраны SHA-256 артефактов, зафиксированы в `.checkpoints/05-backend/`.
 
-**См. `docs/PROJECT_CONTEXT.md`, раздел 14** — детальный план Stage 6.
+### Артефакты
+
+- `manifest.txt` — SHA-256 релизного бинарника + 14 исходных файлов + миграции.
+- `commit.txt` — хеш коммита, против которого считались хеши.
+
+### Бинарник
+
+- `target/release/zkpool-backend` — 10 734 696 байт.
+- SHA-256: `f868448446edf10c6d9d6699419305c822188f6ee8c0f7f958bd220998fe3611`.
+
+### Метод
+
+Проблема: heredoc в терминале пользователя зависал (не потреблял `EOF` / `ENDOFFILE`). Симптом: делимитер отображался как текст, приглашение не возвращалось.
+
+**Решение:** файл `manifest.txt` создан напрямую в редакторе (Neovim, `:e .checkpoints/05-backend/manifest.txt`), минуя шелл. Затем плейсхолдер коммита заменён через `sed -i`.
+
+**Урок:** для многострочных файлов с большим количеством спецсимволов надёжнее создавать их в редакторе, а не через heredoc в терминале. Если heredoc зависает — `Ctrl+C`, затем `rm -f` для очистки частичного файла.
+
+### Итог Stage 5
+
+- 6 эндпоинтов, все отвечают корректно (5.11 smoke test).
+- 5 unit + 2 ignored integration tests.
+- 3 таблицы Postgres, 2 Docker-контейнера (postgres, redis) — healthy.
+- Бэкенд готов к интеграции с Merkle service (Stage 6).
