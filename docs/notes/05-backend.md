@@ -344,6 +344,75 @@ POST на `{base_url}/hash` с JSON `{"left": hex, "right": hex}`, возвра�
 
 ---
 
+## 5.6. Metrics + logging (`logging.rs` + `metrics.rs`)
+
+Два небольших модуля, обслуживающих наблюдаемость (observability).
+
+### `logging.rs`
+
+Инициализация `tracing` + `tracing-subscriber`.
+
+**Два режима:**
+- **`LOG_FORMAT=pretty`** (default, dev) — human-readable с цветами.
+- **`LOG_FORMAT=json`** (production) — JSON-строки для log-коллекторов (Loki, Elastic).
+
+**Фильтр:** `RUST_LOG` env (default `info`).
+
+**Единственная функция:** `init_logging() -> Result<()>`. Вызывается **один раз** при старте процесса.
+
+### `metrics.rs`
+
+Custom Prometheus-метрики. Используется `metrics` facade + `metrics-exporter-prometheus` backend.
+
+**Префикс `zkpool_`** — чтобы не путаться с метриками `axum-prometheus` (там префиксы `axum_` и `process_`).
+
+**Метрики:**
+
+| Метрика | Тип | Что |
+|---|---|---|
+| `zkpool_indexer_deposits_total` | counter | Обработано DepositEvent |
+| `zkpool_indexer_withdrawals_total` | counter | Обработано WithdrawEvent |
+| `zkpool_indexer_errors_total` | counter | Ошибки indexer'а |
+| `zkpool_indexer_lag_seconds` | gauge | Секунд с последнего обработанного блока |
+| `zkpool_indexer_tree_size` | gauge | Текущее количество листьев |
+| `zkpool_tree_add_leaf_duration_seconds` | histogram | Время `add_leaf` |
+| `zkpool_tree_hash_duration_seconds` | histogram | Время Poseidon2 hash |
+| `zkpool_tree_errors_total` | counter | Ошибки дерева |
+| `zkpool_db_errors_total` | counter | Ошибки БД |
+
+**Buckets для histogram** — 0.1 ms, 1 ms, 10 ms, 100 ms, 1 s, 5 s, 30 s.
+
+**Функции:**
+- `init_metrics()` — устанавливает Prometheus recorder **глобально**, один раз.
+- `render_metrics()` — возвращает строку для endpoint'а `/metrics`.
+- `record_deposit()`, `record_withdrawal()`, `record_indexer_error()`, `record_db_error()`, `record_tree_error()` — счётчики.
+- `set_indexer_lag(seconds)`, `set_tree_size(size)` — gauges.
+- `record_add_leaf_duration(seconds)`, `record_hash_duration(seconds)` — histograms.
+
+**Global state:** `PROMETHEUS_HANDLE: OnceLock<PrometheusHandle>` — установить можно только один раз.
+
+### ⚠️ Ошибка: содержимое попало не в тот файл
+
+**Симптом:** после "replace fully" для `logging.rs` и `metrics.rs` — тест `test_render_before_init` **оказался в `logging.rs`**, а `metrics.rs` был **пустой** (0 строк).
+
+**Причина:** редактор применил обе "replace fully" инструкции к **одному** файлу (или вторая не применилась).
+
+**Обнаружение:** `cargo test --lib` вывел имя теста как `logging::tests::test_render_before_init`, хотя код был написан для `metrics.rs`. Проверили `wc -l` и `grep -n "pub fn init_logging\|pub fn init_metrics"` — увидели несоответствие.
+
+**Решение:** перезаписали **оба** файла заново. `logging.rs` — 41 строка, `metrics.rs` — 119 строк.
+
+**Урок:** после "replace fully" **всегда** проверяй `wc -l` и `grep` на **характерные** функции/тесты. Если имя модуля в выводе `cargo test` не совпадает с ожидаемым — файлы перепутаны.
+
+### Итоги 5.6
+
+- `logging.rs` — 41 строка.
+- `metrics.rs` — 119 строк.
+- Тест `metrics::tests::test_render_before_init` — passed (1 passed, 2 ignored).
+- **Коммит:** `af219cd`.
+- **Чекпоинт:** `.checkpoints/05.6-metrics-logging/`.
+
+---
+
 ## Что дальше
 
 **Следующий под-этап:** 5.4 — `cache.rs` (Redis wrapper).
