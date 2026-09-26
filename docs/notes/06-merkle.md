@@ -577,7 +577,9 @@ Stage 6 полностью завершён. Все 7 под-этапов (6.1 �
 
 10 файлов (4 модуля, 3 теста, `package.json`, `pnpm-lock.yaml`, `smoke.sh`) — SHA-256 зафиксированы в `manifest.txt`.
 
-### Что дальше
+---
+
+## Что дальше
 
 - **Stage 7** — Prover (Rust + Sunspot), порт 4002.
 - **Stage 8** — Frontend (Vue 3).

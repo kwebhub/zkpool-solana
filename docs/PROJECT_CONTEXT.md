@@ -500,7 +500,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 4.5 — LiteSVM E2E test ✅
 - Stage 5 — Backend ✅
 - Stage 6 — Merkle service (Node.js) ✅
-- **Stage 7 — Prover (Rust + Sunspot) ← in progress (7.1 done)**
+- **Stage 7 — Prover (Rust + Sunspot) ← in progress (7.1, 7.2 done)**
 - Stage 8 — Frontend (Vue 3)
 - Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 10 — Engineering processes (CI/CD, templates)
@@ -822,8 +822,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 7.1 (prover skeleton — builds + runs).
-**Next stage:** Stage 7.2 — `config.rs` (circuit paths + binary paths).
+**Last completed stage:** Stage 7.2 (`config.rs` — env-loaded paths, 2 tests).
+**Next stage:** Stage 7.3 — `witness.rs` (serialize `Prover.toml`).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -968,7 +968,7 @@ POST /prove
 
 **Sub-stages:**
 - 7.1 — project skeleton (`services/prover/`, `Cargo.toml`, `main.rs`). ✅ (`ff31292`)
-- 7.2 — `config.rs` (paths to circuit artifacts + nargo/sunspot binaries).
+- 7.2 — `config.rs` (paths to circuit artifacts + nargo/sunspot binaries). ✅ (`4678050`)
 - 7.3 — `witness.rs` (serialize `Prover.toml`).
 - 7.4 — `prover.rs` (nargo execute + sunspot prove, mutex, cleanup).
 - 7.5 — `server.rs` (axum `POST /prove`, `GET /health`).

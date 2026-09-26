@@ -95,6 +95,56 @@ cargo build --release → Finished in 20.10s
 
 ---
 
+## 7.2. `config.rs` — пути к артефактам и бинарям
+
+**Дата:** 2026-09-26
+**Commit:** `4678050`
+
+### Зачем
+
+Все пути — в одном месте. Env vars с дефолтами под контейнер `solana`.
+
+### Поля `Config`
+
+| Поле | Env var | Default |
+|---|---|---|
+| `port` | `PORT` | `4002` |
+| `circuit_dir` | `CIRCUIT_DIR` | `/home/ubuntu/circuits/withdrawal` |
+| `nargo_bin` | `NARGO_BIN` | `nargo` |
+| `sunspot_bin` | `SUNSPOT_BIN` | `sunspot` |
+| `nargo_timeout_secs` | `NARGO_TIMEOUT_SECS` | `30` |
+| `sunspot_timeout_secs` | `SUNSPOT_TIMEOUT_SECS` | `30` |
+
+### Хелперы для путей
+
+Методы `Config`, а не отдельные поля — чтобы не дублировать формат:
+
+- `acir_path()` → `<circuit_dir>/target/withdrawal.json`
+- `ccs_path()` → `<circuit_dir>/target/withdrawal.ccs`
+- `pk_path()` → `<circuit_dir>/target/withdrawal.pk`
+- `proof_path()` → `<circuit_dir>/target/withdrawal.proof`
+- `pw_path()` → `<circuit_dir>/target/withdrawal.pw`
+
+### Паттерн из бэкенда
+
+Хелперы `optional` / `optional_parse` скопированы из `backend/src/config.rs` без изменений. Согласованность важнее микрооптимизаций.
+
+### Тесты
+
+2 теста:
+- `test_defaults` — `from_env()` возвращает дефолты.
+- `test_artifact_paths` — все `*_path()` собираются правильно.
+
+cargo test --lib → 2 passed
+
+### Уроки
+
+1. **Методы вместо полей для производных путей.** `acir_path()` собирается на лету — если завтра структура `target/` изменится, правим одно место.
+2. **Хелперы из бэкенда скопированы дословно.** Позже, если появится третий сервис, их можно вынести в общий crate. Пока — дублирование дешевле преждевременной абстракции.
+3. **Env vars с дефолтами, а не required.** В контейнере `solana` всё уже на месте; в CI можно переопределить.
+
+---
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
