@@ -938,20 +938,52 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 - **Cross-check passed:** `noir_js` recomputed `nullifier_hash` and `root` from the Stage 3.5 `Prover.toml` witness and matched byte-for-byte. This validates the entire premise of using JS for Poseidon2.
 - **Pitfall caught:** stale ACIR copies in `services/merkle/circuits/` (see section 8). Run `sync-circuits --check` at the start of every ACIR-consuming stage.
 
+## 15. Stage 7 — Prover (next stage)
+
+**Goal:** Rust + axum service on port 4002 that accepts a withdrawal witness over HTTP and returns `{proof, public_witness}` as hex.
+
+**Why shell out to sunspot:** `sunspot` is a Go CLI binary — no Rust library. The pipeline must invoke `nargo execute` (to produce the witness) and `sunspot prove` (to produce the proof).
+
+**Critical constraint — `sunspot prove` output naming:**
+`sunspot prove` always writes `withdrawal.proof` / `withdrawal.pw` — named after the **ACIR**, not the witness. Concurrent requests would clobber each other. Solution: **serialize with an async mutex.**
+
+**Endpoint:**
+```
+POST /prove
+  body: {
+    root, nullifier_hash, recipient, recipient_binding, amount,   // public
+    nullifier, secret, note_secret,                                // private
+    merkle_proof: [20 hex], is_even: [20 bool]
+  }
+  response: { proof: hex, public_witness: hex }
+```
+
+**Pipeline per request (under mutex):**
+1. Write `circuits/withdrawal/Prover-<uuid>.toml` with the witness values.
+2. `nargo execute -p Prover-<uuid> w-<uuid>` → `target/w-<uuid>.gz`.
+3. `sunspot prove target/withdrawal.json target/w-<uuid>.gz target/withdrawal.ccs target/withdrawal.pk` → `target/withdrawal.proof` + `target/withdrawal.pw` (fixed names).
+4. Read `.proof` and `.pw`, hex-encode.
+5. Clean up: `Prover-<uuid>.toml`, `target/w-<uuid>.gz`.
+6. Return `{proof, public_witness}`.
+
+**Sub-stages:**
+- 7.1 — project skeleton (`services/prover/`, `Cargo.toml`, `main.rs`).
+- 7.2 — `config.rs` (paths to circuit artifacts + nargo/sunspot binaries).
+- 7.3 — `witness.rs` (serialize `Prover.toml`).
+- 7.4 — `prover.rs` (nargo execute + sunspot prove, mutex, cleanup).
+- 7.5 — `server.rs` (axum `POST /prove`, `GET /health`).
+- 7.6 — unit tests.
+- 7.7 — run + smoke test (real witness → real proof → verify with `sunspot verify`).
+- 7.8 — final checkpoint.
+
+**Design decisions:**
+- **Sync, not async job queue.** v1 — HTTP request blocks until the proof is ready (~500 ms). Acceptable for a demo.
+- **Mutex, not per-request temp dir.** Simpler, correct; throughput ~2–5 proofs/sec is enough.
+- **No caching.** v1 — deterministic inputs → deterministic proof, but no cache layer yet.
+- **Reference `circuits/withdrawal/` directly.** No copy into the service workspace; `nargo execute -p` allows unique input filenames.
+
+**Integration:** the backend's `POST /api/proof` (currently `501 STUB`) will call `POST http://localhost:4002/prove` — planned for a later sub-stage of 7 or 8.
+
 ---
 
-## 15. Instructions for a new assistant
-
-**If you are starting a new chat:**
-
-1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
-2. Read this file completely.
-3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`.
-4. Last completed stage: **Stage 6.7** (final checkpoint — Stage 6 complete).
-5. Next task: **Stage 7 — Prover** (Rust + Sunspot, port 4002).
-6. **One task at a time.** Only exception: `git commit ... && git push`.
-7. **Give files in full for new files; insertion point + block for existing.**
-8. **Never guess.** If ambiguous — ask.
-9. **Test in small steps.** 20 lines, not 200.
-10. **Never delete information from existing files.**
-11. Reply in **English** in chat. Files: English, except `docs/notes/*.md` and `docs/ru/*.md` (Russian).
+## 16. Instructions for a new assistant
