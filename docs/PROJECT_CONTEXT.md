@@ -500,7 +500,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 4.5 — LiteSVM E2E test ✅
 - Stage 5 — Backend ✅
 - Stage 6 — Merkle service (Node.js) ✅
-- **Stage 7 — Prover (Rust + Sunspot) ← in progress (7.1–7.6 done)**
+- **Stage 7 — Prover (Rust + Sunspot) ← in progress (7.1–7.7 done)**
 - Stage 8 — Frontend (Vue 3)
 - Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 10 — Engineering processes (CI/CD, templates)
@@ -830,8 +830,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 7.6 (HTTP-level tests — 3 passing + 1 ignored real-proof test).
-**Next stage:** Stage 7.7 — run + smoke test (`curl` against running server).
+**Last completed stage:** Stage 7.7 (smoke test — 6/6 checks against running service).
+**Next stage:** Stage 7.8 — final checkpoint for Stage 7.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -981,7 +981,7 @@ POST /prove
 - 7.4 — prover.rs (nargo execute + sunspot prove, mutex, cleanup). ✅ (8103dd1)
 - 7.5 — `server.rs` (axum `POST /prove`, `GET /health`). ✅ (`6aa5fb4`)
 - 7.6 — HTTP-level tests (`tests/server_test.rs`). ✅ (`7603672`)
-- 7.7 — run + smoke test (real witness → real proof → verify with `sunspot verify`).
+- 7.7 — run + smoke test (real witness → real proof → verify with `sunspot verify`). ✅ (`89ad83d`) — 6/6 checks
 - 7.8 — final checkpoint.
 
 **Design decisions:**
