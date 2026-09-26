@@ -604,11 +604,20 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Fix (Stage 9): add port mappings.
 - `jq` and `python3` not installed in `solana` container.
   - Workaround: use raw `curl` output.
-- **Stale ACIR copies in `services/merkle/circuits/` and `web/public/circuits/`.**
-  - Symptom: `services/merkle/circuits/withdrawal.json` had SHA-256 `f154aca0…2050` instead of expected `29ac2e67…91db`.
-  - Cause: `sync-circuits` was last run at Stage 2.3 (Sep 23). The withdrawal circuit was recompiled later (Stage 3, Sep 24), but the copies were never re-synced.
-  - Fix: `cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- apply`.
-  - Lesson: **run `sync-circuits --check` at the start of any stage that consumes ACIRs.** If it reports a mismatch, re-run with `apply` before proceeding. This is exactly the "mismatch between layers" class of bug v3 exists to prevent.
+
+### From Stage 6 (merkle service)
+
+- `node --test <dir>` in Node 24 treats `<dir>` as a module, not a directory to scan.
+  - Symptom: `Error: Cannot find module '/path/test'`.
+  - Fix: use a glob — `node --test test/*.test.js` (unquoted, so the shell expands it).
+  - `package.json` script: `"test": "node --test test/*.test.js"`.
+- Fastify app must be split for testability: `buildApp()` in `app.js`, `listen()` in `server.js`.
+  - Reason: tests use `app.inject()` which requires an app instance without a bound port.
+- `sqlx-postgres v0.7.4` emits a future-incompatibility warning under Rust 1.98.
+  - Not blocking; note for Stage 11 / 12.
+- Stale ACIR copies in `services/merkle/circuits/` and `web/public/circuits/`.
+  - Fix: `sync-circuits --apply` (see earlier bullet).
+  - Lesson: run `sync-circuits --check` at the start of any ACIR-consuming stage.
 
 ### How to find exact signatures for the installed crate version
 
