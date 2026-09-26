@@ -1,10 +1,13 @@
 //! Merkle tree operations matching the on-chain and backend conventions.
 //!
 //! Conventions (must match `services/backend/src/tree.rs`):
-//!   - empty[0]   = "0x00…00" (32 zero bytes)
+//!   - empty[0]   = "00".repeat(32)  (32 zero bytes, bare hex)
 //!   - empty[d+1] = hash_2(empty[d], empty[d])
 //!   - A leaf at index `i` at level `d` is the LEFT child iff bit `d` of `i` is 0.
 //!   - Root is at level DEPTH (20).
+//!
+//! All inputs and outputs are BARE hex strings (no `0x` prefix),
+//! matching services/backend/src/tree.rs.
 //!
 //! Key indexing note:
 //!   `empty[d]` is the hash of an empty subtree with 2^d leaves.
@@ -20,7 +23,7 @@ import { poseidon2Hash } from "./poseidon.js";
 
 export const TREE_DEPTH = 20;
 
-const ZERO_LEAF = "0x" + "00".repeat(32);
+const ZERO_LEAF = "00".repeat(32);
 
 /**
  * Compute the cascade of empty hashes.
@@ -42,8 +45,8 @@ export async function computeEmptyHashes() {
  * Compute the Merkle root from a list of commitments.
  * Missing leaves (up to 2^TREE_DEPTH) are treated as empty subtrees.
  *
- * @param {string[]} commitments - 0x-prefixed hex strings, in insertion order
- * @returns {Promise<string>} root (0x-prefixed hex)
+ * @param {string[]} commitments - bare hex strings, in insertion order
+ * @returns {Promise<string>} root (bare hex)
  */
 export async function computeRoot(commitments) {
   if (commitments.length > 2 ** TREE_DEPTH) {
@@ -61,7 +64,8 @@ export async function computeRoot(commitments) {
 
   while (currentLevel < TREE_DEPTH) {
     const next = [];
-    // Sibling for an unpair node at this level covers 2^(TREE_DEPTH - currentLevel - 1) leaves.
+    // Sibling for an unpair node at this level covers
+    // 2^(TREE_DEPTH - currentLevel - 1) leaves.
     const emptySibling = empty[TREE_DEPTH - currentLevel - 1];
 
     for (let i = 0; i < level.length; i += 2) {
@@ -96,7 +100,7 @@ export async function computeRoot(commitments) {
 /**
  * Compute a Merkle proof for a leaf at `leafIndex`.
  *
- * @param {string[]} commitments
+ * @param {string[]} commitments - bare hex strings
  * @param {number} leafIndex
  * @returns {Promise<{proof: string[], isEven: boolean[]}>}
  *   proof[d]  — sibling hash at level d

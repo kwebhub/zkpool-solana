@@ -131,6 +131,19 @@ When the user writes just **"record"** (or Russian "зафиксируй"):
 
 **Exception:** purely-docs commits (which are themselves the "record" step) don't need a second record pass.
 
+### 0.15. Checkpoint immediately after each sub-stage commit
+
+**Immediately after `git commit && git push` of a sub-stage, create the checkpoint** — do not defer.
+
+The checkpoint directory name matches the sub-stage: `.checkpoints/NN.M-<name>/`.
+
+Contents (per the `05.5-tree` convention):
+- Artifact files **copied** into the checkpoint directory.
+- `manifest.txt` — lines of `<sha256>  <filename>` (relative names).
+- `commit.txt` — the sub-stage commit hash.
+
+**Reason:** the Stage 6.1–6.3 checkpoints were skipped and had to be backfilled. Backfill is recovery, not the process.
+
 ---
 
 ## 1. What this project is

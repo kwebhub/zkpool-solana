@@ -6,11 +6,10 @@
 //!   SAME ACIR (hash2.json) that the withdrawal circuit uses, and execute it
 //!   via noir_js. This is the only way to guarantee identity across layers.
 //!
-//! API:
-//!   poseidon2Hash(left, right) -> Promise<string>  // 0x-prefixed 32-byte hex
-//!
-//! Both inputs and the output are 0x-prefixed hex strings representing BN254
-//! field elements (32 bytes / 64 hex digits).
+//! Convention (matches services/backend/src/tree.rs):
+//!   All inputs and outputs are BARE hex strings (no `0x` prefix),
+//!   64 hex digits = 32 bytes = one BN254 field element.
+//!   Internally we add `0x` for noir_js and strip it from the result.
 
 import { Noir } from "@noir-lang/noir_js";
 import { readFileSync } from "node:fs";
@@ -27,11 +26,15 @@ const noir = new Noir(circuit);
 /**
  * Compute Poseidon2 hash of two field elements.
  *
- * @param {string} left  - 0x-prefixed hex string (field element)
- * @param {string} right - 0x-prefixed hex string (field element)
- * @returns {Promise<string>} 0x-prefixed hex string (field element)
+ * @param {string} left  - bare hex (64 chars, no 0x)
+ * @param {string} right - bare hex (64 chars, no 0x)
+ * @returns {Promise<string>} bare hex (64 chars, no 0x)
  */
 export async function poseidon2Hash(left, right) {
-  const result = await noir.execute({ left, right });
-  return result.returnValue;
+  const result = await noir.execute({
+    left: "0x" + left,
+    right: "0x" + right,
+  });
+  // returnValue is a 0x-prefixed hex string; strip the prefix.
+  return result.returnValue.slice(2);
 }
