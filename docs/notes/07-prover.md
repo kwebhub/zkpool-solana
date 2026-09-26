@@ -331,6 +331,53 @@ POST /prove @/tmp/prove-req.json
 
 ---
 
+## 7.6. HTTP-тесты
+
+**Дата:** 2026-09-26
+**Commit:** `7603672`
+
+### Что сделано
+
+`services/prover/tests/server_test.rs` — интеграционные тесты HTTP-слоя.
+
+**Метод:** `tower::ServiceExt::oneshot` — in-process запросы, без биндинга порта.
+
+### Тесты (4)
+
+| Тест | Тип | Что проверяет |
+|---|---|---|
+| `test_health` | sync | `GET /health` → 200 `{"status":"ok"}` |
+| `test_prove_bad_payload_returns_422` | sync | `POST /prove {}` → 422 (axum Json extractor) |
+| `test_prove_wrong_merkle_len_returns_500` | sync | 19 элементов `merkle_proof` → 500 с сообщением |
+| `test_prove_real` | `#[ignore]` | реальный пруф через HTTP → 648 hex proof + 344 hex pw |
+
+### Dev-dependencies
+
+```toml
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+serde_json = "1.0"
+```
+
+- `tower::util::ServiceExt` — `.oneshot()`.
+- `http_body_util::BodyExt` — сборка тела ответа в `Bytes`.
+
+### Результат
+
+```
+cargo test → 3 passed; 1 ignored
+cargo test --test server_test -- --ignored test_prove_real → 1 passed (0.31s)
+```
+
+### Уроки
+
+1. **`axum::Router` тестируется через `tower::ServiceExt::oneshot`.** Без биндинга порта, in-process, быстро.
+2. **Невалидный JSON → 422, не 400.** Это делает `axum::Json` extractor. Валидация семантики (длина `merkle_proof`) — уже в нашем коде, → 500. Разные слои — разные коды.
+3. **`#[ignore]` + явный запуск.** `test_prove_real` требует nargo + sunspot. Обычный `cargo test` быстрый, полный прогон — вручную.
+
+---
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
