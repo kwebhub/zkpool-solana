@@ -426,6 +426,24 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 **Tests:** 23 (`node --test`) + 8 smoke checks.
 **Integration proven:** `MerkleClient` (backend) → Merkle service, correct hash.
 
+### ✅ Stage 7. Prover (2026-09-26)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 7.1 | Project skeleton | `ff31292` |
+| 7.2 | `config.rs` | `4678050` |
+| 7.3 | `witness.rs` | `95052dd` |
+| 7.4 | `prover.rs` (mutex + subprocess) | `8103dd1` |
+| 7.5 | `server.rs` (axum) | `6aa5fb4` |
+| 7.6 | HTTP tests | `7603672` |
+| 7.7 | Smoke test | `89ad83d` |
+| 7.8 | Final checkpoint | `f5a48bf` |
+
+**Service:** `services/prover/`, port 4002, Rust 1.89.0 + axum 0.7.
+**Convention:** bare hex at HTTP boundary; `0x` only inside `Prover.toml`.
+**Tests:** 8 unit + 3 integration + 1 ignored (real proof) + 6 smoke checks.
+**Real proof:** 324 B proof + 172 B public witness, `sunspot verify` → valid.
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -500,8 +518,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 4.5 — LiteSVM E2E test ✅
 - Stage 5 — Backend ✅
 - Stage 6 — Merkle service (Node.js) ✅
-- **Stage 7 — Prover (Rust + Sunspot) ← in progress (7.1–7.7 done)**
-- Stage 8 — Frontend (Vue 3)
+- Stage 7 — Prover (Rust + Sunspot) ✅
+- **Stage 8 — Frontend (Vue 3) ← next**
 - Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 10 — Engineering processes (CI/CD, templates)
 - Stage 11 — Security (threat model, expanded tests)
@@ -830,8 +848,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 7.7 (smoke test — 6/6 checks against running service).
-**Next stage:** Stage 7.8 — final checkpoint for Stage 7.
+**Last completed stage:** Stage 7.8 (final checkpoint — Stage 7 complete).
+**Next stage:** Stage 8 — Frontend (Vue 3) — or backend `/api/proof` wiring first.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -946,7 +964,7 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 - **Cross-check passed:** `noir_js` recomputed `nullifier_hash` and `root` from the Stage 3.5 `Prover.toml` witness and matched byte-for-byte. This validates the entire premise of using JS for Poseidon2.
 - **Pitfall caught:** stale ACIR copies in `services/merkle/circuits/` (see section 8). Run `sync-circuits --check` at the start of every ACIR-consuming stage.
 
-## 15. Stage 7 — Prover (next stage)
+## 15. Stage 7 — Prover (done)
 
 **Goal:** Rust + axum service on port 4002 that accepts a withdrawal witness over HTTP and returns `{proof, public_witness}` as hex.
 
@@ -982,7 +1000,7 @@ POST /prove
 - 7.5 — `server.rs` (axum `POST /prove`, `GET /health`). ✅ (`6aa5fb4`)
 - 7.6 — HTTP-level tests (`tests/server_test.rs`). ✅ (`7603672`)
 - 7.7 — run + smoke test (real witness → real proof → verify with `sunspot verify`). ✅ (`89ad83d`) — 6/6 checks
-- 7.8 — final checkpoint.
+- 7.8 — final checkpoint. ✅ (`f5a48bf`)
 
 **Design decisions:**
 - **Sync, not async job queue.** v1 — HTTP request blocks until the proof is ready (~500 ms). Acceptable for a demo.
@@ -995,3 +1013,19 @@ POST /prove
 ---
 
 ## 16. Instructions for a new assistant
+
+**If you are starting a new chat:**
+
+1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
+2. Read this file completely.
+3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`.
+4. Last completed stage: **Stage 7.8** (final checkpoint — Stage 7 complete).
+5. Next task: **Stage 8 — Frontend** (Vue 3) — or wire backend `/api/proof` → prover first.
+6. **One task at a time.** Only exception: `git commit ... && git push`.
+7. **Give files in full for new files; insertion point + block for existing.**
+8. **Never guess.** If ambiguous — ask.
+9. **Test in small steps.** 20 lines, not 200.
+10. **Never delete information from existing files.**
+11. **Do not narrate reasoning in chat.** State the task; explain rationale in the notes *after* the push.
+12. Reply in **English** in chat. Files: English, except `docs/notes/*.md` and `docs/ru/*.md` (Russian).
+13. **After each `git commit && git push` of a sub-stage:** create the checkpoint, then record in notes + context, then commit and push the record. Do not defer.

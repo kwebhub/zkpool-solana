@@ -416,6 +416,65 @@ fail: 0
 1. **Smoke-скрипт — воспроизводимый артефакт.** Не одноразовые команды в терминале: любой может запустить `./smoke.sh` после рестарта.
 2. **Два класса ошибок, два кода.** 422 — «не могу распарсить», 500 — «понял, но не могу выполнить». Тестировать оба.
 
+---
+
+## 7.8. Финальный чекпоинт Stage 7
+
+**Дата:** 2026-09-26
+**Commit:** `f5a48bf`
+
+### Итог Stage 7
+
+**Сервис:** `services/prover/`, порт 4002, Rust 1.89.0 + axum 0.7.
+
+**Модули:**
+- `config.rs` — env-конфиг + методы `*_path()`.
+- `witness.rs` — `WitnessInputs`, `validate()`, `to_toml()`.
+- `prover.rs` — `Prover`, mutex, nargo + sunspot pipeline.
+- `server.rs` — axum router, `/health`, `/prove`.
+- `main.rs` — entry point.
+- `tests/server_test.rs` — HTTP-тесты.
+
+**Endpoints:**
+| Метод | Путь | Тело | Ответ |
+|---|---|---|---|
+| GET | `/health` | — | `{status: "ok"}` |
+| POST | `/prove` | `WitnessInputs` | `{proof, public_witness}` (bare hex) |
+
+**Конвенция:** bare hex на границе HTTP. `0x` добавляется только при записи `Prover.toml`.
+
+**Тесты:**
+- Unit: 8 (`config` — 2, `witness` — 6).
+- Integration: 3 + 1 ignored (`test_prove_real`).
+- Smoke: 6/6 через `smoke.sh`.
+
+**Итого: 17 активных тестов + 1 ignored.**
+
+**Реальный пруф:** 324 B proof + 172 B public witness. Проверен `sunspot verify` → valid.
+
+### Артефакты чекпоинта
+
+10 файлов — SHA-256 в `manifest.txt`.
+
+### Что дальше
+
+- **Stage 8** — Frontend (Vue 3).
+- **Stage 9** — Инфраструктура (Makefile, Prometheus, Grafana, порт-маппинг).
+- **Stage 10** — CI/CD.
+- **Stage 11** — Безопасность.
+- **Stage 12** — Финализация.
+- **Stage 13** — Split deposit (после v0.1.0).
+
+### Связь с бэкендом
+
+Бэкенд имеет `PROVER_URL` (default `http://localhost:4002`). Ожидающий эндпоинт `/api/proof` (сейчас `501 STUB`) должен вызвать `POST /prove`. Следующий шаг — реализация этой связки (Stage 8 или отдельный sub-stage Stage 7).
+
+### Уроки
+
+1. **Sunspot — CLI без API.** Мутекс — плата за фиксированные имена выходных файлов.
+2. **Два формата hex в проекте:** bare hex на HTTP, `0x` в Noir TOML. Трансляция в `witness.rs::with_0x()`.
+3. **Один subprocess-pipeline, сериализованный mutex'ом, даёт ~3 пруфа/сек.** Достаточно для демо.
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
