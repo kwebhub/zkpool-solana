@@ -636,6 +636,14 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Fix: `sync-circuits --apply` (see earlier bullet).
   - Lesson: run `sync-circuits --check` at the start of any ACIR-consuming stage.
 
+### From Stage 7 (prover)
+
+- `nargo execute -p <name>` requires `<name>` to have **no dots**. `-p Prover-7.3-test` is parsed as `Prover-7`.
+  - Fix: use uuid-based names without dots (`Prover-<uuid-simple>`).
+- `Prover.toml` hex values must be **`0x`-prefixed**. Bare hex fails for `amount` and `merkle_proof[i]`:
+  - Error: `Expected witness values to be integers, but '00f4240' failed with 'invalid digit found in string'`.
+  - Fix: `witness.rs::with_0x()` adds the prefix idempotently.
+
 ### How to find exact signatures for the installed crate version
 
 - Rust crate sources: `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`.
