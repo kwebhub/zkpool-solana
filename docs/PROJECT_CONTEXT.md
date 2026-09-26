@@ -796,8 +796,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 6.3 (`merkle.js` — root + proof verified against circuit replay).
-**Next stage:** Stage 6.4 — `src/server.js` (Fastify routes).
+**Last completed stage:** Stage 6.4 (`server.js` — 4 endpoints, bare-hex convention, validation, smoke test passed).
+**Next stage:** Stage 6.5 — tests (`node --test`).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -898,8 +898,8 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 **Sub-stages planned:**
 - 6.1 — `package.json` + dependencies + folder structure. ✅ (`4142789`)
 - 6.2 — `src/poseidon.js` — Noir instance caching, `poseidon2Hash(left, right)`. ✅ (`d021210`)
-- 6.3 — `src/merkle.js` — build tree, root, proof. ✅
-- 6.4 — `src/server.js` — Fastify routes.
+- 6.3 — `src/merkle.js` — build tree, root, proof. ✅ (`0e9d766`)
+- 6.4 — `src/server.js` — Fastify routes. ✅ (`fa67096`)
 - 6.5 — tests (`node --test`).
 - 6.6 — run + smoke test with `curl`.
 - 6.7 — final checkpoint.
