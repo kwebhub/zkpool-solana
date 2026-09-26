@@ -805,8 +805,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 6.5 (23 tests, all passing — poseidon, merkle, server).
-**Next stage:** Stage 6.6 — run + smoke test with `curl`.
+**Last completed stage:** Stage 6.6 (smoke test 8/8 + backend integration via `MerkleClient`).
+**Next stage:** Stage 6.7 — final checkpoint for Stage 6.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -910,7 +910,7 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 - 6.3 — `src/merkle.js` — build tree, root, proof. ✅ (`0e9d766`)
 - 6.4 — `src/server.js` — Fastify routes. ✅ (`fa67096`)
 - 6.5 — tests (`node --test`). ✅ (`cf34064`) — 23 tests, split `app.js`/`server.js`
-- 6.6 — run + smoke test with `curl`.
+- 6.6 — run + smoke test with `curl`. ✅ (`d090a3b`) — 8/8 smoke + backend integration
 - 6.7 — final checkpoint.
 
 **6.1 findings (2026-09-25):**
