@@ -223,7 +223,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 | frontend | 5173 | host (not yet mapped) | Stage 8 |
 | backend | 4001 | `solana` container | ✅ Stage 5 |
 | prover | 4002 | `solana` container | Stage 7 |
-| merkle | 4003 | `solana` container | Stage 6 |
+| merkle | 4003 | `solana` container | ✅ Stage 6 |
 | postgres | 5432 | Docker `zkpool-postgres` | ✅ Stage 5.10 |
 | redis | 6379 | Docker `zkpool-redis` | ✅ Stage 5.10 |
 | prometheus | 9090 | Docker | Stage 9 |
@@ -401,13 +401,30 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | GET | `/api/health` | — | `{status, db, version}` |
 | GET | `/api/commitments` | 60/min | `{pool_address, count, commitments[]}` |
 | GET | `/api/root` | 60/min | `{pool_address, root}` |
-| GET | `/api/proof` | 60/min | **501 STUB** (needs Stage 6) |
+| GET | `/api/proof` | 60/min | **501 STUB** (needs Stage 7 — Prover) |
 | POST | `/api/withdraw` | 5/min | `{proof, public_witness}` |
 | GET | `/metrics` | — | Prometheus text |
 
 **Database schema:** 3 tables (`commitments`, `roots`, `nullifiers`) + 3 indexes.
 
 **Backend tests:** 5 unit tests (4 in `indexer.rs`, 1 in `metrics.rs`) + 2 ignored integration tests (in `cache.rs`, need live Redis).
+
+### ✅ Stage 6. Merkle service (2026-09-25 — 2026-09-26)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 6.1 | `package.json` + dependencies | `4142789` |
+| 6.2 | `src/poseidon.js` | `d021210` |
+| 6.3 | `src/merkle.js` | `0e9d766` |
+| 6.4 | `src/server.js` (Fastify) | `fa67096` |
+| 6.5 | Tests (`node --test`) | `cf34064` |
+| 6.6 | Smoke test + backend integration | `d090a3b` |
+| 6.7 | Final checkpoint | `99a228a` |
+
+**Service:** `services/merkle/`, port 4003, Node.js 24.21.0 + Fastify 5.12.5.
+**Convention:** bare hex (no `0x`) at HTTP boundary — matches `tree.rs`.
+**Tests:** 23 (`node --test`) + 8 smoke checks.
+**Integration proven:** `MerkleClient` (backend) → Merkle service, correct hash.
 
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
@@ -482,8 +499,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 4.1 — Anchor program ✅
 - Stage 4.5 — LiteSVM E2E test ✅
 - Stage 5 — Backend ✅
-- **Stage 6 — Merkle service (Node.js) ← in progress (6.1, 6.2 done)**
-- Stage 7 — Prover (Rust + Sunspot)
+- Stage 6 — Merkle service (Node.js) ✅
+- **Stage 7 — Prover (Rust + Sunspot) ← next**
 - Stage 8 — Frontend (Vue 3)
 - Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 10 — Engineering processes (CI/CD, templates)
@@ -805,8 +822,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 6.6 (smoke test 8/8 + backend integration via `MerkleClient`).
-**Next stage:** Stage 6.7 — final checkpoint for Stage 6.
+**Last completed stage:** Stage 6.7 (final checkpoint — Stage 6 complete).
+**Next stage:** Stage 7 — Prover (Rust + Sunspot, port 4002).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -888,7 +905,7 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 
 ---
 
-## 14. Stage 6 — Merkle service (next stage)
+## 14. Stage 6 — Merkle service (done)
 
 **Goal:** Node.js + Fastify HTTP service on port 4003 that exposes Poseidon2 hashing and Merkle tree operations to the backend and frontend.
 
@@ -911,7 +928,7 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 - 6.4 — `src/server.js` — Fastify routes. ✅ (`fa67096`)
 - 6.5 — tests (`node --test`). ✅ (`cf34064`) — 23 tests, split `app.js`/`server.js`
 - 6.6 — run + smoke test with `curl`. ✅ (`d090a3b`) — 8/8 smoke + backend integration
-- 6.7 — final checkpoint.
+- 6.7 — final checkpoint. ✅ (`99a228a`)
 
 **6.1 findings (2026-09-25):**
 - `@noir-lang/noir_js@1.0.0-rc.2` exists on npm; pulls `acvm_js@1.0.0-rc.2`, `types@1.0.0-rc.2`, `noirc_abi@1.0.0-rc.2`, `pako@^3.0.1`.
@@ -930,8 +947,8 @@ After each stage: write the technical note → enrich with why-blocks, expected 
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`.
-4. Last completed stage: **Stage 5.12** (final checkpoint for Stage 5).
-5. Next task: **Stage 6 — Merkle service** (Node.js + Fastify, port 4003).
+4. Last completed stage: **Stage 6.7** (final checkpoint — Stage 6 complete).
+5. Next task: **Stage 7 — Prover** (Rust + Sunspot, port 4002).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

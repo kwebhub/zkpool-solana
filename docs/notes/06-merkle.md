@@ -540,6 +540,49 @@ warning: the following packages contain code that will be rejected by a future v
 
 ---
 
-## Что дальше
+## 6.7. Финальный чекпоинт Stage 6
 
-- **6.7** — финальный чекпоинт.
+**Дата:** 2026-09-26
+**Commit:** `99a228a`
+
+### Что сделано
+
+Stage 6 полностью завершён. Все 7 под-этапов (6.1 – 6.7) пройдены.
+
+### Итог Stage 6
+
+**Сервис:** `services/merkle/`, порт 4003, Node.js 24.21.0 + Fastify 5.12.5.
+
+**Модули:**
+- `src/poseidon.js` — `poseidon2Hash(left, right)`, обёртка над `noir_js`.
+- `src/merkle.js` — `computeEmptyHashes`, `computeRoot`, `computeProof`.
+- `src/app.js` — `buildApp()`, Fastify routes (тестируемый).
+- `src/server.js` — `listen()`-обёртка.
+
+**Endpoints:**
+| Метод | Путь | Тело | Ответ |
+|---|---|---|---|
+| GET | `/health` | — | `{status: "ok"}` |
+| POST | `/hash` | `{left, right}` | `{hash}` |
+| POST | `/root` | `{commitments: [...]}` | `{root}` |
+| POST | `/proof` | `{commitments: [...], leaf_index}` | `{proof: [...], is_even: [...]}` |
+
+**Конвенция:** bare hex (без `0x`) на границе HTTP — совпадает с `tree.rs`.
+
+**Тесты:** 23 (`node --test`), все проходят.
+**Smoke:** 8/8 через `smoke.sh`.
+**Интеграция:** `MerkleClient` из бэкенда успешно вызывает сервис.
+
+### Артефакты чекпоинта
+
+10 файлов (4 модуля, 3 теста, `package.json`, `pnpm-lock.yaml`, `smoke.sh`) — SHA-256 зафиксированы в `manifest.txt`.
+
+### Что дальше
+
+- **Stage 7** — Prover (Rust + Sunspot), порт 4002.
+- **Stage 8** — Frontend (Vue 3).
+- **Stage 9** — Инфраструктура (Makefile, Prometheus, Grafana, порт-маппинг).
+- **Stage 10** — Инженерные процессы (CI/CD).
+- **Stage 11** — Безопасность (threat model, расширенные тесты).
+- **Stage 12** — Финализация.
+- **Stage 13** — Отложенный split deposit (после v0.1.0).
