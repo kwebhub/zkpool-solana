@@ -145,6 +145,74 @@ cargo test --lib → 2 passed
 
 ---
 
+## 7.3. `witness.rs` — сериализация `Prover.toml`
+
+**Дата:** 2026-09-26
+**Commit:** `95052dd`
+
+### Что сделано
+
+- `WitnessInputs` — struct с 10 полями (5 публичных, 5 приватных).
+- `validate()` — проверка длины `merkle_proof` и `is_even` (20 элементов), непустые хеши.
+- `to_toml()` — рендер в TOML для `nargo execute -p <name>`.
+- `with_0x()` — идемпотентно добавляет префикс `0x` (если его нет).
+
+### Критическое правило: `0x` обязателен
+
+Проверено экспериментально:
+
+| Поле | Bare hex | `0x`-prefixed |
+|---|---|---|
+| `root` | ✅ | ✅ |
+| `nullifier_hash` | ✅ | ✅ |
+| `recipient` | ✅ | ✅ |
+| `recipient_binding` | ✅ | ✅ |
+| `amount` | ❌ | ✅ |
+| `merkle_proof[i]` | ❌ | ✅ |
+
+Ошибка bare hex для `amount`:
+
+Failed to deserialize inputs: The value passed for parameter amount is invalid:
+Expected witness values to be integers, but 00f4240 failed with invalid digit found in string
+
+**Вывод:** все hex в `Prover.toml` пишем с `0x`. Метод `with_0x()` идемпотентен — не превращает `0x…` в `0x0x…`.
+
+**Следствие для формата HTTP:** Merkle-сервис отдаёт **bare hex** (для `tree.rs`), prover принимает **bare hex** от бэкенда и **добавляет `0x`** только при записи TOML. Трансляция — на границе prover'а.
+
+### Критическое правило: имя Prover-файла без точек
+
+`nargo execute -p Prover-7.3-test` → `Cannot find input file '…/Prover-7.toml'`. Nargo обрезает имя на первой `.`.
+
+**Решение:** имена без точек, например `Prover-<uuid>` где дефисы допустимы, а точки — нет. В коде (7.4) будем формировать `Prover-{uuid_simple}`, где `uuid_simple` — UUID без дефисов (или только с дефисами, без точек).
+
+### Тесты (6)
+
+- `test_validate_ok` — валидный вход проходит.
+- `test_validate_wrong_merkle_len` — 19 элементов вместо 20 → ошибка.
+- `test_validate_wrong_is_even_len` — 19 вместо 20 → ошибка.
+- `test_to_toml_has_0x_prefix` — все hex-поля начинаются с `0x`.
+- `test_to_toml_idempotent_0x` — повторный вызов `with_0x` не портит уже префиксованный вход.
+- `test_to_toml_lists_lengths` — `merkle_proof` содержит 20 строк, `is_even` содержит 20 булевых.
+
+cargo test --lib witness → 6 passed
+
+### End-to-end проверка
+
+Пример `examples/dump_toml.rs` выводил TOML для синтетического witness'а (значения из Stage 3.5 `Prover.toml`). Результат скормлен `nargo execute`:
+
+[withdrawal] Circuit witness successfully solved
+[withdrawal] Witness saved to target/w73.gz
+
+Witness успешно посчитан. Пример удалён после проверки (временный артефакт).
+
+### Уроки
+
+1. **Nargo сериализует поля по-разному.** `Field` принимает `0x`-prefix и bare hex; `u64`-подобные (`amount` — фактически `Field`, но путь парсинга другой) требуют именно `0x`. Единая стратегия — всегда `0x` — устраняет класс ошибок.
+2. **Имя `-p` не должно содержать точку.** Неочевидно; зафиксировать в `PROJECT_CONTEXT.md` §8.
+3. **Idempotent-prefix.** `with_0x()` сначала проверяет, потом добавляет — можно безопасно вызывать повторно.
+
+---
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
