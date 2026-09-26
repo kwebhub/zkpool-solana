@@ -295,6 +295,42 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ---
 
+## 7.5. `server.rs` — axum HTTP
+
+**Дата:** 2026-09-26
+**Commit:** `6aa5fb4`
+
+- `build_router(Arc<AppState>)` → `axum::Router`.
+- `GET /health` → `{status: "ok"}`.
+- `POST /prove` → `WitnessInputs` → `{proof, public_witness}` (bare hex).
+- `main.rs` — `tracing_subscriber`, `Config::from_env()`, `TcpListener` на `0.0.0.0:4002`.
+
+**Формат ответа:**
+```json
+{"proof": "03286e64...", "public_witness": "..."}
+```
+Bare hex. 324 B proof + 172 B public witness.
+
+**Формат запроса:** `WitnessInputs` из `witness.rs`. Hex-поля — bare или `0x`-prefixed, нормализуются в `to_toml()`.
+
+**Ошибки:** успех → 200; любая ошибка `prove()` → 500 `{error: "<chain>"}` (`format!("{:#}", e)`).
+
+**Middleware:** `CorsLayer::permissive()` (для Stage 8), `TraceLayer` (логи).
+
+**E2E через HTTP:**
+```
+POST /prove @/tmp/prove-req.json
+→ proof len: 648 hex (324 B), pw len: 344 hex (172 B)
+```
+Пруф декодирован в бинарь и проверен `sunspot verify` → `✅ Verification successful!`.
+
+**Уроки:**
+1. Multi-line curl с `-d "{...}"` в контейнере ломается — писать payload в файл, использовать `-d @file`.
+2. `jq` нет в контейнере — парсить JSON через `node -e`.
+3. Bare hex на границе сервиса — согласовано с Merkle-сервисом и `tree.rs`.
+
+---
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
