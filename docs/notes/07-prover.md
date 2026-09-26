@@ -213,6 +213,88 @@ Witness успешно посчитан. Пример удалён после п
 
 ---
 
+## 7.4. `prover.rs` — nargo + sunspot под mutex
+
+**Дата:** 2026-09-26
+**Commit:** `8103dd1`
+
+### Что сделано
+
+- `Prover` — struct с `Config` + `Mutex<()>`.
+- `Prover::prove(&self, inputs)` — async метод, возвращает `ProofResult { proof, public_witness }`.
+- `run_pipeline` — оркестрация: write TOML → nargo → sunspot → read `.proof`/`.pw`.
+- `run_nargo`, `run_sunspot` — отдельные методы для subprocess с таймаутом.
+
+### Ключевое решение: mutex
+
+`sunspot prove` всегда пишет `target/withdrawal.proof` и `target/withdrawal.pw`. Имена **не зависят** от имени witness'а — только от ACIR. Без сериализации два параллельных запроса:
+
+1. A пишет `withdrawal.proof` (свой).
+2. B перезаписывает `withdrawal.proof` (свой).
+3. A читает файл — получает пруф B.
+
+**Следствие:** результат A невалиден относительно его публичных входов. Data corruption без ошибки.
+
+**Решение:** `Mutex<()>` в `Prover`. Все вызовы `prove()` сериализуются. `_guard = self.lock.lock().await` держится до конца `run_pipeline`.
+
+### Cleanup
+
+Файлы `Prover-<uuid>.toml` и `target/w-<uuid>.gz` удаляются **после** пайплайна, best-effort:
+
+```rust
+let result = self.run_pipeline(...).await;
+let _ = tokio::fs::remove_file(&prover_toml_path).await;
+let _ = tokio::fs::remove_file(&witness_gz_path).await;
+result
+```
+
+Даже если пайплайн упал — cleanup всё равно выполнится.
+
+НЕ удаляются withdrawal.proof и withdrawal.pw — они перезаписываются каждым запросом, и мы их читаем до релиза mutex'а.
+
+### Имена файлов
+
+- Prover-<uuid_simple>.toml — где uuid_simple — UUID без дефисов (.simple() в uuid crate). Без точек — критично, см. 7.3.
+- w-<uuid_simple> — имя witness'а.
+
+### Таймауты
+
+- nargo execute — nargo_timeout_secs (default 30).
+- sunspot prove — sunspot_timeout_secs (default 30).
+
+tokio::time::timeout вокруг Command::output(). При превышении — ошибка, cleanup всё равно выполняется.
+
+### Тесты
+
+- Unit-тесты witness.rs и config.rs продолжают проходить (8 штук).
+- test_prove_real — #[ignore], требует nargo + sunspot + артефакты. Запускается явно.
+
+### End-to-end проверка (реальный пруф)
+
+```bash
+cargo test --lib test_prove_real -- --ignored --nocapture
+→ test result: ok. 1 passed; finished in 0.31s
+```
+
+Пруф: 324 байта. Public witness: 172 байта. Оба совпадают с размерами из Stage 3.5.
+
+Проверка валидности:
+```bash
+sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
+→ ✅ Verification successful!
+```
+
+Полный цикл: witness.rs → nargo execute → sunspot prove → валидный Groth16-пруф.
+
+### Уроки
+
+1. Mutex через tokio::sync::Mutex, не std::sync::Mutex. Мы в async-контексте; std::sync::Mutex блокирует поток executor'а.
+2. Cleanup в let _ = .... Best-effort удаление — не валить запрос, если temp-файл уже удалён кем-то другим.
+3. #[ignore] для интеграционных тестов. test_prove_real требует внешних бинарей и артефактов — запускается только вручную или в CI со всеми зависимостями.
+4. Фиксированные имена выходных файлов sunspot — архитектурное ограничение. Mutex — следствие. Альтернатива (per-request temp dir) отвергнута в дизайне (раздел 15 PROJECT_CONTEXT.md): проще mutex, пропускная способность ~2–5 пруфов/сек достаточна.
+
+---
+
 ## Что дальше
 
 - **7.2** — `config.rs`: пути к `circuits/withdrawal/` и бинарям `nargo`/`sunspot`.
