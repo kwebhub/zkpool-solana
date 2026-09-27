@@ -1216,3 +1216,61 @@ POST /api/withdraw @withdraw-req.json
 1. **Формат на границе между своими сервисами тоже контракт.** Мы не заметили рассинхрон между `WithdrawRequest` (Stage 5) и `WitnessInputs` (Stage 7) до момента связки — хотя оба писались нами же. **Правило:** при появлении второго сервиса сразу сверять wire-форматы.
 2. **A2 — компромисс ради фронтенда.** base64 в `WithdrawResponse` был зафиксирован раньше, чем реальный потребитель. Менять контракт на hex — риск для Stage 8. Конвертация на бэкенде — дешевле.
 3. **`WithdrawRequest` получил `validate()`.** Раньше блоб не валидировался (нечего было валидировать). Теперь 20-элементные массивы проверяются до отправки в prover — быстрее отказ, меньше нагрузки на subprocess.
+
+---
+
+## 05.14. Связка `/api/proof` → Merkle service
+
+**Дата:** 2026-09-27
+**Commit:** `3780473`
+
+### Зачем
+
+`GET /api/proof?pool_address=…&leaf_index=N` — эндпоинт для фронтенда: по индексу листа отдаёт Merkle-пруф, который клиент подставит в witness для `POST /api/withdraw`. До этого был `501 STUB` с момента Stage 5.
+
+### Что делает
+
+1. Читает commitments из Postgres (`list_commitments(pool)`, `ORDER BY leaf_index ASC`).
+2. Проверяет, что `leaf_index` в диапазоне; иначе `404` с `count` и `leaf_index`.
+3. Формирует bare-hex список commitments.
+4. `POST {MERKLE_URL}/proof` с `{commitments, leaf_index}`.
+5. Возвращает `{pool_address, leaf_index, proof, is_even}`.
+
+### Формат ответа
+
+```json
+{
+  "pool_address": "5cnVgz8dWgaJnQ8NAsVsjXA3ufVAGgWjYiMmNrdcNMgv",
+  "leaf_index": 0,
+  "proof": ["2a7c1a45...", ... 20 hex],
+  "is_even": [true, ..., 20 bool]
+}
+```
+
+### Проверка
+
+Пустая БД → {"count":0,"error":"leaf_index out of range","leaf_index":0} — корректный 404.
+
+С 3 существующими commitments (pool 5cnVgz8...) → реальный пруф из 20 элементов + is_even. Совпадает по формату с тем, что ожидает prover (WitnessInputs.merkle_proof + WitnessInputs.is_even).
+
+### Проблема схемы (отдельно, не блокирует)
+
+commitments имеет две уникальности:
+
+- commitments_pkey (id)
+- commitments_leaf_index_key UNIQUE (leaf_index) — глобальная, не по пулу
+- commitments_pool_leaf_idx INDEX (pool_address, leaf_index) — не уникальный
+
+Из-за commitments_leaf_index_key вставка leaf_index = 0 для второго пула падает. 
+
+**Схема не поддерживает несколько пулов одновременно.**
+
+**Не блокирует текущий проект** — в zkpool-solana один пул. Но при работе с несколькими пулами или тестовыми данными для разных пулов — упрёмся. Записать в PROJECT_CONTEXT.md §8 (Known pitfalls) для Stage 11/12.
+
+### Уроки
+
+1. ON CONFLICT DO NOTHING + INSERT 0 0 — диагностический сигнал, не успех. Проверять: если 0 строк вставилось, значит либо конфликт, либо нет совпадений — разбираться.
+
+2. Схема БД содержит неожиданные ограничения. commitments_leaf_index_key — уникальность по одному столбцу там, где логически нужна уникальность по паре. Обнаружено только при попытке вставить тестовую строку.
+
+3. Сервисы падают при рестарте контейнера. После docker compose up -d --force-recreate solana (или рестарта) все три сервиса (merkle, prover, backend) надо поднимать заново. В Stage 9 — Makefile с одной командой.

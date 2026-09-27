@@ -685,8 +685,18 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Error: `Expected witness values to be integers, but '00f4240' failed with 'invalid digit found in string'`.
   - Fix: `witness.rs::with_0x()` adds the prefix idempotently.
 
-### How to find exact signatures for the installed crate version
+### From the backend↔prover wiring (2026-09-27)
 
+- **Schema bug:** `commitments` has `commitments_leaf_index_key UNIQUE (leaf_index)` — global uniqueness, not per-pool.
+  - Symptom: inserting `leaf_index = 0` for a second pool → `INSERT 0 0` (silently swallowed by `ON CONFLICT DO NOTHING`).
+  - Impact: multi-pool support broken. Single-pool (this project) unaffected.
+  - Fix (deferred to Stage 11/12): drop `commitments_leaf_index_key`, keep `commitments_pool_leaf_idx` but make it UNIQUE.
+- **Backend↔prover wire format was mismatched** at first: `WithdrawRequest` (Stage 5) used `{witness: base64}`, prover expected 10 hex fields.
+  - Fix: rewrote `WithdrawRequest` to match `WitnessInputs`; backend converts prover's hex output → base64 for `WithdrawResponse`.
+  - Lesson: when a second service appears, verify wire formats immediately — both were written by us, but at different times with different assumptions.
+- **All three services die on container restart.** After `docker compose up -d --force-recreate solana`, restart merkle (4003), prover (4002), backend (4001) manually. Makefile planned for Stage 9.
+
+### How to find exact signatures for the installed crate version
 - Rust crate sources: `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`.
 - Anchor: `~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anchor-lang-1.2.0/src/`.
 - LiteSVM: `~/.cargo/registry/src/index.crates.io-*/litesvm-0.16.0/src/`.
