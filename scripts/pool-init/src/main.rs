@@ -1,16 +1,8 @@
 //! pool-init — initialize the zkpool on-chain pool on Solana devnet.
 //!
-//! Builds the `pool` instruction by hand (8-byte discriminator + 3 accounts
-//! + system program) and sends it via raw JSON-RPC. No `solana-client`
-//! dependency — avoids version conflicts with the modular `solana-*` crates.
-//!
-//! Usage:
-//!   pool-init [--rpc <url>] [--keypair <path>] [--program <pubkey>]
-//!
-//! Defaults:
-//!   rpc      = https://api.devnet.solana.com
-//!   keypair  = ~/.config/solana/id.json
-//!   program  = 8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm
+//! Builds the `pool` instruction by hand, signs it manually, and sends via
+//! raw JSON-RPC. Avoids `solana-client` and the `wincode` feature (which has
+//! a version conflict in the dependency tree).
 
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -21,9 +13,9 @@ use serde_json::{json, Value};
 use solana_hash::Hash;
 use solana_instruction::{AccountMeta, Instruction};
 use solana_keypair::Keypair;
+use solana_message::Message;
 use solana_pubkey::Pubkey;
 use solana_signer::Signer;
-use solana_transaction::Transaction;
 
 // ---- Constants from the on-chain program ----
 
@@ -31,10 +23,10 @@ use solana_transaction::Transaction;
 const POOL_DISCRIMINATOR: [u8; 8] = [134, 215, 119, 168, 28, 199, 193, 127];
 
 /// PDA seed for `PoolState`.
-const POOL_SEED: &[u8] = b"pool";
+const POOL_SEED: &[u8] = b"pool3";
 
 /// PDA seed for `vault`.
-const VAULT_SEED: &[u8] = b"vault";
+const VAULT_SEED: &[u8] = b"vault3";
 
 /// Default program ID.
 const DEFAULT_PROGRAM: &str = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm";
@@ -103,7 +95,6 @@ async fn main() -> Result<()> {
     println!("Keypair:  {}", args.keypair.display());
     println!("Program:  {}", args.program);
 
-    // Load keypair.
     let keypair = load_keypair(&args.keypair)?;
     let authority = keypair.pubkey();
     println!("Authority: {}", authority);
@@ -117,7 +108,6 @@ async fn main() -> Result<()> {
     println!("Pool PDA:  {} (bump {})", pool_pda, pool_bump);
     println!("Vault PDA: {} (bump {})", vault_pda, vault_bump);
 
-    // Check if pool already exists.
     if account_exists(&client, &args.rpc, &pool_pda).await? {
         println!("\n⚠️  Pool PDA already exists — nothing to do.");
         print_pool_state(&client, &args.rpc, &pool_pda).await?;
@@ -129,29 +119,37 @@ async fn main() -> Result<()> {
     let ix = Instruction {
         program_id: args.program,
         accounts: vec![
-            AccountMeta::new(authority, true),  // authority (signer, writable)
-            AccountMeta::new(pool_pda, false),  // pool (writable)
-            AccountMeta::new(vault_pda, false), // vault (writable)
-            AccountMeta::new_readonly(system_program, false), // system_program
+            AccountMeta::new(authority, true),
+            AccountMeta::new(pool_pda, false),
+            AccountMeta::new(vault_pda, false),
+            AccountMeta::new_readonly(system_program, false),
         ],
         data: POOL_DISCRIMINATOR.to_vec(),
     };
 
-    // Fetch recent blockhash.
     let blockhash = get_latest_blockhash(&client, &args.rpc).await?;
     println!("\nBlockhash: {}", blockhash);
 
-    // Build + sign transaction.
-    let mut tx = Transaction::new_with_payer(&[ix], Some(&authority));
-    tx.sign(&[&keypair], blockhash);
-    let tx_bytes = bincode::serialize(&tx).context("serialize transaction")?;
+    // Build message and serialize manually (the crate's `serialize` is
+    // gated behind the `wincode` feature, which conflicts in our dep tree).
+    let message = Message::new_with_blockhash(&[ix], Some(&authority), &blockhash);
+    let message_bytes = serialize_legacy_message(&message, &blockhash);
+
+    // Sign manually.
+    let signature = keypair.sign_message(&message_bytes);
+
+    // Wire format: compact-u16 (num_sigs) || sig(s) || message.
+    let mut tx_bytes = Vec::with_capacity(1 + 64 + message_bytes.len());
+    // num_sigs = 1, compact-u16 encoding for values < 128 is a single byte.
+    tx_bytes.push(1u8);
+    tx_bytes.extend_from_slice(signature.as_ref());
+    tx_bytes.extend_from_slice(&message_bytes);
+
     println!("Sending transaction ({} bytes)...", tx_bytes.len());
 
-    // Send.
     let sig = send_transaction(&client, &args.rpc, &tx_bytes).await?;
     println!("Signature: {}", sig);
 
-    // Confirm.
     println!("Waiting for confirmation...");
     let confirmed = wait_for_confirmation(&client, &args.rpc, &sig).await?;
     if !confirmed {
@@ -159,7 +157,6 @@ async fn main() -> Result<()> {
     }
     println!("✅ Confirmed");
 
-    // Verify pool state.
     print_pool_state(&client, &args.rpc, &pool_pda).await?;
 
     Ok(())
@@ -263,9 +260,6 @@ async fn print_pool_state(client: &reqwest::Client, rpc: &str, pubkey: &Pubkey) 
             use base64::Engine;
             let data = base64::engine::general_purpose::STANDARD.decode(b64)?;
             println!("\n✅ Pool account exists ({} bytes)", data.len());
-            // Layout: 8 (discriminator) + 32 (authority) + 8 (next_leaf_index)
-            //         + 8 (total_deposits) + 1 (current_root_index)
-            //         + ROOT_HISTORY_SIZE * 32 (roots)
             if data.len() >= 8 + 32 + 8 + 8 + 1 {
                 let authority = Pubkey::try_from(&data[8..40]).context("authority")?;
                 let next_leaf_index = u64::from_le_bytes(data[40..48].try_into().unwrap());
@@ -282,4 +276,62 @@ async fn print_pool_state(client: &reqwest::Client, rpc: &str, pubkey: &Pubkey) 
         }
     }
     Ok(())
+}
+
+/// Manually serialize a legacy `Message` into wire format.
+///
+/// Format:
+///   - header: 3 × u8 (num_required_sigs, num_readonly_signed, num_readonly_unsigned)
+///   - compact-u16: number of account keys
+///   - account keys: 32 bytes each
+///   - blockhash: 32 bytes
+///   - compact-u16: number of instructions
+///   - per instruction:
+///       - program_id_index: u8
+///       - compact-u16: number of accounts
+///       - account indices: u8 each
+///       - compact-u16: data length
+///       - data bytes
+fn serialize_legacy_message(msg: &Message, blockhash: &Hash) -> Vec<u8> {
+    fn write_compact_u16(buf: &mut Vec<u8>, mut n: u16) {
+        loop {
+            let mut byte = (n & 0x7f) as u8;
+            n >>= 7;
+            if n == 0 {
+                buf.push(byte);
+                break;
+            } else {
+                byte |= 0x80;
+                buf.push(byte);
+            }
+        }
+    }
+
+    let mut buf = Vec::new();
+
+    // Header.
+    buf.push(msg.header.num_required_signatures);
+    buf.push(msg.header.num_readonly_signed_accounts);
+    buf.push(msg.header.num_readonly_unsigned_accounts);
+
+    // Account keys.
+    write_compact_u16(&mut buf, msg.account_keys.len() as u16);
+    for key in &msg.account_keys {
+        buf.extend_from_slice(key.as_ref());
+    }
+
+    // Blockhash.
+    buf.extend_from_slice(blockhash.as_ref());
+
+    // Instructions.
+    write_compact_u16(&mut buf, msg.instructions.len() as u16);
+    for ix in &msg.instructions {
+        buf.push(ix.program_id_index);
+        write_compact_u16(&mut buf, ix.accounts.len() as u16);
+        buf.extend_from_slice(&ix.accounts);
+        write_compact_u16(&mut buf, ix.data.len() as u16);
+        buf.extend_from_slice(&ix.data);
+    }
+
+    buf
 }
