@@ -276,7 +276,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 | Backend | Rust + axum | 1.98.1 + 0.7 |
 | Merkle service | Node.js + Fastify | 24.21.0 + 5.12.5 |
 | Noir JS | @noir-lang/noir_js | 1.0.0-rc.2 |
-| Frontend | Vue 3 + Vite + Pinia | 3.5+ / 8.x / 4.x |
+| Frontend | Vue 3 + Vite + Pinia + TypeScript + Pug + SCSS | 3.5+ / 5.4+ / 2.2+ / 5.6+ / 3.0+ / 1.79+ |
 | Solana CLI | Agave | 3.1.10 |
 | LiteSVM | litesvm | 0.16 |
 | Tests Rust toolchain | Rust | 1.98.1 |
