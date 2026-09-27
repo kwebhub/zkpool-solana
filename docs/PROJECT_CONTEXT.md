@@ -511,6 +511,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 9.7b | Withdrawal witness assembly | `4238ed4` |
 | 9.7c | `useWithdraw` composable | `28351ea` |
 | 9.7d | Withdrawal UI + tabs | `867529e` |
+| 9.7e | Refactor: composables to `src/composables/` | `9f1445e` |
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
 **Client SDK:** `@solana/kit@8.3.0`.

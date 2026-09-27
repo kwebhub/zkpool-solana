@@ -1098,6 +1098,95 @@ index.css             5.31 kB (gzip  1.12 kB)
 
 ---
 
+## 9.7e. Рефакторинг: composables в отдельную папку
+
+**Дата:** 2026-09-27
+**Commit:** `9f1445e`
+
+### Зачем
+
+Стандартная конвенция Vue: `use*.ts` живут в `src/composables/`, а не рядом с доменными файлами.
+
+**Было:**
+```
+src/deposit/useDeposit.ts
+src/withdraw/useWithdraw.ts
+```
+
+**Стало:**
+```
+src/composables/useDeposit.ts
+src/composables/useWithdraw.ts
+```
+
+### Что изменилось
+
+**Перемещения (git mv):**
+- `web/src/deposit/useDeposit.ts` → `web/src/composables/useDeposit.ts`
+- `web/src/withdraw/useWithdraw.ts` → `web/src/composables/useWithdraw.ts`
+
+**Импорты в перемещённых файлах:**
+
+`useDeposit.ts`:
+- `./generateNote` → `../deposit/generateNote`
+
+`useWithdraw.ts`:
+- `./parseNote` → `../withdraw/parseNote`
+- `./buildWitness` → `../withdraw/buildWitness`
+- `./reduce` → `../withdraw/reduce`
+
+**Импорты в компонентах:**
+- `DepositForm.vue`: `../deposit/useDeposit` → `../composables/useDeposit`
+- `WithdrawForm.vue`: `../withdraw/useWithdraw` → `../composables/useWithdraw`
+
+Всё остальное (`../client`, `../api/client`, `../stores/wallet`, `../wallet/kitSigner`) — без изменений, пути те же относительно новой папки.
+
+### Новая структура `web/src/`
+
+```
+web/src/
+├── api/             ← client.ts, types.ts
+├── components/      ← .vue
+│   ├── DepositForm.vue
+│   └── WithdrawForm.vue
+├── composables/     ← use*.ts (NEW)
+│   ├── useDeposit.ts
+│   └── useWithdraw.ts
+├── constants.ts
+├── deposit/         ← generateNote.ts
+│   └── generateNote.ts
+├── generated/       ← Codama output
+├── noir/            ← poseidon.ts, hashes.ts
+├── stores/          ← Pinia
+│   └── wallet.ts
+├── wallet/          ← detect.ts, kitSigner.ts, types.ts
+├── withdraw/        ← parseNote.ts, reduce.ts, buildWitness.ts
+│   ├── parseNote.ts
+│   ├── reduce.ts
+│   └── buildWitness.ts
+├── App.vue
+├── client.ts
+├── env.d.ts
+└── main.ts
+```
+
+### Обновлено `PROJECT_CONTEXT.md`
+
+Секция «Repository structure» (§9) — добавлено дерево `web/src/`.
+
+### Грабли
+
+1. **`git mv` — обязателен**, не просто `mv`. Иначе git теряет историю файла (rename detection работает, но менее явно).
+2. **Импорты после перемещения — на одну папку глубже** для доменных файлов (`./generateNote` → `../deposit/generateNote`). Пути к общим модулям (`../client`) не меняются.
+
+### Уроки
+
+1. **Один уровень абстракции — одна папка.** `composables/` — React/Vue-конвенция. Не смешивать с доменными модулями.
+2. **Рефакторинг до полного закрытия Stage.** После Stage 9 — уже поздно (документация, чекпоинты). Сейчас — самое время.
+3. **`git mv` ловит rename даже при значительных изменениях** (98% / 96% совпадения). Git хранит только дельту.
+
+---
+
 ## Что дальше
 
 - **9.8** — Финальный чекпоинт.
