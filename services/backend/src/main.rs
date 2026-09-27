@@ -18,7 +18,7 @@ use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::{error, info};
 
-use zkpool_backend::api_types::{WithdrawRequest, WithdrawResponse};
+use zkpool_backend::api_types::{ProverResponse, WithdrawRequest, WithdrawResponse};
 use zkpool_backend::cache::Cache;
 use zkpool_backend::config::Config;
 use zkpool_backend::db::Db;
@@ -297,10 +297,20 @@ async fn metrics_endpoint() -> impl IntoResponse {
 }
 
 /// `POST /api/withdraw` — proxy the witness to the prover service.
+///
+/// Request: `WithdrawRequest` (10 hex fields, bare hex).
+/// Response: `WithdrawResponse` (base64-encoded proof + public witness).
+///
+/// The prover returns bare hex; we convert to base64 here so the wire
+/// format for the frontend stays unchanged.
 async fn post_withdraw(
     State(state): State<AppState>,
     Json(req): Json<WithdrawRequest>,
 ) -> impl IntoResponse {
+    if let Err(e) = req.validate() {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": e}))).into_response();
+    }
+
     let url = format!("{}/prove", state.config.prover_url);
 
     let resp = reqwest::Client::new().post(&url).json(&req).send().await;
@@ -319,9 +329,30 @@ async fn post_withdraw(
 
     let status = resp.status();
     if status.is_success() {
-        let parsed: Result<WithdrawResponse, _> = resp.json().await;
+        let parsed: Result<ProverResponse, _> = resp.json().await;
         match parsed {
-            Ok(out) => (StatusCode::OK, Json(out)).into_response(),
+            Ok(p) => {
+                match hex_to_base64(&p.proof)
+                    .and_then(|proof| hex_to_base64(&p.public_witness).map(|pw| (proof, pw)))
+                {
+                    Ok((proof, public_witness)) => (
+                        StatusCode::OK,
+                        Json(WithdrawResponse {
+                            proof,
+                            public_witness,
+                        }),
+                    )
+                        .into_response(),
+                    Err(e) => {
+                        error!("prover hex decode error: {:#}", e);
+                        (
+                            StatusCode::BAD_GATEWAY,
+                            Json(json!({"error": "prover returned invalid hex"})),
+                        )
+                            .into_response()
+                    }
+                }
+            }
             Err(e) => {
                 error!("prover response parse error: {:#}", e);
                 (
@@ -351,4 +382,11 @@ async fn post_withdraw(
         )
             .into_response()
     }
+}
+
+/// Decode a bare-hex string into base64 (standard alphabet, with padding).
+fn hex_to_base64(hex_str: &str) -> Result<String> {
+    use base64::Engine;
+    let bytes = hex::decode(hex_str)?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }

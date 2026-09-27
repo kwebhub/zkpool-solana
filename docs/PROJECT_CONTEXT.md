@@ -26,6 +26,10 @@
 
 * NVMe SSD: 256 GB (nvme0n1, 238.5 GiB) — Fully encrypted (LUKS + LVM)
 
+### Text Editor
+
+* LazyVim (Neovim distribution)
+
 ---
 
 ## 0. Rules for the assistant (READ FIRST)
