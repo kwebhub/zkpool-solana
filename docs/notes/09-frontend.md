@@ -311,9 +311,103 @@ export * from "./generated/zk_pool/src/generated";
 
 ---
 
+## 9.4. `@noir-lang/noir_js` в браузере
+
+**Дата:** 2026-09-27
+**Commit:** `c3537c4`
+
+### Зачем
+
+Депозит требует commitment = `hash_3(nullifier, secret, amount)`, который должен совпадать байт-в-байт с тем, что схема withdrawal вычислит на стороне verifier'а. Единственный способ — использовать **тот же ACIR** (`hashes.json`), что и withdrawal-схема, через `noir_js` в браузере.
+
+**Это та же логика, что в Merkle-сервисе (Stage 6.2):** Rust и JS Poseidon2 реализации дают **разные** хеши, чем Noir builtin. Только Noir ACIR даёт идентичность.
+
+### Пакет
+
+```
+"@noir-lang/noir_js": "1.0.0-rc.2"
+```
+
+**Точная версия** — совпадает с nargo 1.0.0-rc.2, что критично.
+
+### Два модуля
+
+**`src/noir/poseidon.ts`** — `poseidon2Hash(left, right)`:
+
+```typescript
+let cachedNoir: Noir | null = null;
+
+async function loadHash2(): Promise<Noir> {
+  if (cachedNoir) return cachedNoir;
+  const resp = await fetch("/circuits/hash2.json");
+  if (!resp.ok) throw new Error(`failed to load hash2.json: HTTP ${resp.status}`);
+  const circuit = await resp.json();
+  cachedNoir = new Noir(circuit);
+  return cachedNoir;
+}
+
+export async function poseidon2Hash(left: string, right: string): Promise<string> {
+  const noir = await loadHash2();
+  const result = await noir.execute({ left: "0x" + left, right: "0x" + right });
+  return (result.returnValue as string).slice(2);
+}
+```
+
+**`src/noir/hashes.ts`** — `computeHashes(nullifier, secret, amount)`:
+
+```typescript
+export async function computeHashes(nullifier, secret, amount): Promise<CommitmentResult> {
+  const noir = await loadHashes();
+  const result = await noir.execute({
+    nullifier: "0x" + nullifier,
+    secret: "0x" + secret,
+    amount: "0x" + amount,
+  });
+  const [commitment, nullifierHash] = result.returnValue as [string, string];
+  return {
+    commitment: commitment.slice(2),
+    nullifierHash: nullifierHash.slice(2),
+  };
+}
+```
+
+Возвращает `{ commitment, nullifierHash }` — **bare hex**.
+
+### Конвенция hex
+
+- **Bare hex** (без `0x`) на границе модуля — совпадает с бэкендом, Merkle-сервисом, prover'ом.
+- `0x` добавляется **только** при вызове `noir.execute(...)`, снимается с `returnValue`.
+
+### Кэширование
+
+`cachedNoir` — `Noir` инстанцируется **один раз** на модуль. Повторные вызовы переиспользуют circuit, не парсят JSON заново. Значимо для интерактивных форм: каждое нажатие клавиши в поле `amount` может вызвать `computeHashes` — без кэша парсили бы 30 KB JSON каждый раз.
+
+### ACIR-ы в `web/public/circuits/`
+
+| Файл | SHA-256 | Размер |
+|---|---|---|
+| `hash2.json` | `27c1937b…37c6` | 30 208 B |
+| `hashes.json` | `ca81b137…be9` | 31 403 B |
+| `withdrawal.json` | `29ac2e67…91db` | 41 414 B |
+
+Синхронизируются через `sync-circuits --apply`. Папка gitignored.
+
+**Проверено:** все три хеша совпадают с ожидаемыми перед Stage 9.4.
+
+### Грабли
+
+**`fetch("/circuits/hash2.json")` зависит от Vite dev-server.** В production-сборке Vite копирует `public/*` в `dist/*`. Путь `/circuits/hash2.json` работает и там. **Не** нужно перемещать в `src/`.
+
+### Уроки
+
+1. **Один ACIR — два потребителя.** Merkle-сервис и браузер используют **тот же** `hash2.json`. Расхождение невозможно по построению.
+2. **`returnValue` — tuple для `hashes`, строка для `hash2`.** Типизация через TypeScript cast — `as [string, string]` и `as string`. Проверено в Stage 6.2 inline-тестом.
+3. **Кэш `Noir` инстанса обязателен.** `new Noir(circuit)` дорого (парсинг ACIR, init ACVM). Один раз — на всё время жизни страницы.
+
+---
+
 ## Что дальше
 
-- **9.4** — `@noir-lang/noir_js` — commitments и nullifier_hash в браузере.
 - **9.5** — API-клиент (типизированные обёртки над бэкендом).
 - **9.6** — UI: депозит.
 - **9.7** — UI: вывод.
