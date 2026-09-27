@@ -191,10 +191,59 @@ Waiting for confirmation...
 
 4. **Rust `Debug` для `Hash` показывает base58-хеш.** Удобно.
 
-### Что дальше
+## 8.3. Финальный чекпоинт Stage 8
 
-- **Stage 8.3** — финальный чекпоинт.
-- **Stage 9** — Frontend: подключение, депозит, вывод.
-- **Stage 10** — Full E2E на devnet.
+**Дата:** 2026-09-27
+**Commit:** `670a8bc`
+
+### Итог Stage 8
+
+**Скрипт:** `scripts/pool-init/`, Rust CLI, raw JSON-RPC.
+
+**Артефакты:**
+- `Cargo.toml` — минимальные зависимости.
+- `Cargo.lock` — зафиксированные версии.
+- `src/main.rs` — ~280 строк: args parsing, PDA derivation, ручная сборка транзакции, RPC calls, чтение состояния.
+
+**On-chain результат:**
+```
+Pool PDA:  B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf
+Vault PDA: HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq
+Init tx:   2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC
+Length:    384 bytes
+Owner:     8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm
+Balance:   0.00260096 SOL (rent-exempt)
+```
+
+**Проверено независимо:** `solana account B89Yho... --url devnet` — owner = program, length = 384.
+
+### Что стало доступно
+
+1. **Индексатор бэкенда теперь видит пул.** `PoolState` существует, indexer polling — активен.
+2. **Депозиты возможны.** После следующего депозита:
+   - `total_deposits++`
+   - `next_leaf_index++`
+   - Commitment event → indexer → Postgres → Merkle tree
+3. **`/api/root` вернёт реальный корень** после первого депозита.
+4. **`/api/proof` будет работать** с реальными commitments.
+5. **`/api/withdraw` + prover** — можно тестировать полный цикл.
+
+### Уроки Stage 8 (обобщение)
+
+1. **Не доверять документации API — читать исходники установленной версии.** `solana-*` crates меняются быстро, methods уезжают под feature-flags.
+2. **`wincode` — токсичная фича.** Тянет две версии, ломает trait resolution. Ручная сборка wire-формата дешевле.
+3. **Versioned seeds (`pool3`, `vault3`) — правильно, но неочевидно.** Читать `constants.rs`, не копировать из примеров.
+4. **`getAccountInfo` — дешёвая проверка существования.** Использовать перед отправкой tx, чтобы не платить комиссию за fail.
+5. **Ручная сборка tx — 60 строк, но полностью предсказуемо.** Для CI и одноразовых скриптов — нормально.
+
+## Что дальше
+
+- **Stage 9** — Frontend (Vue 3): подключение кошелька, депозит, вывод.
+- **Stage 10** — Full E2E на devnet: реальный депозит → реальный вывод.
+- **Stage 11** — Infrastructure (Makefile, Prometheus, Grafana, port mappings).
+- **Stage 12** — CI/CD.
+- **Stage 13** — Security.
+- **Stage 14** — Finalization.
+- **Stage 15** — Split deposit (deferred).
 
 Индексатор бэкенда теперь видит пул. Первый депозит → первое реальное commitment в Postgres → первый реальный Merkle root. Всё, что было построено в Stages 5–7, начнёт работать с реальными данными.
