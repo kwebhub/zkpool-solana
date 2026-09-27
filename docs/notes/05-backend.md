@@ -1160,3 +1160,59 @@ cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- apply
 Запускать sync-circuits --check в начале каждого этапа, который использует ACIR-ы. Если находит расхождение — apply до продолжения.
 
 Это ровно тот класс багов («mismatch между слоями»), против которого построен v3. Обнаружение здесь — валидация принципа №2 (contract checks at every boundary) и принципа №1 (single source of truth через spec.json).
+
+---
+
+## 05.13. Связка `/api/withdraw` → prover
+
+**Дата:** 2026-09-27
+**Commit:** `e1eae1d`
+
+### Зачем
+
+После Stage 7 prover готов, но бэкенд `POST /api/withdraw` слал в него неправильный формат:
+
+| Слой | Было | Стало |
+|---|---|---|
+| Тело запроса | `{witness: base64}` (блоб) | 10 hex-полей (как `WitnessInputs`) |
+| Кодировка пруфа в ответе | base64 (как отдавал бэкенд) | base64 (сохранено для фронтенда) |
+| Кодировка пруфа от prover | — | hex → конвертируется в base64 |
+
+### Решение (вариант A2)
+
+- `WithdrawRequest` — 10 полей, **bare hex** (совпадает с prover `WitnessInputs`).
+- `WithdrawResponse` — без изменений: `{proof: base64, public_witness: base64}`.
+- `post_withdraw` — принимает hex-запрос, шлёт в prover, парсит hex-ответ, конвертирует в base64.
+
+**Почему A2, а не A1 (hex на выходе):** фронтенд ещё не написан (Stage 8), но контракт base64 уже зафиксирован в `WithdrawResponse` с Stage 5. Менять его сейчас — менять дважды.
+
+### Изменения
+
+**`services/backend/src/api_types.rs`:**
+- `WithdrawRequest` — 10 полей + `validate()` (проверка длины `merkle_proof`/`is_even` = 20).
+- `WithdrawResponse` — без изменений.
+- `ProverResponse` — новый тип: `{proof: hex, public_witness: hex}`, только для внутреннего использования в `post_withdraw`.
+- `TREE_DEPTH = 20` — константа.
+
+**`services/backend/src/main.rs`:**
+- `use` импортирует `ProverResponse`.
+- `post_withdraw` — вызывает `req.validate()` до провайдера; парсит `ProverResponse` (hex); конвертирует оба поля в base64.
+- Хелпер `hex_to_base64(hex_str) -> Result<String>` — `hex::decode` + `base64::STANDARD.encode`.
+
+### End-to-end проверка
+
+Backend на 4001, prover на 4002, оба живы:
+
+```bash
+POST /api/withdraw @withdraw-req.json
+→ proof b64 len: 432 (324 bytes)
+→ pw b64 len: 232 (172 bytes)
+```
+
+Размеры совпадают с размерами из Stage 3.5 и Stage 7.4. Транспорт hex→base64 корректен.
+
+### Уроки
+
+1. **Формат на границе между своими сервисами тоже контракт.** Мы не заметили рассинхрон между `WithdrawRequest` (Stage 5) и `WitnessInputs` (Stage 7) до момента связки — хотя оба писались нами же. **Правило:** при появлении второго сервиса сразу сверять wire-форматы.
+2. **A2 — компромисс ради фронтенда.** base64 в `WithdrawResponse` был зафиксирован раньше, чем реальный потребитель. Менять контракт на hex — риск для Stage 8. Конвертация на бэкенде — дешевле.
+3. **`WithdrawRequest` получил `validate()`.** Раньше блоб не валидировался (нечего было валидировать). Теперь 20-элементные массивы проверяются до отправки в prover — быстрее отказ, меньше нагрузки на subprocess.
