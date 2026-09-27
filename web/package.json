@@ -11,6 +11,7 @@
     "generate:client": "node scripts/generate-client.mjs"
   },
   "dependencies": {
+    "@noir-lang/noir_js": "1.0.0-rc.2",
     "@solana/addresses": "^8.3.0",
     "@solana/kit": "^8.3.0",
     "@solana/program-client-core": "^8.3.0",
