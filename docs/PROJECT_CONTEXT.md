@@ -2,7 +2,7 @@
 
 > **Purpose:** single entry point for an AI assistant in a new chat. Load this file first.
 >
-> **Last updated:** 2026-09-25 (after stage 5.11 — smoke test passed)
+> **Last updated:** 2026-09-27 (Stage 8.2 — pool-init in progress)
 >
 > **Handoff note:** this version was condensed from a 720-line file to fit cleanly into a new chat's context. Every section is preserved; some have been tightened. Nothing was removed.
 
@@ -166,6 +166,14 @@ Contents (per the `05.5-tree` convention):
 - `commit.txt` — the sub-stage commit hash.
 
 **Reason:** the Stage 6.1–6.3 checkpoints were skipped and had to be backfilled. Backfill is recovery, not the process.
+
+---
+
+### 0.16. No mid-message retractions
+
+**Give one action per message.** No "Wait —", no self-contradicting corrections after a task in the same message, no "Actually — let me reconsider". If a task turns out wrong, state the new task in the **next** message, after the user has run the previous one.
+
+**Reason:** mid-message retractions confuse the user and waste tokens. Figure it out **before** sending.
 
 ---
 
