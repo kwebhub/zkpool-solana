@@ -500,6 +500,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 |---|---|---|
 | 9.1 | Vue 3 + TS + Pug + SCSS skeleton | `45b887e` |
 | 9.2 | Minimal wallet connect | `d06a931` |
+| 9.3 | Codama client for `zk_pool` | `70c1b6d` |
 
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
@@ -581,7 +582,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
-- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1, 9.2 done)**
+- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.3 done)**
 - Stage 10 — Full E2E (deposit → withdraw on devnet)
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
@@ -921,8 +922,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.2 (minimal wallet connect — TS + Pug + SCSS, Pinia).
-**Next stage:** Stage 9.3 — Codama-generated client for `zk_pool`.
+**Last completed stage:** Stage 9.3 (Codama client for `zk_pool` — 20 generated files).
+**Next stage:** Stage 9.4 — `@noir-lang/noir_js` in browser (commitments, nullifier_hash).
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).

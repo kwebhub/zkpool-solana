@@ -222,9 +222,97 @@ Bundle вырос с 63 KB до 73 KB (gzip: 25 → 29 KB) — приемлем�
 
 ---
 
+## 9.3. Codama-клиент для `zk_pool`
+
+**Дата:** 2026-09-27
+**Commit:** `70c1b6d`
+
+### Зачем
+
+Фронтенду нужны инструкции `pool`, `deposit`, `withdraw` и PDAs (`pool`, `vault`, `nullifierRecord`). Писать вручную аккаунт-меты, дискриминаторы, borsh-сериализацию — источник ошибок того же класса, что убил v2. **Codama** генерирует TypeScript-клиент из Anchor IDL — единый источник правды.
+
+### Пакеты
+
+```json
+"devDependencies": {
+  "@codama/nodes-from-anchor": "1.5.6",
+  "@codama/renderers-js": "2.5.0",
+  "codama": "1.11.0"
+}
+```
+
+**Точные версии** (без `^`), как в правиле для `@solana/kit` и `@codama/*` (см. `PROJECT_CONTEXT.md` §8).
+
+**Runtime:**
+```json
+"dependencies": {
+  "@solana/program-client-core": "8.3.0",
+  "@solana/addresses": "8.3.0",
+  "@solana/kit": "8.3.0"
+}
+```
+
+### Скрипт генерации
+
+`web/scripts/generate-client.mjs`:
+
+```javascript
+import { readFileSync } from "node:fs";
+import { createFromRoot } from "codama";
+import { rootNodeFromAnchor } from "@codama/nodes-from-anchor";
+import { renderVisitor } from "@codama/renderers-js";
+
+const idl = JSON.parse(readFileSync("../onchain/target/idl/zk_pool.json", "utf8"));
+const codama = createFromRoot(rootNodeFromAnchor(idl));
+codama.accept(renderVisitor("./src/generated/zk_pool"));
+```
+
+**Запуск:** `pnpm generate:client`
+
+**Перегенерировать нужно** после любого изменения Anchor-программы (IDL меняется).
+
+### Что сгенерировано
+
+20 файлов в `web/src/generated/zk_pool/src/generated/`:
+
+- `instructions/{pool,deposit,withdraw}.ts` — конструкторы инструкций.
+- `pdas/{pool,vault,nullifierRecord}.ts` — derivation PDAs.
+- `accounts/{poolState,nullifierRecord}.ts` — десериализаторы.
+- `events/{depositEvent,withdrawEvent}.ts` — типы событий.
+- `errors/zkPool.ts` — типы ошибок.
+- `programs/zkPool.ts` — корневой program-объект.
+- `index.ts` — агрегатор.
+
+### Реэкспорт
+
+`web/src/client.ts`:
+
+```typescript
+export * from "./generated/zk_pool/src/generated";
+```
+
+Единая точка импорта — если структура папок изменится, правим одно место.
+
+### Грабли
+
+1. **`@solana/program-client-core` не устанавливается автоматически.** Codama-рендерер генерирует `import { ... } from "@solana/program-client-core"`, но добавлять его в `package.json` должен пользователь. Ошибка: `Cannot find module '@solana/program-client-core'`.
+   - Fix: `pnpm add @solana/program-client-core`.
+
+2. **`@types/node` нужен.** В сгенерированных `errors/zkPool.ts` используется `process.env.NODE_ENV`. Без `@types/node` — `error TS2591: Cannot find name 'process'`.
+   - Fix: `pnpm add -D @types/node`, добавить `"node"` в `tsconfig.json` → `compilerOptions.types`.
+
+3. **Bundle size не изменился после генерации.** Потому что сгенерированный код ещё не импортируется в `App.vue`. Дерево встряхнётся только когда `client.ts` реально кто-то использует.
+
+### Уроки
+
+1. **Codama 1.11.0 + Anchor 1.2.0 работают.** IDL из `onchain/target/idl/zk_pool.json` совместим.
+2. **`generate:client` — идемпотентный.** Запуск несколько раз даёт одинаковый вывод. Хорошо для CI.
+3. **Проверять актуальность IDL.** Если Anchor-программа изменилась, а клиент не перегенерировали — фронтенд будет собирать невалидные инструкции. Возможный шаг для CI: `pnpm generate:client && git diff --exit-code`.
+
+---
+
 ## Что дальше
 
-- **9.3** — Codama-клиент для `zk_pool`.
 - **9.4** — `@noir-lang/noir_js` — commitments и nullifier_hash в браузере.
 - **9.5** — API-клиент (типизированные обёртки над бэкендом).
 - **9.6** — UI: депозит.
