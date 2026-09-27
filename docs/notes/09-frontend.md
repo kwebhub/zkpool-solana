@@ -1027,6 +1027,77 @@ On-chain `encode_public_inputs` тоже reduce'ит `recipient` перед уп
 
 ---
 
+## 9.7d. UI экран вывода
+
+**Дата:** 2026-09-27
+**Commit:** `867529e`
+
+### Что сделано
+
+- `src/components/WithdrawForm.vue` — форма вывода.
+- `src/App.vue` — табы Deposit/Withdraw.
+
+### `WithdrawForm.vue`
+
+**Поля:**
+- `Deposit note (JSON)` — textarea (многострочный ввод).
+- `Recipient address (base58)` — текстовое поле.
+
+**Кнопка `Withdraw`** — disabled, пока note или recipient пустые, или идёт запрос.
+
+**После успеха:**
+- Signature с ссылкой на Explorer.
+- Recipient, amount (lamports), root, nullifier_hash — для проверки.
+
+**Не показывает:**
+- Пруф (324 байта hex — нечитаемо).
+- Merkle proof (20 элементов — бесполезно для пользователя).
+- Полный witness — эти данные технические.
+
+**Что важно для пользователя:** транзакция ушла, куда ушла, сколько, каким корнем (можно сверить с `/api/root` если нужно).
+
+### `App.vue` — табы
+
+```pug
+nav.tabs
+  button(:class="{ active: tab === 'deposit' }" @click="tab = 'deposit'") Deposit
+  button(:class="{ active: tab === 'withdraw' }" @click="tab = 'withdraw'") Withdraw
+DepositForm(v-if="tab === 'deposit'")
+WithdrawForm(v-else)
+```
+
+**Состояние `tab` — локальное `ref`**, не Pinia. Таб не переживает перезагрузку — это ок, UI-стейт, не бизнес-логика.
+
+**Кошелёк не подключён:** вместо табов — подсказка "Connect a wallet to continue."
+
+### Стилизация табов
+
+`.tabs` — flex-контейнер с нижней границей. Активный таб — `border-bottom: 2px solid #333` со сдвигом `margin-bottom: -1px`, чтобы перекрыть границу контейнера. Классический CSS-паттерн.
+
+### Bundle size
+
+```
+acvm_js_bg.wasm   3,047.92 kB
+noirc_abi_wasm      788.51 kB
+index.js            177.46 kB (gzip 62.28 kB)
+index.css             5.31 kB (gzip  1.12 kB)
+```
+
+Прирост JS от 9.6c: 165 → 177 KB. WASM не менялся.
+
+### Грабли
+
+1. **`v-else` без явного условия** — Vue 3 разрешает `v-else` после `v-if` без выражения. Работает, но неявно. В `App.vue` табы — два `button` с явным `:class`, плюс `v-if`/`v-else` для форм.
+2. **`tab` локальный, а не в Pinia** — правильное решение. Пиния нужна для кошелька (глобальное состояние), таб — локальный UI-стейт.
+
+### Уроки
+
+1. **Не показывать пользователю все данные witness'а.** Пруф — 324 байта. Merkle proof — 20 элементов. Это отладка, не UI.
+2. **Показывать signature + ссылку на Explorer.** Стандарт для Solana-приложений.
+3. **Табы — локальный `ref`, не Pinia.** Если состояние не разделяется между компонентами — не тащить в store.
+
+---
+
 ## Что дальше
 
 - **9.8** — Финальный чекпоинт.
