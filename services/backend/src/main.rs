@@ -94,6 +94,7 @@ async fn main() -> Result<()> {
         .route("/api/commitments", get(get_commitments))
         .route("/api/root", get(get_root))
         .route("/api/proof", get(get_proof))
+        .route("/api/root-preview", post(post_root_preview))
         .layer(middleware::from_fn_with_state(
             rate_limiter.clone(),
             rate_limit::read_middleware,
@@ -355,6 +356,70 @@ async fn get_proof(
             )
                 .into_response()
         }
+        Err(e) => {
+            error!("merkle response parse error: {:#}", e);
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "merkle returned invalid response"})),
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Request body for `POST /api/root-preview`.
+#[derive(Debug, Deserialize)]
+struct RootPreviewRequest {
+    /// Commitment list (bare hex, 64 chars each), in insertion order.
+    commitments: Vec<String>,
+}
+
+/// `POST /api/root-preview` — compute the Merkle root for a hypothetical
+/// commitment list by proxying to the Merkle service `/root`.
+///
+/// Used by the frontend before a deposit: the new root must be submitted
+/// as an argument to the on-chain `deposit` instruction, and it must match
+/// what the backend indexer will compute after the event.
+async fn post_root_preview(
+    State(state): State<AppState>,
+    Json(req): Json<RootPreviewRequest>,
+) -> impl IntoResponse {
+    let url = format!("{}/root", state.config.merkle_url);
+    let body = json!({ "commitments": req.commitments });
+
+    let resp = reqwest::Client::new().post(&url).json(&body).send().await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            error!("merkle request failed: {:#}", e);
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "merkle service unreachable"})),
+            )
+                .into_response();
+        }
+    };
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body: String = resp.text().await.unwrap_or_default();
+        error!("merkle {}: {}", status, body);
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": "merkle service error"})),
+        )
+            .into_response();
+    }
+
+    match resp.json::<serde_json::Value>().await {
+        Ok(v) => (
+            StatusCode::OK,
+            Json(json!({
+                "root": v.get("root").cloned().unwrap_or(json!(null)),
+            })),
+        )
+            .into_response(),
         Err(e) => {
             error!("merkle response parse error: {:#}", e);
             (
