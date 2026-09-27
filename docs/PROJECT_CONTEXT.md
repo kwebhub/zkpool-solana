@@ -8,8 +8,27 @@
 
 ---
 
-## 0. Rules for the assistant (READ FIRST)
+## Setup
 
+### System Overview
+
+* Laptop Model: Dell Latitude 5330
+* OS: Debian GNU/Linux 13 (trixie) x86_64
+* Kernel: 6.12.107+deb13-amd64 (Preempt Dynamic)
+
+### Hardware Specs
+
+* CPU: 12th Gen Intel Core i5-1245U (10 Cores / 12 Threads)
+* RAM: 16 GiB (15 GiB usable) — 2.5 GiB used / 11 GiB free
+* Swap: 12 GiB (0 B used)
+
+### Storage & Drives
+
+* NVMe SSD: 256 GB (nvme0n1, 238.5 GiB) — Fully encrypted (LUKS + LVM)
+
+---
+
+## 0. Rules for the assistant (READ FIRST)
 This is the **single normative section** of this file. Everything else describes the project. If in doubt — this section wins.
 
 ### 0.1. Quick-start for a new assistant
