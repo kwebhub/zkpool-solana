@@ -565,9 +565,114 @@ POST /api/root-preview {"commitments":["09d9d188784ab20199a5eb7267ce27765a374ce6
 
 ---
 
+## 9.6b. Логика депозита
+
+**Дата:** 2026-09-27
+**Commit:** `0a086a5`
+
+### Что сделано
+
+Пять файлов:
+
+| Файл | Роль |
+|---|---|
+| `src/constants.ts` | Program ID, Pool PDA, MIN_DEPOSIT_AMOUNT, TREE_DEPTH |
+| `src/api/client.ts` | + `postRootPreview` (проксирует Merkle `/root`) |
+| `src/deposit/generateNote.ts` | Генерация 4 секретов + commitment |
+| `src/wallet/kitSigner.ts` | `makeNoopSigner(address)` — заглушка для Codama |
+| `src/deposit/useDeposit.ts` | Композабл: полный flow |
+
+### `constants.ts`
+
+```typescript
+ZK_POOL_PROGRAM_ID  = "8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm"
+VERIFIER_PROGRAM_ID = "5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ"
+POOL_PDA            = "B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf"
+TREE_DEPTH          = 20
+MIN_DEPOSIT_AMOUNT  = 1_000_000n  // 0.001 SOL
+LAMPORTS_PER_SOL    = 1_000_000_000n
+```
+
+**Источник значений:** `onchain/programs/zk_pool/src/constants.rs`. Синхронизируется в CI (Stage 12).
+
+### `generateNote.ts`
+
+**`DepositNote`:**
+```typescript
+{
+  nullifier:      string;  // bare hex, 64 chars
+  secret:         string;  // bare hex, 64 chars
+  noteSecret:     string;  // bare hex, 64 chars
+  amount:         string;  // bare hex, 64 chars (lamports, padded)
+  commitment:     string;  // derived: hash_3(nullifier, secret, amount)
+  nullifierHash:  string;  // derived: hash_1(nullifier)
+}
+```
+
+**`randomFieldHex()`** — Web Crypto API, 32 байта, маска верхних 2 бит (`bytes[0] &= 0x3f`) — значение остаётся ниже простого числа BN254 (2^254).
+
+**`generateNote(amountLamports)`** — генерит три секрета + гексовую сумму, вызывает `computeHashes()` из `noir/hashes.ts` (Stage 9.4).
+
+**Критично:** потеря note = потеря средств. On-chain восстановление невозможно. UI должен заставлять пользователя сохранять note.
+
+### `kitSigner.ts` — почему заглушка
+
+Codama-инструкция `getDepositInstructionAsync` требует `InstructionSignerInput` для аккаунта `depositor` — то есть `TransactionSigner` или `AccountSignerMeta { address, role, signer }`. У нас есть **инжектированный** wallet provider с методом `signAndSendTransaction(wire_tx)`, но не `TransactionSigner` в смысле `@solana/kit`.
+
+**Два подхода:**
+
+- **(A)** Построить полный `TransactionSigner`-adapter вокруг wallet provider'а (методы `signTransactions`, `address`, …).
+- **(B)** Отдать `makeNoopSigner(address)` в Codama (только для построения instruction'а), а **подписание** сделать через `provider.signAndSendTransaction(base64_wire_tx)`.
+
+**Выбрали (B).** Меньше кода, соответствует тому, как реально работает Phantom/Solflare: они подписывают **сериализованную** транзакцию, а не kit-объект.
+
+**`makeNoopSigner`** возвращает `{ address, signTransactions: () => throw }` — type-safe заглушка. Если её метод вызовется, ошибка будет громкой.
+
+### `useDeposit.ts` — pipeline
+
+```
+1. generateNote(amountLamports)
+   └─> computeHashes() — noir_js в браузере
+2. getCommitments() → список текущих commitments
+3. Список + note.commitment → postRootPreview()
+   └─> backend → Merkle /root → новый корень
+4. getDepositInstructionAsync({depositor: noopSigner, commitment, newRoot, amount})
+5. rpc.getLatestBlockhash()
+6. createTransactionMessage + setLifetime + appendInstruction
+7. compileTransaction → getBase64EncodedWireTransaction
+8. provider.signAndSendTransaction(base64)
+9. (fone-and-forget) confirmSignature()
+```
+
+**Composable API:**
+```typescript
+const { loading, error, result, deposit } = useDeposit();
+await deposit(1_000_000n);
+```
+
+`loading` / `error` / `result` — реактивные refs.
+
+### Критично: где вычисляется `new_root`
+
+**Не во фронтенде.** Вызов `postRootPreview()` → backend → Merkle-сервис `/root`. Это **единственный** вычислитель корней во всей системе.
+
+On-chain инструкция `deposit` **не проверяет** корректность `new_root` (см. `deposit.rs`, "Trust model"). Единственная защита — клиент использует проверенную реализацию. Мы это делаем.
+
+### Грабли
+
+1. **Codama требует `TransactionSigner` для signer-аккаунтов.** `{address, role}` — недостаточно, `AccountSignerMeta` требует поле `signer`. Обход — `makeNoopSigner`.
+2. **`amountLamports` в `DepositNote` — уже hex**, не decimal. `generateNote` конвертирует при создании. Дальше по пайплайну всё hex.
+3. **`postRootPreview` не был в `api/client.ts`** при первом прогоне — забыли при рефакторинге. Добавлено по месту.
+
+### Уроки
+
+1. **Один вычислитель корней — Merkle-сервис.** Никаких TS-портов `merkle.js`.
+2. **Codama-инструкции не подписывают.** Они только **конструируют** instruction. Подпись — отдельный шаг, всегда через wallet provider.
+3. **Noop signer — рабочий паттерн** для "build без подписи". Используется везде, где нужно собрать instruction, но подпись отложена.
+
+---
+
 ## Что дальше
 
-- **9.5** — API-клиент (типизированные обёртки над бэкендом).
-- **9.6** — UI: депозит.
 - **9.7** — UI: вывод.
 - **9.8** — Финальный чекпоинт.
