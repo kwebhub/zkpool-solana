@@ -19,7 +19,7 @@ import {
 } from "@solana/kit";
 import { getDepositInstructionAsync } from "../client";
 import { getCommitments, postRootPreview } from "../api/client";
-import { generateNote, type DepositNote } from "./generateNote";
+import { generateNote, type DepositNote } from "../deposit/generateNote";
 import { useWalletStore } from "../stores/wallet";
 import { makeNoopSigner } from "../wallet/kitSigner";
 

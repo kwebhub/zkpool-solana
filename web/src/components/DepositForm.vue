@@ -57,7 +57,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useDeposit } from "../deposit/useDeposit";
+import { useDeposit } from "../composables/useDeposit";
 import { useWalletStore } from "../stores/wallet";
 import { LAMPORTS_PER_SOL, MIN_DEPOSIT_AMOUNT } from "../constants";
 

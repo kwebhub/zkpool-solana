@@ -824,7 +824,17 @@ zkpool-solana/
 │   │       └── indexer.rs
 │   ├── merkle/              ← Node.js + Fastify (Stage 6)
 │   └── prover/              ← Rust + Sunspot (Stage 7)
-├── web/                     ← Vue 3 (Stage 8)
+├── web/                     ← Vue 3 (Stage 9)
+│   └── src/
+│       ├── api/             ← typed HTTP client
+│       ├── components/      ← .vue files
+│       ├── composables/     ← use*.ts files
+│       ├── deposit/         ← deposit logic (generateNote, etc.)
+│       ├── generated/       ← Codama output
+│       ├── noir/            ← poseidon, hashes
+│       ├── stores/          ← Pinia
+│       ├── wallet/          ← wallet provider + kit signer
+│       └── withdraw/        ← withdraw logic (parseNote, reduce, buildWitness, etc.)
 ├── scripts/
 │   ├── validate-spec/       ← Rust CLI
 │   └── sync-circuits/       ← Rust CLI

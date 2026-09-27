@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useWithdraw } from "../withdraw/useWithdraw";
+import { useWithdraw } from "../composables/useWithdraw";
 import { useWalletStore } from "../stores/wallet";
 
 const wallet = useWalletStore();

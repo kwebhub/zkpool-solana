@@ -21,9 +21,9 @@ import {
 import { getWithdrawInstructionAsync } from "../client";
 import { useWalletStore } from "../stores/wallet";
 import { makeNoopSigner } from "../wallet/kitSigner";
-import { parseNote } from "./parseNote";
-import { buildWitness, type WithdrawWitness } from "./buildWitness";
-import { hexToBytes } from "./reduce";
+import { parseNote } from "../withdraw/parseNote";
+import { buildWitness, type WithdrawWitness } from "../withdraw/buildWitness";
+import { hexToBytes } from "../withdraw/reduce";
 
 const RPC_URL = "https://api.devnet.solana.com";
 
