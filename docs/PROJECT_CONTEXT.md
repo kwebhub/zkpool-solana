@@ -37,7 +37,7 @@ This is the **single normative section** of this file. Everything else describes
 
 ### 0.1. Quick-start for a new assistant
 
-1. **Read section 0 completely** — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push).
+1. **Read section 0 completely** — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately), 0.16 (no mid-message retractions).
 2. Read **section 12 (Current state)**.
 3. Read **section 13 (Documentation as portfolio material)**.
 4. Read these notes in order:
@@ -49,6 +49,10 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/03-sunspot.md`
    - `docs/notes/04-anchor.md`
    - `docs/notes/05-backend.md`
+   - `docs/notes/06-merkle.md`
+   - `docs/notes/07-prover.md`
+   - `docs/notes/08-pool-init.md`
+   - `docs/notes/09-frontend.md` (in progress)
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -476,6 +480,31 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 **Tests:** 8 unit + 3 integration + 1 ignored (real proof) + 6 smoke checks.
 **Real proof:** 324 B proof + 172 B public witness, `sunspot verify` → valid.
 
+### ✅ Stage 8. Deploy pool on-chain (2026-09-27)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 8.1 | `scripts/pool-init/` skeleton | `b342417` |
+| 8.2 | Pool initialized on devnet | `a4d274a` |
+| 8.3 | Final checkpoint | `734664f` |
+
+**Script:** `scripts/pool-init/`, Rust CLI, raw JSON-RPC (no `solana-client`).
+**Pool PDA:** `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`
+**Vault PDA:** `HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq`
+**Init tx:** `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
+**PoolState:** 384 bytes, owner = zk_pool program, authority = wallet, counters zero.
+
+### ✅ Stage 9. Frontend (2026-09-27 — in progress)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 9.1 | Vue 3 + TS + Pug + SCSS skeleton | `45b887e` |
+| 9.2 | Minimal wallet connect | `d06a931` |
+
+**Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
+**No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
+**Client SDK:** `@solana/kit@8.3.0`.
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -551,8 +580,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 5 — Backend ✅
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
-- **Stage 8 — Deploy pool on-chain ← next**
-- Stage 9 — Frontend (Vue 3)
+- Stage 8 — Deploy pool on-chain ✅
+- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1, 9.2 done)**
 - Stage 10 — Full E2E (deposit → withdraw on devnet)
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
@@ -892,8 +921,12 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 8.2 (pool initialized on devnet — tx `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`).
-**Next stage:** Stage 8.3 — final checkpoint for Stage 8.
+**Last completed stage:** Stage 9.2 (minimal wallet connect — TS + Pug + SCSS, Pinia).
+**Next stage:** Stage 9.3 — Codama-generated client for `zk_pool`.
+
+**Recent bridge commits (between Stages 7 and 8):**
+- `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
+- `3780473` — wire `/api/proof` → Merkle service.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -907,9 +940,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `PoolState`: 384 bytes, authority = wallet, all counters zero.
 - Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
-**Pool PDA (derived, not yet created on-chain):** `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`.
-
-**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) + 5 (backend unit) = **91**.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) + 5 (backend unit) + 23 (merkle) + 17+1 (prover) = **132+**.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -917,6 +948,13 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `withdrawal.json` — `29ac2e677229f4518944c76161933416e2a083dee83da638a9dfd01226cc91db`
 
 **Running containers:** `solana-zkpool-solana`, `zkpool-postgres` (healthy), `zkpool-redis` (healthy).
+**Running processes (inside `solana` container):** merkle (4003), prover (4002), backend (4001) — must be restarted after container restart.
+
+**Pool state (created 2026-09-27):**
+- Pool PDA: `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`
+- Vault PDA: `HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq`
+- `PoolState`: 384 bytes, authority = wallet, all counters zero.
+- Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
 **Docs sizes:**
 - `00-glossary.md` — 545 lines
@@ -1069,8 +1107,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`.
-4. Last completed stage: **Backend↔services wiring** (Stage 7.8 + wiring commits `e1eae1d`, `3780473`).
-5. Next task: **Stage 8 — Deploy pool on-chain** (call `Initialize Pool` on devnet).
+4. Last completed stage: **Stage 9.2** (minimal wallet connect).
+5. Next task: **Stage 9.3 — Codama-generated client for `zk_pool`**.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

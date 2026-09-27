@@ -140,9 +140,90 @@ pnpm build → ✓ 26 modules, dist/assets/index-*.js 63.57 kB (gzip 25.29 kB)
 
 ---
 
+## 9.2. Minimal wallet connect
+
+**Дата:** 2026-09-27
+**Commit:** `d06a931`
+
+### Решение: без `@solana/wallet-adapter-vue`
+
+Стандартный пакет `@solana/wallet-adapter-vue@0.4.5` требует `@solana/web3.js@^1.99` как peer dependency. Но наш проект строит инструкции через **`@solana/kit@8.3.0`** (современный SDK). Смешивать legacy `web3.js` и `@solana/kit` в одном приложении — конверсия `PublicKey ↔ Address` на каждой границе, дополнительные 200+ KB bundle.
+
+**Решение:** минимальный собственный слой поверх инжектированных провайдеров (`window.phantom.solana`, `window.solflare`, `window.solana`).
+
+**Стандартный connect-флоу** любой Solana wallet provider:
+- `provider.connect()` → `{ publicKey: { toBase58() } }`
+- `provider.disconnect()`
+- `provider.signTransaction(tx)` / `provider.signAndSendTransaction(tx)`
+- `provider.on("connect" | "disconnect" | "accountChanged", handler)`
+
+Ничего специфичного для Vue не нужно — обычный observable через Pinia `ref`.
+
+### Модули
+
+**`src/wallet/types.ts`** — `WalletProvider` интерфейс (то, что торчит из `window`) и `DetectedWallet` (обёртка для UI).
+
+**`src/wallet/detect.ts`** — `detectWallets()`:
+- Проверяет `window.phantom?.solana`, `window.solflare`, `window.backpack`, `window.solana`.
+- Дедуплицирует (Phantom может торчать и как `window.phantom.solana`, и как `window.solana`).
+- Возвращает массив с именем и провайдером.
+
+**`src/stores/wallet.ts`** — Pinia store:
+- `available` — найденные кошельки.
+- `provider` — выбранный (после connect).
+- `addr` — `Address | null` (тип из `@solana/kit`).
+- `connect(wallet)` / `disconnect()` / `tryEagerConnect()`.
+- `connected`, `walletName`, `connecting`, `error`.
+
+### `tryEagerConnect`
+
+При загрузке страницы пробуем `provider.connect({ onlyIfTrusted: true })` для каждого доступного кошелька. Если пользователь уже авторизовал этот dapp раньше — подключение мгновенное, без попапа. Если нет — silent fail, ждём клика.
+
+**Стандартный паттерн.** Phantom, Solflare его поддерживают.
+
+### UI
+
+`App.vue` — хедер с двумя состояниями:
+- **Подключено:** имя кошелька + сокращённый адрес (`5iM6…AKGc`) + кнопка Disconnect.
+- **Не подключено:** кнопка Connect {Phantom|Solflare|Backpack} для каждого найденного. Если ни одного — сообщение "Install Phantom or Solflare".
+
+Pug-шаблон, SCSS стили, scoped.
+
+### Стек
+
+```json
+"@solana/addresses": "^8.3.0",
+"@solana/kit": "^8.3.0",
+"pinia": "^2.2.0",
+"vue": "^3.5.0",
+"vue-router": "^4.4.0"
+```
+
+### Проверка
+
+```bash
+pnpm typecheck → OK
+pnpm build → ✓ 68 modules, index-*.js 73.39 kB (gzip 29.32 kB)
+```
+
+Bundle вырос с 63 KB до 73 KB (gzip: 25 → 29 KB) — приемлемо.
+
+### Грабли
+
+1. **`window.solana` и `window.phantom.solana` — один и тот же объект.** Проверяем дедупликацию через `Set<WalletProvider>`. Иначе в UI будет две кнопки "Phantom".
+2. **`Address` из `@solana/kit` vs `PublicKey` из `web3.js`.** Не путать. Наш `address(pk)` конвертирует base58-строку в `Address`. Внутри kit это брендированный тип.
+3. **`connect({ onlyIfTrusted: true })` кидает исключение, если пользователь не авторизован.** Обязательно оборачивать в `try/catch` и продолжать цикл по другим кошелькам.
+
+### Уроки
+
+1. **Не тащить библиотеку ради 50 строк кода.** wallet-adapter-vue тянет web3.js, который конфликтует с нашим kit-стеком.
+2. **`window.phantom?.solana ?? window.solana` — правильный fallback.** Phantom выставляет оба, Solflare — только `window.solflare`, Backpack — `window.backpack`.
+3. **`onlyIfTrusted` — тихий auto-connect.** Без него при каждой загрузке страницы появляется попап кошелька.
+
+---
+
 ## Что дальше
 
-- **9.2** — Solana wallet adapter (Phantom / Solflare).
 - **9.3** — Codama-клиент для `zk_pool`.
 - **9.4** — `@noir-lang/noir_js` — commitments и nullifier_hash в браузере.
 - **9.5** — API-клиент (типизированные обёртки над бэкендом).
