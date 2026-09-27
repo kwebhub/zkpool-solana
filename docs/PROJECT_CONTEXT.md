@@ -509,6 +509,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 9.6c | Deposit UI screen | `fae22c4` |
 | 9.7a | BN254 field reduction (recipient) + tests | `c8ef710` |
 | 9.7b | Withdrawal witness assembly | `4238ed4` |
+| 9.7c | `useWithdraw` composable | `28351ea` |
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
 **Client SDK:** `@solana/kit@8.3.0`.
@@ -589,7 +590,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
-- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.7b done)**
+- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.7c done)**
 - Stage 10 — Full E2E (deposit → withdraw on devnet)
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
@@ -929,8 +930,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.7b (withdrawal witness — parseNote, buildWitness; `hash_1 == hash_2(x, 0)` verified).
-**Next stage:** Stage 9.7c — `useWithdraw` composable (tx build + send).
+**Last completed stage:** Stage 9.7c (`useWithdraw` — note parse → witness → Groth16 proof → tx send).
+**Next stage:** Stage 9.7d — withdrawal UI screen.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).

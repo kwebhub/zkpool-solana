@@ -920,6 +920,113 @@ expected (Prover.toml):       0x1412cc9d862599e6869a1881c8562062b98537456d903581
 
 ---
 
+## 9.7c. `useWithdraw` composable
+
+**Дата:** 2026-09-27
+**Commit:** `28351ea`
+
+### Что делает
+
+Обёртка полного цикла вывода:
+
+```
+1. parseNote(noteJson)           ← 9.7b1
+2. buildWitness(note, recipient) ← 9.7b2 (hashes, Merkle proof, Groth16 proof)
+3. decode base64 → 324 bytes     ← проверка длины
+4. getWithdrawInstructionAsync   ← Codama
+5. RPC getLatestBlockhash
+6. build transaction message
+7. compileTransaction → base64 wire tx
+8. provider.signAndSendTransaction
+9. (fire-and-forget) confirmSignature
+```
+
+### API
+
+```typescript
+const { loading, error, result, withdraw } = useWithdraw();
+await withdraw(noteJson, recipientBase58);
+```
+
+Возвращает `WithdrawResult`:
+```typescript
+{
+  signature: string;
+  recipient: string;
+  amount:    string;   // decimal lamports
+  witness:   WithdrawWitness;  // полный witness из 9.7b
+}
+```
+
+### Инструкция `withdraw` — аргументы
+
+Из `WithdrawInstructionDataArgs` (сгенерировано Codama):
+
+| Поле | Тип | Источник |
+|---|---|---|
+| `proof` | `ReadonlyUint8Array` | base64 → 324 bytes |
+| `nullifierHash` | `ReadonlyUint8Array` | hex → 32 bytes |
+| `root` | `ReadonlyUint8Array` | hex → 32 bytes |
+| `recipient` | `Address` | base58 (не reduced) |
+| `amount` | `number \| bigint` | decimal → bigint |
+| `recipientBinding` | `ReadonlyUint8Array` | hex → 32 bytes |
+
+**Аккаунты** (auto-derived Codama где можно):
+- `payer` — noop signer на wallet address (см. 9.6b).
+- `pool` — PDA `[b"pool3"]`.
+- `nullifierRecord` — PDA `[b"nullifier", pool, nullifier_hash]`.
+- `vault` — PDA `[b"vault3", pool]`.
+- `to` — recipient address (writable).
+- `verifierProgram` — verifier program ID.
+- `systemProgram` — system program.
+
+### Проверка длины proof
+
+```typescript
+if (proofBytes.length !== 324) {
+  throw new Error(`unexpected proof length: ${proofBytes.length}, expected 324`);
+}
+```
+
+**Зачем:** если `sunspot prove` вдруг вернёт пруф другого размера (изменение схемы, другая кривая), on-chain `require!(proof.len() == PROOF_LEN)` упадёт с `InvalidProofLength`. Лучше отвалиться раньше, на фронте.
+
+### base64 → bytes
+
+```typescript
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    out[i] = bin.charCodeAt(i);
+  }
+  return out;
+}
+```
+
+`atob` — встроен в браузер, работает в Node 16+. `Buffer.from(b64, 'base64')` — Node-only, не подходит.
+
+### `recipient` — что передавать
+
+**Два разных значения:**
+- **В instruction аргумент `recipient`** — base58 адрес (Codama сам делает `getAddressEncoder().encode(Address)` в 32 байта).
+- **`recipientBinding`** — вычислен в `buildWitness` через **reduced** recipient (BN254).
+
+On-chain `encode_public_inputs` тоже reduce'ит `recipient` перед упаковкой в публичные входы. **Итог:** circuit получает reduced recipient, binding тоже на reduced — совпадает.
+
+### Грабли
+
+1. **`proof` на входе Codama — байты, не base64.** `getWithdrawInstructionAsync` ожидает `ReadonlyUint8Array`. Конвертация base64 → Uint8Array — обязательный шаг.
+2. **`to` (аккаунт) и `recipient` (аргумент) — разные вещи.** `to` — writable account meta; `recipient` — data-аргумент. Оба — один и тот же адрес, но типы разные (`Address` для обоих, но в разных местах instruction).
+3. **`amount` в Codama — `bigint`.** Строка из witness (`witness.amount`) конвертируется через `BigInt(...)`.
+
+### Уроки
+
+1. **Fire-and-forget confirmation** — правильный паттерн для UX. Пользователь получает signature сразу; polling идёт в фоне.
+2. **Явные проверки длины перед on-chain.** 324 байта для Groth16 — если что-то не так, лучше знать до отправки транзакции.
+3. **`atob` вместо Buffer.** Один и тот же код работает в браузере и в Node.
+
+---
+
 ## Что дальше
 
 - **9.8** — Финальный чекпоинт.
