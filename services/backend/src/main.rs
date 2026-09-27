@@ -273,18 +273,97 @@ struct ProofQuery {
 }
 
 async fn get_proof(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Query(q): Query<ProofQuery>,
 ) -> impl IntoResponse {
-    (
-        StatusCode::NOT_IMPLEMENTED,
-        Json(json!({
-            "error": "not implemented",
-            "reason": "requires the Merkle service (Stage 6)",
-            "pool_address": q.pool_address,
-            "leaf_index": q.leaf_index,
-        })),
-    )
+    let pool = q
+        .pool_address
+        .unwrap_or_else(|| state.config.pool_address.clone());
+
+    // Load commitments in leaf_index order.
+    let rows = match state.db.list_commitments(&pool).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            error!("list_commitments failed: {:#}", e);
+            metrics::record_db_error();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({"error": "db query failed"})),
+            )
+                .into_response();
+        }
+    };
+
+    if q.leaf_index as usize >= rows.len() {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "leaf_index out of range",
+                "count": rows.len(),
+                "leaf_index": q.leaf_index,
+            })),
+        )
+            .into_response();
+    }
+
+    // Build commitments list (bare hex) for the Merkle service.
+    let commitments: Vec<String> = rows.iter().map(|c| hex::encode(&c.commitment)).collect();
+
+    let url = format!("{}/proof", state.config.merkle_url);
+    let body = json!({
+        "commitments": commitments,
+        "leaf_index": q.leaf_index,
+    });
+
+    let resp = reqwest::Client::new().post(&url).json(&body).send().await;
+
+    let resp = match resp {
+        Ok(r) => r,
+        Err(e) => {
+            error!("merkle request failed: {:#}", e);
+            return (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "merkle service unreachable"})),
+            )
+                .into_response();
+        }
+    };
+
+    let status = resp.status();
+    if !status.is_success() {
+        let body: String = resp.text().await.unwrap_or_default();
+        error!("merkle {}: {}", status, body);
+        return (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": "merkle service error"})),
+        )
+            .into_response();
+    }
+
+    match resp.json::<serde_json::Value>().await {
+        Ok(v) => {
+            let proof = v.get("proof").cloned().unwrap_or(json!([]));
+            let is_even = v.get("is_even").cloned().unwrap_or(json!([]));
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "pool_address": pool,
+                    "leaf_index": q.leaf_index,
+                    "proof": proof,
+                    "is_even": is_even,
+                })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            error!("merkle response parse error: {:#}", e);
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(json!({"error": "merkle returned invalid response"})),
+            )
+                .into_response()
+        }
+    }
 }
 
 async fn metrics_endpoint() -> impl IntoResponse {
