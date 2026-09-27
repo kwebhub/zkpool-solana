@@ -243,7 +243,8 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 │ • Verifier program:  5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ │
 │ • zk_pool program:   8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm │
 │ • Pool PDA:          B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf │
-│   (PDA exists only after `Initialize Pool` is called — Stage 8)  │
+│ • Vault PDA:         HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq │
+│   (Both created 2026-09-27, tx 2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1...)│
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -891,14 +892,20 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 8.1 (`scripts/pool-init/` skeleton — builds).
-**Next stage:** Stage 8.2 — `main.rs` implementation (build + send `pool` instruction via raw RPC).
+**Last completed stage:** Stage 8.2 (pool initialized on devnet — tx `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`).
+**Next stage:** Stage 8.3 — final checkpoint for Stage 8.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
 **Deployed programs on devnet:**
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
+
+**Pool state (created 2026-09-27):**
+- Pool PDA: `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`
+- Vault PDA: `HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq`
+- `PoolState`: 384 bytes, authority = wallet, all counters zero.
+- Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
 **Pool PDA (derived, not yet created on-chain):** `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`.
 
