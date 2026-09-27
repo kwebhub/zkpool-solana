@@ -222,7 +222,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 └──────────────┘   └──────────────┘   └──────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
-│ PROVER (Rust + axum) — port 4002  (Stage 7)                      │
+│ PROVER (Rust + axum) — port 4002                                 │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
@@ -235,7 +235,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 │ • Verifier program:  5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ │
 │ • zk_pool program:   8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm │
 │ • Pool PDA:          B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf │
-│   (PDA exists only after `Initialize Pool` is called — not yet)  │
+│   (PDA exists only after `Initialize Pool` is called — Stage 8)  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -542,12 +542,14 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 5 — Backend ✅
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
-- **Stage 8 — Frontend (Vue 3) ← next**
-- Stage 9 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
-- Stage 10 — Engineering processes (CI/CD, templates)
-- Stage 11 — Security (threat model, expanded tests)
-- Stage 12 — Finalization
-- Stage 13 — Deferred: split deposit (after v0.1.0)
+- **Stage 8 — Deploy pool on-chain ← next**
+- Stage 9 — Frontend (Vue 3)
+- Stage 10 — Full E2E (deposit → withdraw on devnet)
+- Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
+- Stage 12 — Engineering processes (CI/CD, templates)
+- Stage 13 — Security (threat model, expanded tests)
+- Stage 14 — Finalization
+- Stage 15 — Deferred: split deposit (after v0.1.0)
 
 ### 7.10. Merkle service ordering dependency
 
@@ -881,8 +883,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 7.8 (final checkpoint — Stage 7 complete).
-**Next stage:** Stage 8 — Frontend (Vue 3) — or backend `/api/proof` wiring first.
+**Last completed stage:** Backend↔prover + backend↔merkle wiring (commits `e1eae1d`, `3780473`).
+**Next stage:** Stage 8 — Deploy pool on-chain (call `Initialize Pool` on devnet).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
@@ -1052,8 +1054,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`.
-4. Last completed stage: **Stage 7.8** (final checkpoint — Stage 7 complete).
-5. Next task: **Stage 8 — Frontend** (Vue 3) — or wire backend `/api/proof` → prover first.
+4. Last completed stage: **Backend↔services wiring** (Stage 7.8 + wiring commits `e1eae1d`, `3780473`).
+5. Next task: **Stage 8 — Deploy pool on-chain** (call `Initialize Pool` on devnet).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
