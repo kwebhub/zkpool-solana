@@ -86,3 +86,11 @@ export async function postWithdraw(req: WithdrawRequest): Promise<WithdrawRespon
     body: JSON.stringify(req),
   });
 }
+
+/** `POST /api/root-preview`. */
+export async function postRootPreview(commitments: string[]): Promise<{ root: string }> {
+  return request<{ root: string }>("/api/root-preview", {
+    method: "POST",
+    body: JSON.stringify({ commitments }),
+  });
+}
