@@ -502,6 +502,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 9.2 | Minimal wallet connect | `d06a931` |
 | 9.3 | Codama client for `zk_pool` | `70c1b6d` |
 | 9.4 | `@noir-lang/noir_js` in browser | `c3537c4` |
+| 9.5 | Typed API client | `d28f530` |
 
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
@@ -583,7 +584,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
-- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.4 done)**
+- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.5 done)**
 - Stage 10 — Full E2E (deposit → withdraw on devnet)
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
@@ -923,8 +924,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.4 (`@noir-lang/noir_js` in browser — `poseidon2Hash`, `computeHashes`).
-**Next stage:** Stage 9.5 — typed API client for the backend.
+**Last completed stage:** Stage 9.5 (typed API client — 5 endpoints, `ApiClientError`).
+**Next stage:** Stage 9.6 — deposit UI.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).

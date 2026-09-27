@@ -406,6 +406,103 @@ export async function computeHashes(nullifier, secret, amount): Promise<Commitme
 
 ---
 
+## 9.5. Типизированный API-клиент
+
+**Дата:** 2026-09-27
+**Commit:** `d28f530`
+
+### Зачем
+
+Фронтенд общается с бэкендом (4001) через пять эндпоинтов. Без типов легко ошибиться в именах полей (`public_witness` vs `publicWitness`), забыть про `null` в `root`, перепутать форматы hex/base64.
+
+**Решение:** два файла — `types.ts` (интерфейсы) и `client.ts` (обёртки над fetch).
+
+### `types.ts` — контракты
+
+**Базовые типы:**
+- `Hex = string` — bare hex, без `0x`.
+- `Base64 = string` — стандартный алфавит с padding.
+
+**Response-типы:**
+
+```typescript
+HealthResponse      // {status, db, version}
+CommitmentsResponse // {pool_address, count, commitments: CommitmentRecord[]}
+RootResponse        // {pool_address, root: Hex | null}
+ProofResponse       // {pool_address, leaf_index, proof: Hex[20], is_even: bool[20]}
+WithdrawResponse    // {proof: Base64, public_witness: Base64}
+```
+
+**Request-тип:**
+
+```typescript
+WithdrawRequest     // 10 полей, все Hex (кроме is_even: bool[])
+```
+
+**Ошибка:**
+
+```typescript
+ApiError            // {error: string, [key: string]: unknown}
+```
+
+Индексная сигнатура `[key: string]: unknown` — потому что бэкенд добавляет контекстные поля (`prover_status`, `prover_body`) к базовому `{error}`.
+
+### `client.ts` — обёртки
+
+**Общий хелпер `request<T>(path, init?)`:**
+
+1. `fetch` с JSON-заголовком.
+2. Читает тело как текст (не `.json()`, чтобы корректно обработать пустой ответ).
+3. Если тело не пустое — `JSON.parse`, иначе `body = null`.
+4. Если `!resp.ok` — бросает `ApiClientError` с телом и статусом.
+5. Возвращает `T`.
+
+**`ApiClientError`** — свой класс ошибки с `status` и `body`, чтобы вызывающий код мог различать 400 / 502 / 500.
+
+**Экспортируемые функции:**
+
+```typescript
+getHealth()
+getCommitments(poolAddress?)
+getRoot(poolAddress?)
+getProof(leafIndex, poolAddress?)
+postWithdraw(req)
+```
+
+`poolAddress` опционален во всех: если не указан, бэкенд использует свой `POOL_ADDRESS` из env.
+
+### BASE = ""
+
+**Пустая строка.** В dev-режиме Vite проксирует `/api/*` на `localhost:4001` (`vite.config.ts`). В production тот же origin — reverse proxy должен сделать то же самое. **Никаких абсолютных URL.**
+
+### Обработка ошибок
+
+**Три класса ошибок:**
+
+| Класс | Когда | Что в теле |
+|---|---|---|
+| `ApiClientError` (400) | `WithdrawRequest` невалиден | `{error: "<validation msg>"}` |
+| `ApiClientError` (502) | prover/merkle недоступен | `{error: "prover unreachable"}` |
+| `ApiClientError` (500) | DB error, internal | `{error: "db query failed"}` |
+
+Все — через единый `ApiClientError`. Вызывающий код может смотреть на `e.status` для деталей.
+
+### Грабли
+
+1. **`resp.json()` не работает для пустого тела.** `Content-Length: 0` → исключение. Поэтому читаем через `resp.text()` и парсим вручную.
+
+2. **`root: null` в `RootResponse`.** TypeScript строгий — `Hex | null`. Клиент должен проверять.
+
+3. **Никаких `throw` для HTTP-ошибок, кроме `!resp.ok`.** 200 с `{"error": "..."}` в теле — невозможно; бэкенд всегда возвращает 200 только с валидными данными.
+
+### Уроки
+
+1. **Один хелпер — все эндпоинты.** Никаких пяти почти одинаковых `fetch`-обёрток.
+2. **`ApiClientError` — класс, не просто `Error`.** Позволяет `catch (e) { if (e instanceof ApiClientError && e.status === 400) ... }`.
+3. **Явные Response-типы** — самодокументируемый контракт между фронтом и бэком. Если бэкенд меняет поле — TypeScript укажет на все места использования.
+
+---
+
 ## Что дальше
 
 - **9.5** — API-клиент (типизированные обёртки над бэкендом).
