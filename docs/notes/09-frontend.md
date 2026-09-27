@@ -737,6 +737,88 @@ index.js                    165.86 kB (gzip 58.93 kB)
 
 ---
 
+## 9.7a. BN254 reduction (recipient)
+
+**Дата:** 2026-09-27
+**Commit:** `c8ef710`
+
+### Зачем
+
+Solana pubkey — 32 случайных байта. BN254 поле имеет порядок ≈ 2^254, а pubkey — 256 бит. Значит, ~75% pubkey'ев **больше** модуля. Схема withdrawal ожидает `recipient` как **элемент поля** — значение должно быть < prime.
+
+On-chain модуль `encoding.rs::encode_public_inputs` уже делает reduction при кодировании публичных входов:
+
+```rust
+let recipient_reduced = reduce_to_field(&recipient.to_bytes());
+```
+
+Но `recipient_binding = hash_2(note_secret, recipient)` вычисляется **в браузере** (Stage 9.4). Значит, фронтенд должен использовать **тот же** reduced-`recipient`, что и on-chain — иначе proof не пройдёт верификацию.
+
+### Проверка API `noir_js`
+
+Тест перед написанием кода:
+
+```
+noir.execute({left: BN254_PRIME + 1, right: 0})
+→ Error: The value passed for parameter `left` is invalid:
+  Expected witness values to be integers, but `30644e72...00000002` failed with `invalid digit found in string`
+```
+
+**Вывод:** `noir_js` **отбрасывает** значения ≥ prime. Reduction обязателен на фронтенде.
+
+### `reduce.ts` — TS-порт `encoding.rs::reduce_to_field`
+
+**Алгоритм:** повторное вычитание модуля.
+
+- `isGe(a, b)` — сравнение 32-байтовых BE-чисел.
+- `subBe(a, b)` — вычитание с borrow.
+- `reduceToField(input)` — 5 итераций вычитания (максимум нужно 4, т.к. 2^256 / p ≈ 4.006; пятая — safety margin, как в Rust).
+- `reduceToFieldHex` — hex-обёртка.
+- `bytesToHex`, `hexToBytes` — утилиты.
+
+**Константа `BN254_PRIME_BE`** — скопирована из `encoding.rs`, 32 байта.
+
+### Тесты
+
+4 теста, все проходят:
+
+```
+✔ zero stays zero
+✔ prime reduces to zero
+✔ max value reduces below prime
+✔ small value unchanged
+```
+
+**Те же кейсы, что в Rust-тестах `encoding.rs`.** Это кросс-языковая проверка — если TS-порт разойдётся с Rust, CI (Stage 12) поймает.
+
+### Запуск TS-тестов
+
+```
+node --experimental-strip-types --test src/withdraw/reduce.test.ts
+```
+
+Node 24 умеет исполнять `.ts` без сборки (type stripping). **Требует** `allowImportingTsExtensions: true` в `tsconfig.json` и явного `.ts` в импортах:
+
+```typescript
+import { reduceToField } from "./reduce.ts";
+```
+
+**Конфликт:** `vue-tsc` ругается на `.ts` без флага. Флаг добавлен в `tsconfig.json`.
+
+### Грабли
+
+1. **`noir_js` не делает implicit reduction.** Ошибка `invalid digit found in string` — невнятная, но означает "значение не является валидным Field".
+2. **TypeScript 5.9 ужесточил `Uint8Array` generic.** `Uint8Array<ArrayBufferLike>` не присваивается `Uint8Array<ArrayBuffer>`. Фикс: явные аннотации `Uint8Array<ArrayBuffer>`.
+3. **`--experimental-strip-types` требует `.ts` в импортах.** Node не делает auto-extension resolution как bundler.
+
+### Уроки
+
+1. **Кросс-языковые порты требуют кросс-языковых тестов.** TS-порт `reduce_to_field` проверяется теми же кейсами, что Rust. Если разойдётся — упадёт тест, а не верификация on-chain.
+2. **Один алгоритм — два применения.** Rust использует `reduce_to_field` внутри CPI-вызова, TS — при вычислении `recipient_binding`. Оба обязаны давать одинаковый результат.
+3. **`--experimental-strip-types` — практичный способ тестировать TS.** Без Vitest/Jest, только встроенный Node test runner.
+
+---
+
 ## Что дальше
 
 - **9.7** — UI: вывод.
