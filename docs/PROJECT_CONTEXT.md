@@ -437,8 +437,9 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | GET | `/api/health` | — | `{status, db, version}` |
 | GET | `/api/commitments` | 60/min | `{pool_address, count, commitments[]}` |
 | GET | `/api/root` | 60/min | `{pool_address, root}` |
-| GET | `/api/proof` | 60/min | **501 STUB** (needs Stage 7 — Prover) |
-| POST | `/api/withdraw` | 5/min | `{proof, public_witness}` |
+| GET | `/api/proof` | 60/min | `{pool_address, leaf_index, proof[], is_even[]}` |
+| POST | `/api/root-preview` | 60/min | `{root}` — proxies Merkle `/root` |
+| POST | `/api/withdraw` | 5/min | `{proof, public_witness}` (base64) |
 | GET | `/metrics` | — | Prometheus text |
 
 **Database schema:** 3 tables (`commitments`, `roots`, `nullifiers`) + 3 indexes.
@@ -503,6 +504,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 9.3 | Codama client for `zk_pool` | `70c1b6d` |
 | 9.4 | `@noir-lang/noir_js` in browser | `c3537c4` |
 | 9.5 | Typed API client | `d28f530` |
+| 9.6a | Backend `POST /api/root-preview` | `dc0a59b` |
 
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
@@ -924,8 +926,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.5 (typed API client — 5 endpoints, `ApiClientError`).
-**Next stage:** Stage 9.6 — deposit UI.
+**Last completed stage:** Stage 9.6a (backend `POST /api/root-preview` — proxies Merkle `/root`).
+**Next stage:** Stage 9.6b — deposit UI.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
