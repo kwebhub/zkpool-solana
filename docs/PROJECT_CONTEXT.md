@@ -883,8 +883,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Backend↔prover + backend↔merkle wiring (commits `e1eae1d`, `3780473`).
-**Next stage:** Stage 8 — Deploy pool on-chain (call `Initialize Pool` on devnet).
+**Last completed stage:** Stage 8.1 (`scripts/pool-init/` skeleton — builds).
+**Next stage:** Stage 8.2 — `main.rs` implementation (build + send `pool` instruction via raw RPC).
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 
