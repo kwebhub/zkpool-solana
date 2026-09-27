@@ -17,13 +17,16 @@
         p.muted(v-if="wallet.available.length === 0") No Solana wallet detected. Install Phantom or Solflare.
 
   main
-    p Frontend skeleton — Stage 9.2
-    p.error(v-if="wallet.error") {{ wallet.error }}
+    p(v-if="!wallet.connected") Connect a wallet to deposit.
+    DepositForm(v-else)
+
+  p.error(v-if="wallet.error") {{ wallet.error }}
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 import { useWalletStore } from "./stores/wallet";
+import DepositForm from "./components/DepositForm.vue";
 
 const wallet = useWalletStore();
 
