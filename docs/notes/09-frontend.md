@@ -819,7 +819,107 @@ import { reduceToField } from "./reduce.ts";
 
 ---
 
+## 9.7b. Сборка withdrawal witness
+
+**Дата:** 2026-09-27
+**Commit:** `4238ed4`
+
+### Что сделано
+
+Два файла:
+- `src/withdraw/parseNote.ts` — парсинг и валидация сохранённой note.
+- `src/withdraw/buildWitness.ts` — сборка witness'а + получение Groth16-пруфа от бэкенда.
+
+### `parseNote.ts`
+
+**Входные форматы:** JSON-строка или уже распарсенный объект.
+
+**`ParsedNote`:**
+```typescript
+{
+  nullifier:      string;  // 64-hex
+  secret:         string;  // 64-hex
+  noteSecret:     string;  // 64-hex
+  amount:         string;  // 64-hex
+  commitment:     string;  // 64-hex
+  nullifierHash:  string;  // 64-hex
+  txSignature:    string;  // base58
+  poolPda:        string;  // base58
+}
+```
+
+**Валидация:** hex-поля проверяются регуляркой `/^[0-9a-f]{64}$/`. Не-hex поля — непустые строки.
+
+**Имена полей:** snake_case в JSON (`note_secret`, `nullifier_hash`), camelCase в TS (`noteSecret`, `nullifierHash`). Парсер делает маппинг.
+
+### `buildWitness.ts`
+
+**Пайплайн:**
+
+```
+1. nullifier_hash = hash_2(nullifier, 0)      ← noir_js в браузере
+   (использует hash_1(x) == hash_2(x, 0))
+2. recipient → 32 байта → reduceToField       ← BN254
+3. recipient_binding = hash_2(note_secret, recipient_field)
+4. GET /api/commitments → найти leaf_index по commitment
+5. GET /api/proof?leaf_index=N → proof, is_even
+6. GET /api/root → root
+7. POST /api/withdraw → proof (base64), public_witness (base64)
+```
+
+**`WithdrawWitness` содержит всё для on-chain `withdraw`:**
+
+```typescript
+{
+  root:               string;  // bare hex
+  nullifierHash:      string;  // bare hex
+  recipient:          Address; // base58
+  recipientFieldHex:  string;  // bare hex
+  recipientBinding:   string;  // bare hex
+  amount:             string;  // decimal
+  merkleProof:        string[];// 20 hex
+  isEven:             boolean[];// 20 bool
+  proofBase64:        string;  // 324 B
+  publicWitnessBase64:string;  // 172 B
+}
+```
+
+### `base58ToBytes`
+
+**Мини-декодер base58** — 30 строк. Node.js Buffer не работает в браузере без polyfill. `@solana/addresses` даёт base58-строки, но не сырые байты — для reduction нужны именно 32 байта.
+
+Алгоритм:
+1. `bytes[0] = 0`.
+2. Для каждого символа: `carry = idx`, `for j in bytes: carry += bytes[j] * 58; bytes[j] = carry & 0xff; carry >>= 8`. Push оставшийся carry.
+3. Ведущие `'1'` → ведущие нули.
+4. Reverse → 32 байта с левым padding.
+
+### Кросс-проверка: `hash_1(x) == hash_2(x, 0)`
+
+**Зафиксировано в `PROJECT_CONTEXT.md` §7.4** (zero-padding без domain separation). Проверено вживую:
+
+```
+hash_1(nullifier) via hashes: 0x1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4
+hash_2(nullifier, 0):         0x1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4
+expected (Prover.toml):       0x1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4
+```
+
+**Вывод:** `buildWitness` может использовать `poseidon2Hash(x, "0".repeat(64))` вместо отдельного `hash_1` circuit'а. Упрощение: один ACIR (`hash2.json`) вместо двух.
+
+### Грабли
+
+1. **`getProof` не возвращает `root`.** `ProofResponse` = `{pool_address, leaf_index, proof, is_even}`. Root — отдельный endpoint `/api/root`.
+2. **Файл в `/tmp/` не видит `node_modules`.** Node резолвит `node_modules` относительно скрипта, не cwd. Тестовые скрипты — в `services/merkle/`.
+3. **`bytesToHex` не использовался** после рефакторинга — импорт удалён.
+
+### Уроки
+
+1. **`hash_1(x) == hash_2(x, 0)` — не теорема, а проверенный факт.** Не полагаться на память — гонять проверку при каждом изменении схемы.
+2. **Base58-декодер — 30 строк.** Не тянуть библиотеку ради одной функции.
+3. **`buildWitness` — чистый orchestrator.** Никакой криптографии внутри — только вызовы `poseidon2Hash`, `reduceToFieldHex`, `getCommitments`, `getProof`, `getRoot`, `postWithdraw`.
+
+---
+
 ## Что дальше
 
-- **9.7** — UI: вывод.
 - **9.8** — Финальный чекпоинт.
