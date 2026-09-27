@@ -672,6 +672,71 @@ On-chain инструкция `deposit` **не проверяет** коррек
 
 ---
 
+## 9.6c. UI экран депозита
+
+**Дата:** 2026-09-27
+**Commit:** `fae22c4`
+
+### Что сделано
+
+- `src/components/DepositForm.vue` — форма ввода суммы + результат.
+- `src/App.vue` — обновлён: показывает `DepositForm` при подключённом кошельке.
+
+### `DepositForm.vue`
+
+**Поля:**
+- `Amount (SOL)` — text input, дефолт `0.01`, минимум из `MIN_DEPOSIT_AMOUNT`.
+- Кнопка `Deposit` (disabled, пока amount < min или кошелёк не подключён).
+
+**После успеха:**
+- Signature с ссылкой на Explorer (devnet).
+- Commitment, new_root — полные hex.
+- **Отдельный блок "⚠️ Save this note":** все 4 секрета (`nullifier`, `secret`, `note_secret`, `amount` в hex).
+- Кнопка "Copy note as JSON" — копирует всё, включая `tx_signature` и `pool_pda`.
+
+**Критично:** потеря note = потеря средств. Визуально это выделено жёлтым блоком с красным предупреждением.
+
+### Валидация
+
+```typescript
+canDeposit = wallet.connected
+          && !deposit.loading
+          && amount > 0
+          && amountLamports >= MIN_DEPOSIT_AMOUNT
+```
+
+**Проверяется на фронте до вызова** — быстрый отказ, экономия RPC-вызовов и попапа кошелька.
+
+### `App.vue`
+
+**Три состояния:**
+1. Кошелёк не подключён → "Connect a wallet to deposit."
+2. Кошелёк подключён → `DepositForm`.
+3. Ошибка кошелька → сообщение под main.
+
+### Bundle size после 9.6c
+
+```
+noirc_abi_wasm_bg.wasm      788.51 kB
+acvm_js_bg.wasm           3,047.92 kB
+index.js                    165.86 kB (gzip 58.93 kB)
+```
+
+**3.8 MB WASM** — цена `noir_js` в браузере. Это `acvm_js` — ACIR Virtual Machine, компилируемая из Rust в WASM. Критично для byte-identical Poseidon2 хешей.
+
+**Дальнейшие оптимизации** (не сейчас):
+- Lazy load WASM только когда нужен депозит/вывод.
+- Предзагрузка через `<link rel="preload">`.
+
+### Уроки
+
+1. **Форма должна явно говорить о важности note.** Просто показать hex-строки недостаточно. `⚠️ Loss of this note means loss of funds.`
+2. **`copy as JSON`** — практично: пользователь сохраняет в файл одной кнопкой, а не собирает поля руками.
+3. **`shortSig`** в UI — `abc…xyz` вместо 88 символов base58. Полный signature — в Explorer-ссылке.
+4. **Проверка min amount на фронте** — UX + экономия. Но **on-chain проверка тоже есть** (`DepositBelowMinimum`), это последняя линия защиты.
+
+---
+
 ## Что дальше
 
 - **9.7** — UI: вывод.
