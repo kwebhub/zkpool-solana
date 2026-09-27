@@ -1187,6 +1187,110 @@ web/src/
 
 ---
 
+## 9.8. Финальный чекпоинт Stage 9
+
+**Дата:** 2026-09-27
+**Commit:** `cf65ec3`
+
+### Итог Stage 9
+
+**Стек:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
+**Client SDK:** `@solana/kit@8.3.0`, `@solana/addresses@8.3.0`, `@solana/program-client-core@8.3.0`.
+**Noir:** `@noir-lang/noir_js@1.0.0-rc.2`.
+**Codama:** `codama@1.11.0` + renderers.
+
+### Все 10 под-этапов
+
+| # | Тема |
+|---|---|
+| 9.1 | Vue 3 + TS + Pug + SCSS skeleton |
+| 9.2 | Wallet connect (без wallet-adapter-vue) |
+| 9.3 | Codama client для zk_pool |
+| 9.4 | noir_js в браузере (poseidon, hashes) |
+| 9.5 | Типизированный API-клиент |
+| 9.6a | Backend `/api/root-preview` |
+| 9.6b | Deposit logic |
+| 9.6c | Deposit UI |
+| 9.7a | BN254 reduction |
+| 9.7b | Withdrawal witness assembly |
+| 9.7c | `useWithdraw` composable |
+| 9.7d | Withdrawal UI + tabs |
+| 9.7e | Composables refactor |
+| 9.8 | Финальный чекпоинт |
+
+### Модули `web/src/`
+
+**API и константы:**
+- `api/client.ts` — 6 typed endpoints.
+- `api/types.ts` — контракты бэкенда.
+- `constants.ts` — Program IDs, PDA, MIN_DEPOSIT.
+- `client.ts` — реэкспорт Codama.
+
+**UI:**
+- `App.vue` — табы Deposit/Withdraw.
+- `components/DepositForm.vue`.
+- `components/WithdrawForm.vue`.
+
+**Composables:**
+- `composables/useDeposit.ts`.
+- `composables/useWithdraw.ts`.
+
+**Crypto:**
+- `noir/poseidon.ts` — `poseidon2Hash`.
+- `noir/hashes.ts` — `computeHashes`.
+- `withdraw/reduce.ts` — BN254 reduction (+ 4 теста).
+
+**Domain:**
+- `deposit/generateNote.ts`.
+- `withdraw/parseNote.ts`, `withdraw/buildWitness.ts`.
+
+**Infra:**
+- `wallet/detect.ts`, `wallet/types.ts`, `wallet/kitSigner.ts`.
+- `stores/wallet.ts`.
+- `generated/zk_pool/` — 20 файлов Codama.
+
+### Ключевые архитектурные решения
+
+1. **Никакого `@solana/wallet-adapter-vue`.** Только `window.phantom.solana` / `window.solflare`. Избегаем legacy `@solana/web3.js`.
+2. **Codama для инструкций.** Никакой ручной borsh-сериализации.
+3. **`hash_1(x) == hash_2(x, 0)`.** Проверено. Один ACIR — `hash2.json` — вместо двух.
+4. **`new_root` считает Merkle-сервис.** Фронтенд вызывает `/api/root-preview`, не портирует `merkle.js`.
+5. **Noop signer для Codama.** Instruction строится, подпись — через `provider.signAndSendTransaction(base64)`.
+6. **BN254 reduction — TS-порт `encoding.rs`.** Кросс-языковые тесты.
+
+### Размер бандла
+
+```
+noirc_abi_wasm_bg.wasm      788.51 kB
+acvm_js_bg.wasm           3,047.92 kB
+index.js                    177.46 kB (gzip 62.28 kB)
+index.css                     5.31 kB
+```
+
+WASM — 3.8 МБ, необходимо для noir_js.
+
+### Что не сделано (перенесено)
+
+- **E2E тест полного цикла депозит → вывод.** Stage 10.
+- **Port mapping для фронтенда.** Stage 11.
+- **Lazy load WASM.** Оптимизация, не критично.
+- **Router (vue-router).** Установлен, но не используется — табы пока покрывают потребности.
+
+### Уроки Stage 9 (обобщение)
+
+1. **`@solana/kit` 8.x + Codama 1.11 — рабочий стек.** Генерирует инструкции, PDA derivation, аккаунты. Никаких ручных декодеров.
+2. **noir_js в браузере — 3.8 МБ WASM.** Приемлемо для demo. Lazy load — future.
+3. **Одна криптографическая реализация на всю систему.** Poseidon2 — только через Noir ACIR. Никаких JS/Rust портов.
+4. **Codama требует signer, но подпись отложена.** Noop signer — рабочий паттерн.
+5. **Domain-модули (deposit/, withdraw/) + composables (use*.ts) — разные папки.** Стандарт Vue.
+
+---
+
 ## Что дальше
 
-- **9.8** — Финальный чекпоинт.
+- **Stage 10** — Full E2E на devnet.
+- **Stage 11** — Infrastructure (Makefile, Prometheus, Grafana, port mappings).
+- **Stage 12** — CI/CD.
+- **Stage 13** — Security.
+- **Stage 14** — Finalization.
+- **Stage 15** — Split deposit (deferred).

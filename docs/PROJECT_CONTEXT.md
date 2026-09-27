@@ -495,7 +495,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 **Init tx:** `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 **PoolState:** 384 bytes, owner = zk_pool program, authority = wallet, counters zero.
 
-### ✅ Stage 9. Frontend (2026-09-27 — in progress)
+### ✅ Stage 9. Frontend (2026-09-27)
 
 | # | Sub-stage | Commit |
 |---|---|---|
@@ -512,6 +512,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 9.7c | `useWithdraw` composable | `28351ea` |
 | 9.7d | Withdrawal UI + tabs | `867529e` |
 | 9.7e | Refactor: composables to `src/composables/` | `9f1445e` |
+| 9.8 | Final checkpoint | `cf65ec3` |
 **Stack:** Vue 3.5 + Vite 5.4 + Pinia 2.2 + TypeScript 5.9 + Pug 3.0 + SCSS 1.105.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
 **Client SDK:** `@solana/kit@8.3.0`.
@@ -592,8 +593,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 6 — Merkle service (Node.js) ✅
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
-- **Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ← in progress (9.1–9.7d done)**
-- Stage 10 — Full E2E (deposit → withdraw on devnet)
+- Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
+- **Stage 10 — Full E2E (deposit → withdraw on devnet) ← next**
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
 - Stage 13 — Security (threat model, expanded tests)
@@ -942,8 +943,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.7d (withdrawal UI + Deposit/Withdraw tabs — Stage 9 functionally complete).
-**Next stage:** Stage 9.8 — final checkpoint for Stage 9.
+**Last completed stage:** Stage 9.8 (final checkpoint — Stage 9 complete).
+**Next stage:** Stage 10 — Full E2E (deposit → withdraw on devnet).
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1127,9 +1128,9 @@ POST /prove
 
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
-3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`.
-4. Last completed stage: **Stage 9.2** (minimal wallet connect).
-5. Next task: **Stage 9.3 — Codama-generated client for `zk_pool`**.
+3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
+4. Last completed stage: **Stage 9.8** (final checkpoint — Stage 9 complete).
+5. Next task: **Stage 10 — Full E2E** (deposit → withdraw on devnet).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
