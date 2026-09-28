@@ -54,7 +54,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/08-pool-init.md`
    - `docs/notes/09-frontend.md`
    - `docs/notes/10-e2e.md`
-   - `docs/notes/11-infra.md` (in progress)
+   - `docs/notes/11-infra.md`
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -546,6 +546,24 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 4. Compute budget exceeded (182k CU needed, 200k default).
 5. (Test observation, not a bug.)
 
+### ✅ Stage 11. Infrastructure (2026-09-28)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 11.1 | Makefile | `1b1f80d` |
+| 11.2 | Port mappings (4001–4003, 5173) | `6d2eb42` |
+| 11.3a | Prometheus | `c90e09a` |
+| 11.3b | Grafana provisioning | `a58731d` |
+| 11.4 | Final checkpoint | `776ea2f` |
+
+**Makefile targets:** `up`, `down`, `reset`, `status`, `logs`, `web`, `build`, `clean`, `help`.
+
+**Stack:** 5 containers — `solana`, `postgres`, `redis`, `prometheus`, `grafana`.
+
+**Monitoring:** Prometheus scrapes backend `/metrics` every 15s. Grafana dashboard `zkpool-backend` (uid stable).
+
+**All ports from host:** 4001 (backend), 4002 (prover), 4003 (merkle), 5173 (web), 9090 (Prometheus), 3000 (Grafana, admin/admin).
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -624,8 +642,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 8 — Deploy pool on-chain ✅
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
-- **Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ← in progress (11.1–11.3b done)**
-- Stage 12 — Engineering processes (CI/CD, templates)
+- Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
+- **Stage 12 — Engineering processes (CI/CD, templates) ← next**
 - Stage 13 — Security (threat model, expanded tests)
 - Stage 14 — Finalization
 - Stage 15 — Deferred: split deposit (after v0.1.0)
@@ -999,8 +1017,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 11.3b (Grafana — datasource + `zkpool-backend` dashboard provisioned).
-**Next stage:** Stage 11.4 — final checkpoint for Stage 11.
+**Last completed stage:** Stage 11.4 (final checkpoint — Stage 11 complete).
+**Next stage:** Stage 12 — Engineering processes (CI/CD, templates).
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1185,8 +1203,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 11.3b** (Grafana).
-5. Next task: **Stage 11.4** — final checkpoint for Stage 11.
+4. Last completed stage: **Stage 11.4** (final checkpoint — Stage 11 complete).
+5. Next task: **Stage 12 — Engineering processes** (CI/CD, templates).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

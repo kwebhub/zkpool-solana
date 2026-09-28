@@ -373,7 +373,77 @@ $ curl -u admin:admin http://localhost:3000/api/dashboards/uid/zkpool-backend
 
 ---
 
+## 11.4. Финальный чекпоинт Stage 11
+
+**Дата:** 2026-09-28
+**Commit:** `776ea2f`
+
+# ✅ Stage 11 завершён.
+
+Makefile, port mappings, Prometheus, Grafana — всё работает.
+
+### Итог
+
+**5 контейнеров:**
+| Container | Ports | Status |
+|---|---|---|
+| `solana-zkpool-solana` | 4001–4003, 5173 | Up |
+| `zkpool-postgres` | 5432 | Up (healthy) |
+| `zkpool-redis` | 6379 | Up (healthy) |
+| `zkpool-prometheus` | 9090 | Up |
+| `zkpool-grafana` | 3000 | Up |
+
+**3 приложения внутри `solana`:**
+- merkle (4003) — `node src/server.js`
+- prover (4002) — `./target/release/zkpool-prover`
+- backend (4001) — `./target/release/zkpool-backend`
+
+**Health checks:** все 200/OK.
+
+**Endpoints из браузера:**
+- `http://localhost:5173` — frontend (Vite dev server)
+- `http://localhost:4001/api/health` — backend
+- `http://localhost:4002/health` — prover
+- `http://localhost:4003/health` — merkle
+- `http://localhost:9090` — Prometheus UI
+- `http://localhost:3000` — Grafana UI (`admin`/`admin`), dashboard `zkpool-backend`
+
+### Makefile — финальный набор
+
+| Target | Назначение |
+|---|---|
+| `make up` | docker-compose + merkle + prover + backend + health check |
+| `make down` | всё стоп |
+| `make reset` | down + up infra + clear DB/Redis + start services |
+| `make status` | containers + processes + HTTP health |
+| `make logs` | tail логов всех сервисов |
+| `make web` | Vite dev server + health check |
+| `make build` | backend + prover + web |
+| `make clean` | удалить build artifacts |
+
+### Мониторинг
+
+**Метрики backend'а** (9 штук) → Prometheus → Grafana dashboard `zkpool-backend`:
+
+- Indexer — deposits/withdrawals rate
+- Indexer lag
+- Tree size
+- Errors total
+- Tree add_leaf — p50/p95/p99
+- Tree hash_2 — p50/p95
+
+### Уроки Stage 11
+
+1. **Makefile — обязательный инструмент.** 4 команды запуска свёрнуты в `make up`.
+2. **`--force-recreate` — для применения `ports`.** `docker compose restart` не работает.
+3. **Prometheus — pull-модель.** Backend не знает о нём. `/metrics` — единственный контракт.
+4. **Grafana provisioning через файлы — воспроизводимо.** Docker compose up → всё готово.
+5. **Prometheus/Grafana в том же Docker network.** Имена сервисов (`solana:4001`, `prometheus:9090`) резолвятся через compose-сеть.
+6. **Порты 3000/9090 не конфликтуют** с нашими 4001–4003, 5173.
+
 ## Что дальше
 
-- **11.4** — Grafana dashboard для backend metrics.
-- **11.5** — финальный чекпоинт.
+- **Stage 12** — Engineering processes (CI/CD, GitHub Actions, templates).
+- **Stage 13** — Security (threat model, expanded tests).
+- **Stage 14** — Finalization.
+- **Stage 15** — Split deposit (deferred).
