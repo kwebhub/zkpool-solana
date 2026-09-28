@@ -101,6 +101,100 @@ reset: down
 
 ---
 
+## 11.2. Port mappings
+
+**Дата:** 2026-09-28
+**Commit:** `6d2eb42`
+
+### Зачем
+
+До этого этапа сервисы были доступны **только изнутри** `solana` контейнера. Чтобы открыть `http://localhost:4001` в браузере или обратиться к `curl` с хоста — нужен port mapping.
+
+### Изменения
+
+**`infra/docker-compose.yml`**, сервис `solana`:
+
+```yaml
+ports:
+  - "4001:4001"   # backend
+  - "4002:4002"   # prover
+  - "4003:4003"   # merkle
+  - "5173:5173"   # vite dev server
+```
+
+### Перезапуск
+
+```bash
+docker compose -f infra/docker-compose.yml up -d --force-recreate solana
+```
+
+**Важно:** `--force-recreate` обязателен. Без него compose видит "контейнер запущен" и не применяет изменения в `ports`.
+
+**Следствие:** все процессы внутри контейнера убиваются. Их надо перезапустить через `make up`.
+
+### Проверка с хоста
+
+```bash
+$ docker compose -f infra/docker-compose.yml ps
+solana-zkpool-solana  ...  0.0.0.0:4001-4003->4001-4003/tcp, 0.0.0.0:5173->5173/tcp
+
+$ curl http://localhost:4001/api/health
+{"db":true,"status":"ok","version":"0.1.0"}
+
+$ curl http://localhost:4002/health
+{"status":"ok"}
+
+$ curl http://localhost:4003/health
+{"status":"ok"}
+
+$ curl http://localhost:5173/
+HTTP 200
+```
+
+### Обновлён `make web`
+
+**Было:**
+```makefile
+web:
+	@$(COMPOSE) exec -d $(CONTAINER) bash -ic '...'
+	@echo "   (not yet reachable from host — port mapping in Stage 11.2)"
+```
+
+**Стало:**
+```makefile
+web:
+	@$(COMPOSE) exec -d $(CONTAINER) bash -ic 'pkill -f vite || true; cd /home/ubuntu/web && nohup pnpm dev > /tmp/web.log 2>&1 &'
+	@sleep 3
+	@curl -sf -m 5 http://localhost:5173/ >/dev/null && echo "   ✓ http://localhost:5173" || echo "   ✗ vite not reachable"
+```
+
+**Плюс:** `make web` теперь сам проверяет, что Vite поднялся.
+
+### Забыли сохранить Makefile
+
+**Симптом:** `git commit -m "port mappings"` ушёл с **старой** версией Makefile. `make web` всё ещё писал "(not yet reachable from host)".
+
+**Причина:** отредактировали `Makefile`, но не сохранили в редакторе до `git add -A`.
+
+**Фикс:** отдельный коммит `6d2eb42` с одной строкой (`1 file changed, 1 insertion(+), 1 deletion(-)`).
+
+**Урок:** после редактирования файла — сохранить. Можно визуально проверить через `git diff` перед `git add`.
+
+### Грабли
+
+1. **`--force-recreate` обязателен для применения `ports`.** Без него compose не пересоздаёт контейнер.
+2. **Рестарт контейнера убивает все процессы.** `make up` их восстанавливает.
+3. **Порты не конфликтуют с Postgres (5432) / Redis (6379).** Разные диапазоны.
+
+### Уроки
+
+1. **Port mapping — последний шаг к полноценному dev-опыту.** До этого всё тестирование было через `docker compose exec`.
+2. **`make web` сам себя проверяет.** `curl` после запуска — быстрый сигнал о проблеме.
+3. **Редактор → сохранить → `git diff` → `git add`.** Порядок, который предотвращает "забыл сохранить".
+4. **`--force-recreate` не пересоздаёт volumes.** Postgres/Redis данные остаются.
+
+---
+
 ## Что дальше
 
 - **11.2** — port mappings в `docker-compose.yml` (4001–4003, 5173).
