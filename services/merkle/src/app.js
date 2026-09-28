@@ -19,6 +19,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { poseidon2Hash } from "./poseidon.js";
 import { computeRoot, computeProof, TREE_DEPTH } from "./merkle.js";
+import { computeHashes } from "./hashes.js";
 
 const HEX64_RE = /^[0-9a-f]{64}$/;
 
@@ -44,6 +45,18 @@ export async function buildApp({ logger = true } = {}) {
     }
     const hash = await poseidon2Hash(left, right);
     return { hash };
+  });
+
+  // --- POST /hashes ---
+  app.post("/hashes", async (req, reply) => {
+    const { nullifier, secret, amount } = req.body ?? {};
+    if (!isHex64(nullifier) || !isHex64(secret) || !isHex64(amount)) {
+      return reply.code(400).send({
+        error: "nullifier, secret and amount must be 64-char bare hex strings (no 0x)",
+      });
+    }
+    const result = await computeHashes(nullifier, secret, amount);
+    return result;
   });
 
   // --- POST /root ---
