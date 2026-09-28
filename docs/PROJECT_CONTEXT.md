@@ -53,7 +53,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/07-prover.md`
    - `docs/notes/08-pool-init.md`
    - `docs/notes/09-frontend.md`
-   - `docs/notes/10-e2e.md` (in progress)
+   - `docs/notes/10-e2e.md`
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -518,6 +518,32 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 **No `@solana/wallet-adapter-vue`** — uses `window.phantom.solana` / `window.solflare` / `window.solana` directly. Avoids legacy `@solana/web3.js` dependency.
 **Client SDK:** `@solana/kit@8.3.0`.
 
+### ✅ Stage 10. Full E2E (2026-09-28)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 10.1a | Merkle `POST /hashes` | `e1a47a5` |
+| 10.1b | `scripts/e2e-deposit/` | `2748d39` |
+| 10.1c | First deposit + BN254 mask fix | `adcb441` |
+| 10.2 | `scripts/e2e-withdraw/` + full E2E | `1f6da41` |
+| 10.3 | Second E2E (arbitrary recipient) + double-spend | `3697d75` |
+| 10.4 | Final checkpoint | `b750465` |
+
+**Result:** full E2E (deposit → withdraw) verified twice on devnet. Groth16 proof verified on-chain. Double-spend protection works (Anchor `init` constraint).
+
+**Deployed on devnet:**
+- E2E #1: deposit `5LzXw…`, withdraw `5f3Lq…`, recipient = pool PDA
+- E2E #2: deposit `36Z43…`, withdraw `5Tt2o…`, recipient = `3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP`
+
+**DB state:** 2 commitments, 2 roots, 2 nullifiers.
+
+**5 bugs found and fixed:**
+1. BN254 mask `& 0x3f` → `& 0x1f`.
+2. Borsh `Vec<u8>` missing 4-byte LE length prefix.
+3. Seed `b"nullifier3"` → `b"nullifier_record"`.
+4. Compute budget exceeded (182k CU needed, 200k default).
+5. (Test observation, not a bug.)
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -595,8 +621,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
-- **Stage 10 — Full E2E (deposit → withdraw on devnet) ← in progress (10.1a–10.3 done)**
-- Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
+- Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
+- **Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ← next**
 - Stage 12 — Engineering processes (CI/CD, templates)
 - Stage 13 — Security (threat model, expanded tests)
 - Stage 14 — Finalization
@@ -970,8 +996,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 10.3 (second E2E — arbitrary recipient + double-spend protection verified).
-**Next stage:** Stage 10.4 — final checkpoint for Stage 10.
+**Last completed stage:** Stage 10.4 (final checkpoint — Stage 10 complete).
+**Next stage:** Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings).
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1156,8 +1182,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 10.3** (second E2E — arbitrary recipient + double-spend).
-5. Next task: **Stage 10.4** — final checkpoint for Stage 10.
+4. Last completed stage: **Stage 10.4** (final checkpoint — Stage 10 complete).
+5. Next task: **Stage 11 — Infrastructure** (Makefile, Prometheus, Grafana, port mappings).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
