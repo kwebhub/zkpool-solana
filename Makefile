@@ -131,9 +131,10 @@ logs:
 .PHONY: web
 web:
 	@echo "→ starting Vite dev server (5173)"
-	@$(COMPOSE) exec -d $(CONTAINER) bash -ic 'pkill -f "vite" || true; cd /home/ubuntu/web && nohup pnpm dev > /tmp/web.log 2>&1 &'
-	@echo "   (not yet reachable from host — port mapping in Stage 11.2)"
-
+	@$(COMPOSE) exec -d $(CONTAINER) bash -ic 'pkill -f vite || true; cd /home/ubuntu/web && nohup pnpm dev > /tmp/web.log 2>&1 &'
+	@sleep 3
+	@curl -sf -m 5 http://localhost:5173/ >/dev/null && echo "   ✓ http://localhost:5173" || echo "   ✗ vite not reachable"
+	
 # ============================================================
 # Build
 # ============================================================
