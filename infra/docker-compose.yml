@@ -65,6 +65,40 @@ services:
     command: redis-server --appendonly yes
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: zkpool-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    depends_on:
+      - solana
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: zkpool-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
