@@ -290,9 +290,90 @@ $ curl http://localhost:9090/api/v1/targets
 
 ---
 
+## 11.3b. Grafana provisioning
+
+**Дата:** 2026-09-28
+**Commit:** `a58731d`
+
+### Зачем
+
+Grafana — UI для Prometheus. Datasource + dashboard provisioning через файлы — воспроизводимо: при рестарте контейнера всё поднимается автоматически.
+
+### `infra/grafana/provisioning/datasources/prometheus.yml`
+
+```yaml
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+```
+
+**`url: http://prometheus:9090`** — имя контейнера в compose-сети. Не `localhost`.
+
+### `infra/grafana/provisioning/dashboards/dashboards.yml`
+
+```yaml
+apiVersion: 1
+providers:
+  - name: zkpool
+    orgId: 1
+    folder: zkpool-solana
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      foldersFromFilesStructure: false
+```
+
+**Провайдер читает JSON-файлы** из `/etc/grafana/provisioning/dashboards/` внутри контейнера (это путь, куда монтируется наш `infra/grafana/provisioning/dashboards/`).
+
+### `infra/grafana/provisioning/dashboards/zkpool.json`
+
+**6 панелей:**
+1. **Indexer — deposits / withdrawals** (`rate(..._total[1m])`).
+2. **Indexer lag** (gauge, секунды).
+3. **Tree size** (stat, кол-во листьев).
+4. **Errors total** (sum трёх counter'ов).
+5. **Tree add_leaf duration** — p50/p95/p99 через `histogram_quantile`.
+6. **Tree hash_2 duration** — p50/p95.
+
+**`refresh: 5s`** — панели обновляются каждые 5 секунд.
+**`time.from: now-15m`** — окно по умолчанию 15 минут.
+**UID `zkpool-backend`** — стабильный, для ссылок.
+
+### Проверка
+
+```bash
+$ curl -u admin:admin http://localhost:3000/api/datasources
+[{"name":"Prometheus","url":"http://prometheus:9090","isDefault":true,"readOnly":true}]
+
+$ curl -u admin:admin http://localhost:3000/api/dashboards/uid/zkpool-backend
+{"meta":{"url":"/d/zkpool-backend/zkpool-solana-e28094-backend"}}
+```
+
+**Grafana доступна на `http://localhost:3000`, логин `admin/admin`.**
+
+### Грабли
+
+1. **`folder: zkpool-solana` создаёт папку в Grafana.** Дополнительно к ней Grafana создаёт папку `zkpool` — по имени провайдера. Дублирование папок — косметическая проблема, не влияет на работу.
+2. **`restart` контейнера обязателен после добавления файлов провижионинга.** Grafana читает их один раз при старте.
+3. **`allowUiUpdates: true`** — можно править в UI, изменения сохраняются в БД Grafana. При рестарте provisioning **не перезаписывает** UI-изменения. Для dev — удобно.
+
+### Уроки
+
+1. **Provisioning через файлы — источник правды.** `make up` + `docker compose up` → дашборд готов. Никаких ручных настроек в UI.
+2. **UID дашборда стабилен.** `zkpool-backend` — можно давать ссылку `http://localhost:3000/d/zkpool-backend`.
+3. **`histogram_quantile(0.95, rate(..._bucket[5m]))`** — стандартный PromQL паттерн для процентилей.
+
+---
+
 ## Что дальше
 
-- **11.2** — port mappings в `docker-compose.yml` (4001–4003, 5173).
-- **11.3** — Prometheus + Grafana в compose, scrape config.
 - **11.4** — Grafana dashboard для backend metrics.
 - **11.5** — финальный чекпоинт.

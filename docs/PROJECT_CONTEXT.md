@@ -242,7 +242,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 ┌──────────────────────────────────────────────────────────────────┐
 │ MONITORING                                                       │
 │ • Prometheus :9090  (scrapes backend /metrics every 15s)         │
-│ • Grafana    :3000  (admin/admin)                                │
+│ • Grafana    :3000  (admin/admin) — dashboard "zkpool-backend"   │
 └──────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────────────────────────────────────────────────┐
@@ -266,7 +266,7 @@ In v2, `withdraw` failed with `InvalidInstructionData`. Root cause not found in 
 | postgres | 5432 | Docker `zkpool-postgres` | ✅ Stage 5.10 |
 | redis | 6379 | Docker `zkpool-redis` | ✅ Stage 5.10 |
 | prometheus | 9090 | Docker `zkpool-prometheus` | ✅ Stage 11.3a |
-| grafana | 3000 | Docker `zkpool-grafana` | ✅ Stage 11.3a |
+| grafana | 3000 | Docker `zkpool-grafana` | ✅ Stage 11.3b |
 
 **Port mapping:** `solana` container exposes 4001 (backend), 4002 (prover), 4003 (merkle), 5173 (Vite). All reachable from host as `http://localhost:<port>`.
 
@@ -624,7 +624,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 8 — Deploy pool on-chain ✅
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
-- **Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ← in progress (11.1–11.3a done)**
+- **Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ← in progress (11.1–11.3b done)**
 - Stage 12 — Engineering processes (CI/CD, templates)
 - Stage 13 — Security (threat model, expanded tests)
 - Stage 14 — Finalization
@@ -999,8 +999,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 11.3a (Prometheus — scrapes backend `/metrics` every 15s).
-**Next stage:** Stage 11.3b — Grafana provisioning (datasource + dashboard).
+**Last completed stage:** Stage 11.3b (Grafana — datasource + `zkpool-backend` dashboard provisioned).
+**Next stage:** Stage 11.4 — final checkpoint for Stage 11.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1185,8 +1185,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 11.3a** (Prometheus).
-5. Next task: **Stage 11.3b** — Grafana provisioning.
+4. Last completed stage: **Stage 11.3b** (Grafana).
+5. Next task: **Stage 11.4** — final checkpoint for Stage 11.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
