@@ -747,6 +747,20 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Fix: mask `& 0x1f` (top byte ≤ `0x1f < 0x30`).
   - Applied in both `scripts/e2e-deposit/src/main.rs` and `web/src/deposit/generateNote.ts`.
 
+### From Stage 10 (E2E withdraw)
+
+- **Anchor Borsh: `Vec<u8>` needs a `u32 LE` length prefix.**
+  - Symptom: `memory allocation failed, out of memory` on instruction entry.
+  - Cause: wrote `[disc || proof_bytes || ...]` instead of `[disc || u32_le_len || proof_bytes || ...]`.
+  - Fix: prepend `(proof.len() as u32).to_le_bytes()`.
+- **`NULLIFIER_RECORD_SEED = b"nullifier_record"`** — no `"3"` suffix (unlike `pool3`/`vault3`).
+  - Symptom: `ConstraintSeeds. Left: HaviR… Right: DNfyZ…`.
+  - Always read `constants.rs` — do not guess seeds.
+- **Groth16 verification consumes ~182k CU.** Default 200k is not enough.
+  - Symptom: `ComputationalBudgetExceeded` with `Proof verified successfully!` in logs.
+  - Fix: prepend `ComputeBudgetInstruction::SetComputeUnitLimit(400_000)`.
+  - Instruction data: `[2, u32 LE limit]`. Program ID: `ComputeBudget111111111111111111111111111111`.
+
 ### From the backend↔prover wiring (2026-09-27)
 
 - **Schema bug:** `commitments` has `commitments_leaf_index_key UNIQUE (leaf_index)` — global uniqueness, not per-pool.
