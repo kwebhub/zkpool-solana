@@ -52,7 +52,8 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/06-merkle.md`
    - `docs/notes/07-prover.md`
    - `docs/notes/08-pool-init.md`
-   - `docs/notes/09-frontend.md` (in progress)
+   - `docs/notes/09-frontend.md`
+   - `docs/notes/10-e2e.md` (in progress)
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -594,7 +595,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 7 — Prover (Rust + Sunspot) ✅
 - Stage 8 — Deploy pool on-chain ✅
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
-- **Stage 10 — Full E2E (deposit → withdraw on devnet) ← next**
+- **Stage 10 — Full E2E (deposit → withdraw on devnet) ← in progress (10.1a done)**
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings)
 - Stage 12 — Engineering processes (CI/CD, templates)
 - Stage 13 — Security (threat model, expanded tests)
@@ -943,8 +944,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 9.8 (final checkpoint — Stage 9 complete).
-**Next stage:** Stage 10 — Full E2E (deposit → withdraw on devnet).
+**Last completed stage:** Stage 10.1a (Merkle `POST /hashes` — wraps `hashes.json`).
+**Next stage:** Stage 10.1b — `scripts/e2e-deposit/` (Rust CLI).
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1129,8 +1130,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 9.8** (final checkpoint — Stage 9 complete).
-5. Next task: **Stage 10 — Full E2E** (deposit → withdraw on devnet).
+4. Last completed stage: **Stage 10.1a** (Merkle `POST /hashes`).
+5. Next task: **Stage 10.1b** — `scripts/e2e-deposit/` (Rust CLI).
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
