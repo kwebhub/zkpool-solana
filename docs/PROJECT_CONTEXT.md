@@ -738,6 +738,15 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Error: `Expected witness values to be integers, but '00f4240' failed with 'invalid digit found in string'`.
   - Fix: `witness.rs::with_0x()` adds the prefix idempotently.
 
+### From Stage 10 (E2E deposit)
+
+- **BN254 field mask must account for the modulus's top byte.**
+  - BN254 prime = `0x30644e72…` — top byte is `0x30`.
+  - Mask `& 0x3f` allows top byte up to `0x3f` — **exceeds the modulus** for values `0x31–0x3f`.
+  - Symptom: `POST /hashes` → 500, `Value 0x31020e14… exceeds field modulus`.
+  - Fix: mask `& 0x1f` (top byte ≤ `0x1f < 0x30`).
+  - Applied in both `scripts/e2e-deposit/src/main.rs` and `web/src/deposit/generateNote.ts`.
+
 ### From the backend↔prover wiring (2026-09-27)
 
 - **Schema bug:** `commitments` has `commitments_leaf_index_key UNIQUE (leaf_index)` — global uniqueness, not per-pool.
