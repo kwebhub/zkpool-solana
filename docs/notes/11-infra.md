@@ -195,6 +195,101 @@ web:
 
 ---
 
+## 11.3a. Prometheus
+
+**Дата:** 2026-09-28
+**Commit:** `c90e09a`
+
+### Зачем
+
+Backend уже экспортирует 9 метрик на `/metrics` (Stage 5.6, `touch_startup_metrics`). Но никто их не собирает. Prometheus — стандартный TSDB для scraping + PromQL-запросов.
+
+### `infra/prometheus.yml`
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "zkpool-backend"
+    static_configs:
+      - targets: ["solana:4001"]
+        labels:
+          service: "backend"
+```
+
+**`solana:4001`** — имя контейнера `solana` в compose-сети. Prometheus и solana в одном Docker network.
+
+### Сервис в `docker-compose.yml`
+
+```yaml
+prometheus:
+  image: prom/prometheus:v2.55.0
+  container_name: zkpool-prometheus
+  ports:
+    - "9090:9090"
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus_data:/prometheus
+  command:
+    - "--config.file=/etc/prometheus/prometheus.yml"
+    - "--storage.tsdb.path=/prometheus"
+    - "--storage.tsdb.retention.time=7d"
+  depends_on:
+    - solana
+  restart: unless-stopped
+```
+
+**`retention.time=7d`** — 7 дней хранения. Для dev — достаточно.
+
+### Метрики backend'а
+
+| Метрика | Тип | Смысл |
+|---|---|---|
+| `zkpool_tree_errors_total` | counter | Ошибки Merkle-дерева |
+| `zkpool_indexer_errors_total` | counter | Ошибки indexer'а |
+| `zkpool_indexer_deposits_total` | counter | Обработано DepositEvent |
+| `zkpool_indexer_withdrawals_total` | counter | Обработано WithdrawEvent |
+| `zkpool_db_errors_total` | counter | Ошибки SQL |
+| `zkpool_indexer_lag_seconds` | gauge | Отставание от chain head |
+| `zkpool_indexer_tree_size` | gauge | Кол-во листьев в дереве |
+| `zkpool_tree_add_leaf_duration_seconds` | histogram | Латентность add_leaf |
+| `zkpool_tree_hash_duration_seconds` | histogram | Латентность hash_2 (HTTP) |
+
+### Проверка
+
+```bash
+$ curl http://localhost:9090/api/v1/targets
+{
+  "data": {
+    "activeTargets": [{
+      "labels": {"instance":"solana:4001","job":"zkpool-backend"},
+      "scrapeUrl": "http://solana:4001/metrics",
+      "lastError": "",
+      "health": "up",
+      "lastScrapeDuration": 0.0017
+    }]
+  }
+}
+```
+
+`health: up`, scrape 1.7 ms. ✅
+
+### Грабли
+
+1. **Prometheus должен быть в том же Docker network**, что и `solana`. В compose это автоматом — все сервисы в `infra_default`. Если бы Prometheus был на хосте (не в compose) — нужен был бы `host.docker.internal:4001`.
+2. **`solana` не имеет `healthcheck`** — Prometheus не ждёт его готовности. `depends_on: solana` только для порядка запуска. Метрика `up{job="zkpool-backend"}` сама покажет статус.
+
+### Уроки
+
+1. **Prometheus — pull-модель.** Backend **не знает** о Prometheus. Он просто отдаёт `/metrics`. Prometheus сам ходит и забирает.
+2. **`solana:4001` вместо `localhost:4001`.** Внутри compose-сети имена сервисов резолвятся. `localhost` в контейнере Prometheus — это сам Prometheus.
+3. **Порт 9090 не конфликтует** с нашими 4001–4003, 5173.
+4. **`prometheus_data` volume** — отдельный от `postgres_data`/`redis_data`. Не сбрасывается `make reset`.
+
+---
+
 ## Что дальше
 
 - **11.2** — port mappings в `docker-compose.yml` (4001–4003, 5173).
