@@ -30,8 +30,9 @@ export interface DepositNote {
 function randomFieldHex(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  // Clear the top 2 bits to stay well below 2^254.
-  bytes[0] &= 0x3f;
+  // Clear the top 3 bits — the BN254 prime begins with 0x30, so keeping
+  // the top byte ≤ 0x1f guarantees the value is below the modulus.
+  bytes[0] &= 0x1f;
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

@@ -211,8 +211,9 @@ async fn main() -> Result<()> {
 fn random_field_hex() -> String {
     let mut bytes = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut bytes);
-    // Clear top 2 bits — stay below 2^254.
-    bytes[0] &= 0x3f;
+    // Clear top 3 bits — the BN254 prime begins with 0x30, so keeping the
+    // top byte ≤ 0x1f guarantees the value is below the modulus.
+    bytes[0] &= 0x1f;
     hex::encode(bytes)
 }
 
