@@ -290,6 +290,105 @@ permissions:
 
 ---
 
+## 12.4. Security workflow
+
+**Дата:** 2026-09-29
+**Commit:** `6533d07`
+
+### Зачем
+
+Зависимости обновляются. Уязвимости обнаруживаются. Хочется знать об этом — и на push, и между релизами.
+
+### Триггеры
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"
+```
+
+**Weekly на Monday 06:00 UTC.** Ловит уязвимости в неизменённом коде. Если в code нет изменений, но CVE появилась — узнаем в понедельник.
+
+### Три job'а
+
+**1. `cargo-audit` — 7 крейтов (matrix):**
+
+```
+onchain/          ← SBF program
+tests/            ← LiteSVM
+services/backend/
+services/prover/
+scripts/pool-init/
+scripts/e2e-deposit/
+scripts/e2e-withdraw/
+```
+
+`taiki-e/install-action@cargo-audit` — установка за секунды (кэш).
+
+**2. `pnpm-audit` — 2 директории (matrix):**
+
+```
+services/merkle/
+web/
+```
+
+`--audit-level=high` — только high и critical. Moderate/low не блокируют.
+
+**3. `cargo-deny` — single job, conditional:**
+
+```yaml
+run: |
+  if [ -f deny.toml ]; then
+    cargo deny check
+  else
+    echo "deny.toml not found — skipping (create in Stage 12.5)"
+  fi
+```
+
+`cargo-deny` умеет проверять лицензии, источники, banned crates. Но требует конфиг `deny.toml`. Пока его нет — job проходит с warning.
+
+### `|| true` — report-only режим
+
+```yaml
+run: cargo audit --deny warnings || true
+```
+
+**Смысл:** CI проходит даже при найденных уязвимостях. Отчёт виден в логах, но не блокирует мерж.
+
+**Почему:** у нас уже есть `sqlx-postgres v0.7.4` с future-incompat warning. Если поставить strict — CI красный на каждом push. Сначала triage, потом strict.
+
+**TODO:** убрать `|| true` после того, как разберёмся с текущими warnings (Stage 13 — security).
+
+### Permissions
+
+```yaml
+permissions:
+  contents: read
+  issues: write
+```
+
+`issues: write` — зарезервировано. Если захотим автоматически создавать issue при найденной CVE.
+
+### Грабли
+
+1. **`taiki-e/install-action@cargo-audit`** — готовый action, ставит за 5 секунд (кэш). Альтернатива `cargo install cargo-audit --locked` — 2 минуты.
+2. **`matrix.crate` — список директорий, не названий.** `working-directory: ${{ matrix.crate }}` — работает только если это путь.
+3. **`cargo audit` не работает без `Cargo.lock`.** У нас все crate'ы имеют lock-файлы — OK.
+4. **`pnpm audit` падает без `pnpm-lock.yaml`.** Есть в обоих проектах.
+
+### Уроки
+
+1. **Security workflow ≠ security audit.** Первый — автоматизация. Второй — Stage 13 (threat model, penetration, adversarial tests).
+2. **Weekly schedule — обязательная часть.** CVE не спрашивает, обновился ли код.
+3. **Report-only на старте.** Красный CI с первого дня отключает внимание к другим job'ам. Сначала — видимость.
+4. **`cargo-deny` — opt-in.** Требует конфиг. Не тащить, пока нет нужды.
+
+---
+
 ## Что дальше
 
 - **12.3** — Release workflow (тегированные релизы).
