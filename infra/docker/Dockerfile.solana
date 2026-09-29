@@ -28,6 +28,8 @@ RUN echo 'export GNARK_VERIFIER_BIN="$HOME/sunspot/gnark-solana/crates/verifier-
   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.7/install.sh | METHOD=script bash && \
   bash -c "source $NVM_DIR/nvm.sh && nvm install 24 && nvm alias default 24" && \
   curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.5.1 ENV="$HOME/.bashrc" SHELL="$(which bash)" bash - && \
+  cargo install cargo-deny --locked --version 0.20.2 && \
+  cargo install cargo-audit --locked && \
   echo 'export NVM_DIR="$HOME/.nvm"' >> $HOME/.bashrc && \
   echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $HOME/.bashrc && \
   echo '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"' >> $HOME/.bashrc && \
