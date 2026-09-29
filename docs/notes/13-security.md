@@ -383,6 +383,63 @@ make exec-c CMD='ls -la /home/ubuntu'
 3. **Version schema в `deny.toml` — меняется между версиями `cargo-deny`.** Наш старый `version = 2` не работает с 0.20.2. Всегда генерировать свежий через `cargo deny init`.
 4. **`advisories FAILED` — реально важно. `licenses FAILED` — часто про конфиг.** Разделять эти сигналы.
 
-## Что дальше
+---
 
-- **13.6** — финальный чекпоинт Stage 13.
+## 13.6. Финальный чекпоинт Stage 13
+
+**Дата:** 2026-09-29
+**Commit:** `a241083`
+
+# ✅ Stage 13 завершён.
+
+### Итог
+
+| Под-этап | Тема | Commit |
+|---|---|---|
+| 13.1 | Threat model (12 attacks, 7 invariants) | `96303b1` |
+| 13.2 | Adversarial tests (7, всего 15) | `69bf648` |
+| 13.3 | Backend validation hardening | `d0f3f85` |
+| 13.4 | Frontend security review | `60038a7` |
+| 13.5 | sqlx upgrade + deny.toml + make exec-c | `1f35743`, `f31480f` |
+| 13.6 | Final checkpoint | `a241083` |
+
+### Артефакты
+
+- **`docs/threat-model.md`** (269 строк) — 8 секций, 12 атак, 7 инвариантов.
+- **`tests/src/test_adversarial.rs`** — 7 новых тестов.
+- **`services/backend/src/api_types.rs` + `main.rs`** — hex64 validation, bounds checks.
+- **`deny.toml`** (root + backend).
+- **`Makefile`** — цель `exec-c`.
+
+### Статус 12 атак
+
+**Защищены (5):** A2, A3, A4, A11, A12.
+**Частично (3):** A7, A8, A10.
+**Не защищены (4):** A1 (corrupt tree), A5 (phishing), A6 (malicious prover), A9 (commitment forgery).
+
+Все 12 задокументированы в threat-model. Незащищённые — известные ограничения демо, не баги.
+
+### Что сделано в этом этапе
+
+**Найдено и починено:**
+- `RUSTSEC-2024-0363` — sqlx 0.7.4 уязвимость. Upgrade до 0.8.6.
+- Backend input validation — 8 hex-полей были без проверок. Плюс bounds на `leaf_index` и `commitments`.
+
+**Задокументировано:**
+- 4 архитектурных ограничения (A1, A5, A6, A9).
+- 7 рекомендаций для production (verify new_root, client-side prover, MPC setup, multisig upgrade, ROOT_HISTORY_SIZE, CSP, wallet-rate-limit).
+
+### Что осталось (для Stage 14 или follow-up)
+
+- Root `deny.toml` — allow list пуст после копирования свежего init. Заполнить: MIT, Apache-2.0, BSD-3, ISC, Unicode-3.0, Zlib, OpenSSL, CC0-1.0, MPL-2.0.
+- `security.yml` — `|| true` на audit steps. Убрать после того, как `cargo deny check` полностью зелёный.
+- CSP header — production-only, не в scope демо.
+
+### Уроки Stage 13 (обобщение)
+
+1. **Threat model — не паранойя.** Формальный список из 12 сценариев выявил 4 ограничения, которые ранее не были явно обозначены.
+2. **Adversarial тесты документируют, не только защищают.** `a1_..._is_accepted` — валидный тест, фиксирующий known limitation.
+3. **Валидация входа — не бюрократия.** `leaf_index=99999999999999` без границы — реальный вектор DoS.
+4. **`cargo audit` — обязательный минимум, `cargo deny` — правильный инструмент.** Advisories ловят CVE, licenses ловят проблемы комплаенса.
+5. **`RUSTSEC-2024-0363` не теоретическая.** Эксплойт демонстрировался публично. Upgrade был обязателен.
+6. **Честность о границах.** Демо-проект не обязан быть production-grade. Но он **обязан** явно указывать, где граница.

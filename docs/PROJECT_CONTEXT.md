@@ -56,7 +56,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/10-e2e.md`
    - `docs/notes/11-infra.md`
    - `docs/notes/12-engineering.md`
-   - `docs/notes/13-security.md` (in progress)
+   - `docs/notes/13-security.md`
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -583,6 +583,25 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 **Known gaps:** `merkle` job is placeholder (no nargo); `security` is report-only (`|| true`); `cargo-deny` needs `deny.toml`.
 
+### ✅ Stage 13. Security (2026-09-29)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 13.1 | Threat model (12 attacks, 7 invariants) | `96303b1` |
+| 13.2 | Adversarial tests (7, total 15) | `69bf648` |
+| 13.3 | Backend input validation hardening | `d0f3f85` |
+| 13.4 | Frontend security review | `60038a7` |
+| 13.5 | sqlx 0.7→0.8, deny.toml, make exec-c | `1f35743`, `f31480f` |
+| 13.6 | Final checkpoint | `a241083` |
+
+**Threat model:** 12 attacks (5 protected, 3 partial, 4 not prevented). All documented in `docs/threat-model.md`.
+
+**Fixes:**
+- `RUSTSEC-2024-0363` — sqlx 0.7.4 → 0.8.6.
+- Backend validation: hex64 checks, leaf_index < 2^20, commitments < 2^20.
+
+**Open items:** root `deny.toml` allow list; `security.yml` `|| true`; CSP for production.
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -663,8 +682,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
-- **Stage 13 — Security (threat model, expanded tests) ← in progress (13.1–13.5 done)**
-- Stage 14 — Finalization
+- Stage 13 — Security (threat model, expanded tests) ✅
+- **Stage 14 — Finalization ← next**
 - Stage 15 — Deferred: split deposit (after v0.1.0)
 
 ### 7.10. Merkle service ordering dependency
@@ -1049,8 +1068,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 13.5 (sqlx 0.7→0.8 upgrade for RUSTSEC-2024-0363; deny.toml; make exec-c).
-**Next stage:** Stage 13.6 — final checkpoint for Stage 13.
+**Last completed stage:** Stage 13.6 (final checkpoint — Stage 13 complete).
+**Next stage:** Stage 14 — Finalization.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1235,8 +1254,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 13.5** (sqlx upgrade, deny.toml, make exec-c).
-5. Next task: **Stage 13.6** — final checkpoint for Stage 13.
+4. Last completed stage: **Stage 13.6** (final checkpoint — Stage 13 complete).
+5. Next task: **Stage 14 — Finalization**.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
