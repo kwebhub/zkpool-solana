@@ -644,7 +644,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
-- **Stage 12 — Engineering processes (CI/CD, templates) ← in progress (12.1–12.4 done)**
+- **Stage 12 — Engineering processes (CI/CD, templates) ← in progress (12.1–12.5 done)**
 - Stage 13 — Security (threat model, expanded tests)
 - Stage 14 — Finalization
 - Stage 15 — Deferred: split deposit (after v0.1.0)
@@ -841,7 +841,9 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 zkpool-solana/
 ├── .github/                 ← CI/CD, templates
 │   ├── workflows/{ci,docker,release,security}.yml
-│   └── (templates, dependabot — planned)
+│   ├── ISSUE_TEMPLATE/{bug_report,feature_request,config}
+│   ├── PULL_REQUEST_TEMPLATE.md
+│   └── dependabot.yml
 ├── .checkpoints/            ← gitignored
 ├── .secrets/                ← gitignored (wallet + program keypair)
 ├── Makefile                 ← `make up` / `down` / `reset` / ...
@@ -1021,8 +1023,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 12.4 (Security workflow — cargo audit, pnpm audit, cargo deny).
-**Next stage:** Stage 12.5 — templates (PR, issues, dependabot).
+**Last completed stage:** Stage 12.5 (templates — PR, issue, dependabot).
+**Next stage:** Stage 12.6 — final checkpoint for Stage 12.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1207,8 +1209,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 12.4** (Security workflow).
-5. Next task: **Stage 12.5** — templates (PR, issues, dependabot).
+4. Last completed stage: **Stage 12.5** (templates).
+5. Next task: **Stage 12.6** — final checkpoint for Stage 12.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

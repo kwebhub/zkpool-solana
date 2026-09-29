@@ -389,6 +389,95 @@ permissions:
 
 ---
 
+## 12.5. Шаблоны PR, issues, dependabot
+
+**Дата:** 2026-09-29
+**Commit:** `0ffc08d`
+
+### Зачем
+
+Публичный (или командный) репозиторий работает лучше, когда у контрибьюторов есть готовые формы. Меньше "что ты хотел этим сказать", больше структурированной информации.
+
+### `PULL_REQUEST_TEMPLATE.md`
+
+**Секции:**
+- **Summary** — что и почему, 1–3 пункта.
+- **Type** — чекбоксы (bug/feature/refactor/docs/ci/security).
+- **Stage / Sub-stage** — привязка к этапу проекта.
+- **Checklist** — что прогнали перед PR:
+  - `cargo test`
+  - `pnpm test`
+  - `pnpm typecheck`
+  - `make reset`
+  - Pitfalls задокументированы
+  - Notes обновлены
+  - Checkpoint создан
+- **Notes** — свободная форма.
+
+**Checklist отражает наши правила** (`PROJECT_CONTEXT.md` §0): пишем в `docs/notes/`, добавляем в §8, создаём чекпоинт.
+
+### `ISSUE_TEMPLATE/bug_report.md`
+
+Форма с полями:
+- What happened
+- Reproduction (с примером команд)
+- Expected / Actual
+- Environment (OS, Docker, stage, commit)
+
+**`labels: bug`** — автоматически.
+
+### `ISSUE_TEMPLATE/feature_request.md`
+
+- Problem
+- Proposed solution
+- Alternatives
+
+**`labels: enhancement`**.
+
+### `ISSUE_TEMPLATE/config.yml`
+
+```yaml
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/kwebhub/zkpool-solana/security/advisories/new
+    about: Please report security vulnerabilities privately.
+```
+
+**`blank_issues_enabled: false`** — заставляем выбирать один из шаблонов.
+
+**Security контакт** — GitHub Security Advisories. Публичные issue для уязвимостей — плохо.
+
+### `dependabot.yml`
+
+**10 update-блоков:**
+- 7 × cargo (onchain, tests, backend, prover, 3 scripts)
+- 2 × npm (merkle, web)
+- 1 × github-actions
+
+**Все — weekly, кроме github-actions — monthly.**
+
+**Лимит открытых PR** — 5 на экосистему. Защита от спама.
+
+**Labels:** `dependencies` + подкатегория (`rust`/`node`/`ci`).
+
+**Почему отдельно на каждый cargo-крейт:** dependabot не умеет обходить Cargo workspace. Каждый `Cargo.lock` — отдельный блок.
+
+### Грабли
+
+1. **`blank_issues_enabled: false` ломает UX для мелочей.** Если кто-то хочет быстрое сообщение без шаблона — не может. Осознанный trade-off: лучше структура, чем быстрота.
+2. **`dependabot.yml` — 10 блоков.** Легко забыть крейт. После добавления нового crate в `scripts/` — обновить dependabot.
+3. **GitHub распознаёт templates по путям.** `.github/PULL_REQUEST_TEMPLATE.md` (без `.github/PULL_REQUEST_TEMPLATE/`). Иначе — не подхватится.
+
+### Уроки
+
+1. **Checklist в PR-шаблоне = напоминание о правилах.** Разработчик не должен помнить, что "чекпоинты обязательны" — шаблон напоминает.
+2. **`config.yml` может ссылаться на внешние URL.** Security advisory — правильное место для уязвимостей.
+3. **Dependabot не панацея.** Автоматические PR требуют триажа. `open-pull-requests-limit: 5` — баланс между свежестью и шумом.
+4. **`monthly` для github-actions** — их обновления реже и важнее для стабильности CI.
+
+---
+
 ## Что дальше
 
 - **12.3** — Release workflow (тегированные релизы).
