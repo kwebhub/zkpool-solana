@@ -767,7 +767,80 @@ git push origin v0.1.0
 
 ---
 
+## 14.11. Финальный чекпоинт Stage 14
+
+**Дата:** 2026-09-29
+**Commit:** `56eeaf1`
+
+# ✅ Stage 14 завершён. Проект опубликован.
+
+### Итог
+
+| Под-этап | Тема | Commit |
+|---|---|---|
+| 14.1 | `.editorconfig` + LICENSE (MIT) | `843ac88` |
+| 14.2 | `README.md` | `274bc4d` |
+| 14.3 | `docs/ru/README.md` | `94d17b8` |
+| 14.4 | `CONTRIBUTING.md` | `747a711` |
+| 14.5 | `SECURITY.md` | `28553d4` |
+| 14.6 | `CHANGELOG.md` (v0.1.0) | `537ea0d` |
+| 14.7 | `docs/DEMO-NOTICE.md` update | `f8b3adc` |
+| 14.8 | `cargo-deny` passes | `e09e8fd` |
+| 14.9 | `cargo-deny` + `cargo-audit` в Dockerfile | `226401c` |
+| 14.10 | Release `v0.1.0` | `48302ed` (tag) |
+| 14.11 | Final checkpoint | `56eeaf1` |
+
+### Публичный релиз
+
+- **Tag:** `v0.1.0`
+- **URL:** https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0
+- **Артефакты:** 6 файлов (программа, IDL, 2 бинаря, web-сборка, SHA256SUMS).
+
+### Публичный репозиторий
+
+- **URL:** https://github.com/kwebhub/zkpool-solana
+- **Visibility:** Public
+- **License:** MIT
+
+### Что сделано в Stage 14
+
+**Документация (11 файлов):**
+- `README.md` (английский, основной).
+- `docs/ru/README.md` (русский, портфолио-материал для русскоязычной аудитории).
+- `CONTRIBUTING.md` — процесс для контрибьюторов.
+- `SECURITY.md` — как сообщить об уязвимости.
+- `CHANGELOG.md` — история релиза v0.1.0.
+- `docs/DEMO-NOTICE.md` — обновлён под текущее состояние.
+- `LICENSE`, `.editorconfig`.
+
+**CI/CD:**
+- Release workflow работает — успешно собран и опубликован v0.1.0.
+- Docker-образ содержит `cargo-deny` + `cargo-audit`.
+- `deny.toml` — все 4 проверки зелёные.
+
+### Что осталось отложенным (Stage 15)
+
+- **Split deposit** — разделение депозита на несколько commitment'ов.
+- **Verify `new_root` on-chain** (A1 из threat model).
+- **Client-side proving** (A6).
+- **Increase `ROOT_HISTORY_SIZE`** (A10).
+- **MPC trusted setup** для Groth16.
+- **CSP для frontend** (production-only).
+- **merkle CI job** — placeholder (нужен `nargo` в CI).
+
+Все эти пункты задокументированы в `docs/threat-model.md` и `docs/DEMO-NOTICE.md`.
+
+### Уроки Stage 14 (обобщение)
+
+1. **`LICENSE` без файла — не лицензия.** GitHub, `cargo-deny`, SPDX — все ищут файл. `Cargo.toml` говорит MIT — файл `LICENSE` это подтверждает.
+2. **Публичный репо — стандарт для портфолио.** Private блокирует GitHub Actions (billing) и скрывает работу от читателей.
+3. **`--no-idl` = «без IDL».** Не путать с «без деплоя». IDL генерируется отдельной командой `anchor idl build`.
+4. **`cargo-deny` 0.20.2 требует явных SPDX-выражений.** `allow-osi-fsf-free` удалён. `private = { ignore = true }` — ключ к простому списку.
+5. **Docker build — 10 минут, но one-time.** `cargo install` внутри контейнера не персистентен. Всё нужное — в образ.
+6. **Annotated tags с подробным сообщением.** Содержат описание релиза — полезно при просмотре на GitHub.
+7. **Пере-тегирование до публикации — допустимо.** После публикации — только новый тег.
+
 ## Что дальше
 
-- **14.10** — тег `v0.1.0` + push → GitHub Release.
-- **14.11** — финальный чекпоинт Stage 14.
+- **Stage 15** — Split deposit (отложен, после v0.1.0).
+- **После Stage 15** — статьи и туториалы на базе `docs/notes/` (Medium, Mirror.xyz, Habr, X, Telegram).
