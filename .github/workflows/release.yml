@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-artifacts:
+    name: Build release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ------------------------------------------------------------
+      # zk_pool program (.so) + IDL
+      # ------------------------------------------------------------
+      - name: Install Rust (SBF)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install 1.1.2
+          avm use 1.1.2
+
+      - name: Build on-chain program
+        working-directory: onchain
+        run: anchor build --no-idl
+
+      - name: Collect program binary + IDL
+        run: |
+          mkdir -p artifacts
+          cp onchain/target/deploy/zk_pool.so artifacts/
+          cp onchain/target/idl/zk_pool.json artifacts/
+
+      # ------------------------------------------------------------
+      # Backend binary
+      # ------------------------------------------------------------
+      - name: Build backend
+        working-directory: services/backend
+        run: cargo build --release
+
+      - name: Collect backend binary
+        run: cp services/backend/target/release/zkpool-backend artifacts/
+
+      # ------------------------------------------------------------
+      # Prover binary
+      # ------------------------------------------------------------
+      - name: Build prover
+        working-directory: services/prover
+        run: cargo build --release
+
+      - name: Collect prover binary
+        run: cp services/prover/target/release/zkpool-prover artifacts/
+
+      # ------------------------------------------------------------
+      # Web build
+      # ------------------------------------------------------------
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "12.5.1"
+
+      - name: Install web deps
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web
+        working-directory: web
+        run: pnpm build
+
+      - name: Package web dist
+        run: |
+          cd web/dist
+          tar czf ../../artifacts/zkpool-web.tar.gz .
+
+      # ------------------------------------------------------------
+      # Checksums
+      # ------------------------------------------------------------
+      - name: Generate SHA-256 checksums
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS
+
+      # ------------------------------------------------------------
+      # Create GitHub Release
+      # ------------------------------------------------------------
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
