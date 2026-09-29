@@ -593,7 +593,71 @@ advisories ok, bans ok, licenses ok, sources ok
 
 ---
 
+## 14.9. `cargo-deny` и `cargo-audit` в Dockerfile
+
+**Дата:** 2026-09-29
+**Commit:** `226401c`
+
+### Зачем
+
+После Stage 14.8 выяснилось: `cargo install cargo-deny` пишет бинарь в `~/.cargo/bin/` **внутри контейнера**, не в volume. При `docker compose up -d --force-recreate solana` — файловая система контейнера пересоздаётся из образа, все `cargo install` результаты теряются.
+
+**Стоимость переустановки:** ~1m 40s на cargo-deny, ~2m на cargo-audit.
+
+**Решение:** испечь в образ.
+
+### Изменение в `Dockerfile.solana`
+
+**Было:**
+```dockerfile
+  curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.5.1 ... bash - && \
+  echo 'export NVM_DIR="$HOME/.nvm"' >> $HOME/.bashrc && \
+```
+
+**Стало:**
+```dockerfile
+  curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=12.5.1 ... bash - && \
+  cargo install cargo-deny --locked --version 0.20.2 && \
+  cargo install cargo-audit --locked && \
+  echo 'export NVM_DIR="$HOME/.nvm"' >> $HOME/.bashrc && \
+```
+
+### Проверка
+
+После rebuild + recreate:
+
+```
+$ which cargo-deny cargo-audit
+/home/ubuntu/.cargo/bin/cargo-deny
+/home/ubuntu/.cargo/bin/cargo-audit
+
+$ cargo deny --config /home/ubuntu/deny.toml check
+advisories ok, bans ok, licenses ok, sources ok
+```
+
+### Цена
+
+**Build time:** 610 секунд (10 минут) — в основном компиляция cargo-deny из исходников.
+
+**Размер образа:** ~50 MB дополнительно (cargo-deny + cargo-audit + их зависимости).
+
+**Оправдано:** Dockerfile пересобирается редко. После пересборки экономия — 3–4 минуты на каждое пересоздание контейнера.
+
+### Грабли
+
+1. **`cargo install` в контейнере не персистентен.** Только volume'ы и образ сохраняют данные. `~/.cargo/` внутри контейнера — эфемерно.
+2. **Первая сборка образа стала дольше.** 610s vs ~120s до этого. Кэш Docker-слоёв помогает при повторных сборках, но `cargo install` слои зависят от версии crates — обновление требует пересборки.
+
+### Уроки
+
+1. **Всё, что нужно для CI/разработки — в образе.** Не `cargo install` в runtime.
+2. **`--locked --version X.Y.Z`** — фиксация версии cargo-deny важна (0.20.x vs 0.18.x — разные схемы конфига).
+3. **Docker build — 10 минут, но это one-time.** Дальше `docker compose up` — секунды.
+4. **Проверка после rebuild обязательна.** `which cargo-deny` + `cargo deny check` — двойная верификация, что всё на месте.
+
+---
+
 ## Что дальше
 
-- **14.9** — тег `v0.1.0` + release.
-- **14.10** — финальный чекпоинт.
+- **14.10** — тег `v0.1.0` + push → GitHub Release.
+- **14.11** — финальный чекпоинт Stage 14.
