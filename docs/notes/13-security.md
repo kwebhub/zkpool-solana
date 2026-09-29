@@ -93,6 +93,66 @@ Stage 13 — систематический аудит безопасности.
 
 ---
 
+## 13.2. Расширенные LiteSVM тесты
+
+**Дата:** 2026-09-29
+**Commit:** `69bf648`
+
+### Что сделано
+
+`tests/src/test_adversarial.rs` — 7 тестов, каждый соответствует пункту из `docs/threat-model.md`.
+
+### Тесты
+
+| Тест | Сценарий | Ожидание | Результат |
+|---|---|---|---|
+| `deposit_below_minimum_rejected` | Депозит < MIN_DEPOSIT_AMOUNT | Ошибка | ✅ |
+| `deposit_at_minimum_accepted` | Депозит = MIN_DEPOSIT_AMOUNT | OK | ✅ |
+| `deposit_with_unchanged_root_rejected` | `new_root == current_root` | Ошибка | ✅ |
+| `a1_garbage_new_root_is_accepted` | Произвольный `new_root` | **OK** (документируем ограничение) | ✅ |
+| `a9_arbitrary_commitment_is_accepted` | Произвольный commitment | **OK** (self-harm only) | ✅ |
+| `a10_root_history_is_bounded` | 11 депозитов → первый root вытеснен | `is_known_root(first) == false` | ✅ |
+| `a11_wrong_verifier_program_rejected` | Wrong verifier program ID | Ошибка | ✅ |
+
+### Два типа тестов
+
+**1. "Атака провалится" — проверка защиты:**
+- `deposit_below_minimum_rejected`
+- `deposit_with_unchanged_root_rejected`
+- `a11_wrong_verifier_program_rejected`
+
+**2. "Атака проходит" — документирование ограничения:**
+- `a1_garbage_new_root_is_accepted` — не проверяется on-chain.
+- `a9_arbitrary_commitment_is_accepted` — self-harm only.
+- `a10_root_history_is_bounded` — ROOT_HISTORY_SIZE = 10.
+
+**Второй тип — не баг в тесте.** Это способ зафиксировать в коде, что атака возможна. Если кто-то случайно "починит" (например, добавит проверку root'а в deposit), тест упадёт — и мы об этом узнаем.
+
+### Полный прогон
+
+```
+running 15 tests
+test result: ok. 15 passed
+```
+
+**15 = 8 оригинальных + 7 adversarial.**
+
+### Грабли
+
+1. **`Fake111...` не парсится как base58 Address** (`WrongSize`). Заменили на `payer.pubkey()` — валидный 32-байтовый адрес, но не verifier.
+2. **`VERIFIER_ID` не использовался** — импорт удалён.
+3. **Clippy: `payer.pubkey().into()` — useless conversion.** `pubkey()` уже возвращает `Address`. Оставили, чтобы соответствовать стилю остальных тестов (`test_deposit.rs` использует тот же паттерн).
+4. **Pattern "self-contained test" — не TestSetup.** В `helpers.rs` только `setup_svm()`. Каждый тест-файл сам определяет `init_pool`, `do_deposit` и т.д. Дублирование, но проще в навигации.
+
+### Уроки
+
+1. **Adversarial tests документируют, не только защищают.** `a1_..._is_accepted` — это **валидный** тест. Он фиксирует known limitation.
+2. **`#[test]` без `should_panic`** для "attack succeeds" случаев. Просто `assert!(result.is_ok())` с комментарием.
+3. **7 тестов покрывают 3 из 12 атак** из threat-model (A1, A9, A10, A11). Остальные (A2–A8, A12) — либо уже в `test_double_spend.rs`/`test_withdraw.rs`, либо вне scope LiteSVM (например, A6 malicious prover).
+4. **`cargo test` в `tests/`** — 15 тестов за 0.5 сек. Быстро, без реальной сети.
+
+---
+
 ## Что дальше
 
 - **13.2** — расширенные LiteSVM тесты (негативные сценарии).

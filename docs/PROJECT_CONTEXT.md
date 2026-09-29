@@ -392,7 +392,7 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 | 4.5.6 | `test_double_spend.rs` | `b7c4284` |
 | 4.5.7 | Final checkpoint | `b7c4284` |
 
-**8 tests passing:**
+**8 tests passing (+ 7 adversarial added in Stage 13.2):**
 - `helpers::tests::test_setup_svm_loads_both_programs`
 - `test_pool::test_airdrop_works`
 - `test_pool::test_pool_creates_state_and_vault`
@@ -663,7 +663,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
-- **Stage 13 — Security (threat model, expanded tests) ← in progress (13.1 done)**
+- **Stage 13 — Security (threat model, expanded tests) ← in progress (13.1, 13.2 done)**
 - Stage 14 — Finalization
 - Stage 15 — Deferred: split deposit (after v0.1.0)
 
@@ -1041,8 +1041,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 13.1 (threat model — 12 attack scenarios, 7 invariants).
-**Next stage:** Stage 13.2 — expanded LiteSVM tests (negative cases).
+**Last completed stage:** Stage 13.2 (adversarial tests — 7 cases, total 15 in `tests/`).
+**Next stage:** Stage 13.3 — backend input validation audit.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1060,7 +1060,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `PoolState`: 384 bytes, authority = wallet, all counters zero.
 - Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) + 8 (LiteSVM) + 5 (backend unit) + 23 (merkle) + 17+1 (prover) = **132+**.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 15 (LiteSVM incl. adversarial) + 5 (backend unit) + 23 (merkle) + 17+1 (prover) = **139+**.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -1227,8 +1227,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 13.1** (threat model).
-5. Next task: **Stage 13.2** — expanded LiteSVM tests.
+4. Last completed stage: **Stage 13.2** (adversarial tests).
+5. Next task: **Stage 13.3** — backend input validation audit.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
