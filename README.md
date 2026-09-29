@@ -8,7 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 > ⚠️ **Demo / educational project.** Not audited, not for production. See [`docs/DEMO-NOTICE.md`](docs/DEMO-NOTICE.md) and [`docs/threat-model.md`](docs/threat-model.md).
-> [Russian version](docs/ru/)
+> [Russian version](docs/ru/README.md)
 ---
 
 ## What it does
