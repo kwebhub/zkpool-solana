@@ -684,7 +684,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
 - Stage 13 — Security (threat model, expanded tests) ✅
-- **Stage 14 — Finalization ← in progress (14.1–14.5 done)**
+- **Stage 14 — Finalization ← in progress (14.1–14.6 done)**
 - Stage 15 — Deferred: split deposit (after v0.1.0)
 
 ### 7.10. Merkle service ordering dependency
@@ -896,7 +896,7 @@ zkpool-solana/
 ├── README.md                ← main (English)
 ├── CONTRIBUTING.md
 ├── SECURITY.md
-├── CHANGELOG.md             ← (planned)
+├── CHANGELOG.md
 ├── LICENSE                  ← MIT
 ├── .editorconfig
 ├── docs/
@@ -1076,8 +1076,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 14.5 (`SECURITY.md`).
-**Next stage:** Stage 14.6 — `CHANGELOG.md`.
+**Last completed stage:** Stage 14.6 (`CHANGELOG.md` — v0.1.0).
+**Next stage:** Stage 14.7 — update `docs/DEMO-NOTICE.md`.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1262,8 +1262,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 14.5** (`SECURITY.md`).
-5. Next task: **Stage 14.6** — `CHANGELOG.md`.
+4. Last completed stage: **Stage 14.6** (`CHANGELOG.md`).
+5. Next task: **Stage 14.7** — update `docs/DEMO-NOTICE.md`.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.

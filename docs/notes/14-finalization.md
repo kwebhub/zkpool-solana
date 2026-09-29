@@ -337,10 +337,89 @@ Public disclosure:   after fix, or 90 days
 
 ---
 
+## 14.6. `CHANGELOG.md`
+
+**Дата:** 2026-09-29
+**Commit:** `537ea0d`
+
+### Зачем
+
+История изменений для внешних читателей. GitHub показывает `CHANGELOG.md` в разделе Releases, автоматически парсит для release notes.
+
+### Формат
+
+**Keep a Changelog 1.1.0** — стандарт. Секции:
+- `Added` — новые фичи.
+- `Changed` — изменения в существующем.
+- `Deprecated` — что будет удалено.
+- `Removed` — что удалено.
+- `Fixed` — багфиксы.
+- `Security` — уязвимости (RUSTSEC, CVE).
+
+**Semantic Versioning** — `[0.1.0]`.
+
+### Структура релиза 0.1.0
+
+**Added** — по этапам:
+- Core protocol (Stages 0–4): circuits, verifier, Anchor program, scripts.
+- Services (Stages 5–7): backend, merkle, prover.
+- On-chain pool deployment (Stage 8).
+- Frontend (Stage 9).
+- E2E demo (Stage 10).
+- Infrastructure (Stage 11): Makefile, Prometheus, Grafana.
+- Engineering (Stage 12): CI/CD, templates.
+- Security (Stage 13): threat model, adversarial tests, hardening.
+
+**Security:**
+- `RUSTSEC-2024-0363` — sqlx upgrade.
+- BN254 mask fix.
+
+**Fixed** — 8 строк:
+- Borsh length prefix.
+- `NULLIFIER_RECORD_SEED`.
+- Compute budget.
+- Codama signer.
+- `--experimental-strip-types`.
+- pnpm allowBuilds.
+- Stale ACIRs.
+
+**Known limitations** — 7 строк, ссылка на threat model.
+
+**Statistics:**
+- ~140 тестов.
+- 4 workflow.
+- 5 контейнеров.
+- 4 deployed programs/PDAs.
+- 2 E2E цикла.
+
+### How this release was built
+
+Раздел про stages 0–14 + описание системы чекпоинтов.
+
+### Грабли
+
+1. **Не даты, а релизы.** `[Unreleased]` — что в main, но не в релизе. `[0.1.0] — 2026-09-29` — тег.
+2. **Ссылки на сравнения внизу:**
+   ```markdown
+   [Unreleased]: https://github.com/.../compare/v0.1.0...HEAD
+   [0.1.0]: https://github.com/.../releases/tag/v0.1.0
+   ```
+   Без них `[Unreleased]` и `[0.1.0]` не станут ссылками.
+3. **Порядок секций фиксирован.** Keep a Changelog явно требует: Added / Changed / Deprecated / Removed / Fixed / Security.
+
+### Уроки
+
+1. **CHANGELOG ≠ git log.** Git log — хронология разработки (включая "docs: record"). CHANGELOG — что изменилось для пользователя.
+2. **Пропускать "docs: record" коммиты.** Они не в changelog. Включать только `feat`, `fix`, `chore` (значимые), `security`.
+3. **Один большой раздел Added для v0.1.0.** Разбивка по этапам — даёт читателю понять scope работы.
+4. **Known limitations в CHANGELOG — необычно, но правильно.** Для демо-проекта прозрачность важнее формата.
+5. **Statistics внизу.** Быстрые цифры для читателя, который не хочет читать всё.
+
+---
+
 ## Что дальше
 
-- **14.6** — `CHANGELOG.md`.
-- **14.7** — `docs/DEMO-NOTICE.md` update.
+- **14.7** — обновление `docs/DEMO-NOTICE.md` (устарел с Stage 5).
 - **14.8** — root `deny.toml` + strict security workflow.
-- **14.9** — tag `v0.1.0` + release.
+- **14.9** — тег `v0.1.0` + release.
 - **14.10** — финальный чекпоинт.
