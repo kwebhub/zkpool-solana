@@ -12,8 +12,8 @@ importers:
         specifier: 11.3.0
         version: 11.3.0
       '@noir-lang/noir_js':
-        specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2
+        specifier: 1.0.0-rc.3
+        version: 1.0.0-rc.3
       fastify:
         specifier: 5.12.5
         version: 5.12.5
@@ -41,17 +41,17 @@ packages:
   '@fastify/proxy-addr@5.1.1':
     resolution: {integrity: sha512-zv07Y9GEuDsJPegZoDFd4SDWaZOW8N2pa0GSrYmKpId/tjt1Hgo3BjZBVjdVpfVrHaA+Qv5jawtS2O50J5xM9g==}
 
-  '@noir-lang/acvm_js@1.0.0-rc.2':
-    resolution: {integrity: sha512-AooQYfr10/i7PCe15aJodeoAGY1XBh99bUwN9rG3vBWIQFlT1aWnUPjudH5R8dzQHkvSkONP1IOK/skJXIgdMw==}
+  '@noir-lang/acvm_js@1.0.0-rc.3':
+    resolution: {integrity: sha512-bTTrcPphNHVrFkbJPVcFrrigwwU/N9+trgEa9PF2X/VWWAX0B1gOGSBwqziOKMwThpU7H2Jb3Z6OFMEhpMKaEQ==}
 
-  '@noir-lang/noir_js@1.0.0-rc.2':
-    resolution: {integrity: sha512-I9mUcSC80vatHO4BTETNWpMuWfGKxFljj58QZuC6HU/ChXW6pezvwI/yVUvfPFe2D4qN8EY8yLyZWM1Ez7ip4Q==}
+  '@noir-lang/noir_js@1.0.0-rc.3':
+    resolution: {integrity: sha512-NrJZPd7zpBWXzP240rP78fr6RE8vg3mFIMIsT5Xiqbh6zdBKfLI8Nb7Ea4UFwFWyRFDqZO3qGd3HbGyRWxxZ8Q==}
 
-  '@noir-lang/noirc_abi@1.0.0-rc.2':
-    resolution: {integrity: sha512-NN1RW12N4b4D+aSsGuqjpSBP6S5IcND3Lz73zzgnZYyc/cI6kbKqyq6RatUGK4NA2V77xTcN5U5lJU52eubrJw==}
+  '@noir-lang/noirc_abi@1.0.0-rc.3':
+    resolution: {integrity: sha512-jax7q2CAAG4jxCzr8MllH/LZxnxnS5PF1YyzmFJ7DTf97k3+LaHSnBPXE8TwQYDsWwyNxQTqDWw1QVEoO1ESaQ==}
 
-  '@noir-lang/types@1.0.0-rc.2':
-    resolution: {integrity: sha512-6f2e2wWrlKmWjVBHh8keSwVh4QQFrljFl71ZsIa2NLp+HanQsc61X9gu1HCCmZu8n9iS/7xue6t9zF3pQwArLw==}
+  '@noir-lang/types@1.0.0-rc.3':
+    resolution: {integrity: sha512-k1UHd67/OSPJb9E6WNKeMtuoDbflLpu803jtbaVqDlr2P/rH8+joDuIxK+nwBMVlnCO2LlcJaN4wpQ/TRHJ78w==}
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -241,20 +241,20 @@ snapshots:
       '@fastify/forwarded': 3.0.2
       ipaddr.js: 2.5.0
 
-  '@noir-lang/acvm_js@1.0.0-rc.2': {}
+  '@noir-lang/acvm_js@1.0.0-rc.3': {}
 
-  '@noir-lang/noir_js@1.0.0-rc.2':
+  '@noir-lang/noir_js@1.0.0-rc.3':
     dependencies:
-      '@noir-lang/acvm_js': 1.0.0-rc.2
-      '@noir-lang/noirc_abi': 1.0.0-rc.2
-      '@noir-lang/types': 1.0.0-rc.2
+      '@noir-lang/acvm_js': 1.0.0-rc.3
+      '@noir-lang/noirc_abi': 1.0.0-rc.3
+      '@noir-lang/types': 1.0.0-rc.3
       pako: 3.0.2
 
-  '@noir-lang/noirc_abi@1.0.0-rc.2':
+  '@noir-lang/noirc_abi@1.0.0-rc.3':
     dependencies:
-      '@noir-lang/types': 1.0.0-rc.2
+      '@noir-lang/types': 1.0.0-rc.3
 
-  '@noir-lang/types@1.0.0-rc.2': {}
+  '@noir-lang/types@1.0.0-rc.3': {}
 
   '@pinojs/redact@0.4.0': {}
 

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@fastify/cors": "11.3.0",
-    "@noir-lang/noir_js": "1.0.0-rc.2",
+    "@noir-lang/noir_js": "1.0.0-rc.3",
     "fastify": "5.12.5"
   },
   "engines": {
