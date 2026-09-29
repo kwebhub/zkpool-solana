@@ -204,12 +204,63 @@ GitHub показывает `README.md` на главной странице р�
 
 ---
 
+## 14.4. `CONTRIBUTING.md`
+
+**Дата:** 2026-09-29
+**Commit:** `747a711`
+
+### Зачем
+
+Для одного разработчика `CONTRIBUTING.md` — формальность. Для публичного портфолио — сигнал: "проект структурирован, я знаю, что делаю".
+
+GitHub автоматически показывает ссылку на этот файл при создании issue/PR.
+
+### Структура
+
+**9 секций:**
+
+1. **Welcome + demo warning.** Сразу предупреждаем о статусе.
+2. **Before you start.** Читать `PROJECT_CONTEXT.md` и `docs/notes/` перед кодом.
+3. **Setup.** `git clone && make up`. Проверка через `make status`.
+4. **Workflow.** Ветки, малые изменения, коммиты.
+5. **Code style.** Rust, TypeScript/Vue, shell.
+6. **Что мержится.** Три категории: welcome / discuss first / not accepted.
+7. **Pitfalls.** Ссылка на §8 PROJECT_CONTEXT + топ-7 грабель.
+8. **Security reporting.** Через `SECURITY.md`, не публичный issue.
+9. **Getting help.** Куда идти с вопросом.
+10. **License.** "By contributing you agree to MIT".
+
+### Ключевые решения
+
+**Conventional Commits с примерами.** Список типов (feat/fix/docs/...), список scopes (onchain/backend/prover/merkle/web/...), 4 примера.
+
+**Три категории PR:**
+- **Welcome:** bug fixes (с тестом), tests, docs, small features, CI.
+- **Discuss first:** новые сервисы, изменения схем, изменение layout'а публичных входов, новые зависимости, большие рефакторинги.
+- **Not accepted:** сломанный демо-flow, удаление тестов, удаление информации из docs, смена лицензии.
+
+**Pitfalls — топ-7 из §8.** Компактный список для быстрого ознакомления. Полный — по ссылке.
+
+### Грабли
+
+1. **"Not accepted" секция может отпугнуть.** Но она защищает от типичных ошибок: "упрощу, удалив раздел". Явно перечислено, что не принимается — и почему.
+2. **Ссылки на `PROJECT_CONTEXT.md`** — 3 раза. Это самая важная точка входа.
+3. **Code style без жёстких правил.** "Follow existing patterns" — не формально, но практично.
+
+### Уроки
+
+1. **Contributing-гайд — не бюрократия.** Это способ масштабировать правила проекта без личного участия.
+2. **"Discuss first"** важнее "not accepted". Позволяет не отвергать людей, а направлять.
+3. **Conventional Commits — стандарт, не открытие.** Но без примеров многие не знают, какой scope использовать. Примеры снижают порог.
+4. **Ссылка на threat-model в секции Security reporting.** Не "открой issue", а "прочти threat-model сначала" — многие вопросы уже отвечены.
+
+---
+
 ## Что дальше
 
-- **14.4** — `CONTRIBUTING.md`.
 - **14.5** — `SECURITY.md`.
 - **14.6** — `CHANGELOG.md`.
-- **14.7** — `docs/DEMO-NOTICE.md` update.
-- **14.8** — root `deny.toml` + security workflow strict.
-- **14.9** — tag `v0.1.0` + release.
+- **14.7** — обновление `docs/DEMO-NOTICE.md`.
+- **14.8** — root `deny.toml` + strict security workflow.
+- **14.9** — тег `v0.1.0` + release.
 - **14.10** — финальный чекпоинт.
