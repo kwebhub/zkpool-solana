@@ -29,7 +29,7 @@ jobs:
           - scripts/e2e-deposit
           - scripts/e2e-withdraw
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
       - name: Run cargo audit
@@ -46,7 +46,7 @@ jobs:
           - services/merkle
           - web
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
@@ -66,7 +66,7 @@ jobs:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
       - name: Run cargo deny
