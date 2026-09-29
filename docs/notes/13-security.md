@@ -153,10 +153,84 @@ test result: ok. 15 passed
 
 ---
 
+## 13.3. Backend input validation audit
+
+**Дата:** 2026-09-29
+**Commit:** `d0f3f85`
+
+### Что нашли
+
+До аудита валидация на backend'е была **минимальной**:
+
+**`WithdrawRequest::validate`:**
+- Проверялись **только** длины массивов `merkle_proof` и `is_even` (= 20).
+- Все hex-строки (`root`, `nullifier_hash`, `recipient`, `recipient_binding`, `amount`, `nullifier`, `secret`, `note_secret`) — без проверок.
+
+**`ProofQuery`:**
+- `leaf_index: u64` — без верхней границы. Атакующий мог послать `leaf_index=18446744073709551615`.
+- Backend форвардил в Merkle-сервис → там `.findIndex` → ошибка.
+
+**`RootPreviewRequest`:**
+- `commitments: Vec<String>` — без ограничения на длину и содержимое.
+- Атакующий мог послать 10M строк → forward в Merkle-сервис → OOM Node.js.
+
+### Что добавили
+
+**1. `validate_hex64(name, v)` — строгая проверка 64-символьного hex.**
+
+Применяется к: `root`, `nullifier_hash`, `recipient_binding`, `nullifier`, `secret`, `note_secret`.
+
+**2. `validate_hex_max(name, v, 64)` — hex до 64 символов.**
+
+Применяется к: `recipient` (может быть короче — leading zeros elided), `amount`, `merkle_proof[i]`.
+
+**3. `MAX_LEAVES = 2^20 = 1_048_576` для `/api/proof`.**
+
+`leaf_index >= MAX_LEAVES` → `400 BAD_REQUEST` **до** обращения к БД и Merkle-сервису.
+
+**4. `MAX_PREVIEW_COMMITMENTS = 2^20` для `/api/root-preview`.**
+
+Плюс каждый commitment проверяется `is_hex64`.
+
+### Тесты (curl)
+
+```
+POST /api/withdraw {"root":"not-hex", ...}
+→ {"error":"root must be 64 hex chars, got 7"}
+
+POST /api/withdraw {"nullifier_hash":"nothex", ...}
+→ {"error":"nullifier_hash must be 64 hex chars, got 6"}
+
+POST /api/withdraw <valid witness>
+→ 200 {"proof":"K7lHW...","public_witness":"..."}
+  (forwarded to prover, Groth16 generated)
+
+GET /api/proof?leaf_index=99999999999999
+→ {"error":"leaf_index must be < 1048576","leaf_index":99999999999999}
+
+POST /api/root-preview {"commitments":["nothex"]}
+→ {"error":"commitments[0] must be 64-char hex"}
+```
+
+### Грабли
+
+1. **`recipient` короче 64 символов — это OK.** BN254 field element, leading zeros могут быть отброшены. Отсюда `validate_hex_max`, не `validate_hex64`.
+2. **`amount` тоже может быть короче.** `0f4240` = 1M lamports.
+3. **Верхняя граница по `leaf_index`** — на 2^20 (MAX_LEAVES). Совпадает с on-chain `MAX_LEAVES = 1 << TREE_DEPTH`.
+4. **`is_hex64` дублируется** в `main.rs` (для root-preview) и `api_types.rs` (`validate_hex64`). Разные модули — небольшая копипаста. Если появится третий потребитель — вынести в общий модуль.
+
+### Уроки
+
+1. **Валидация входа — не бюрократия.** `leaf_index=99999999999999` без границы — реальная уязвимость DoS. Форвард вниз по стеку — самая частая атака на микросервисную архитектуру.
+2. **Проверка на длину ≠ проверка на содержимое.** `len == 64` не говорит, что строка hex. Нужны обе.
+3. **Разные типы полей — разные правила.** `root` (32-байтовый хэш) — всегда 64 hex. `recipient` (field element) — до 64 hex. `merkle_proof[i]` — то же. Одна проверка не подходит всем.
+4. **Ошибки 400 vs 404.** `leaf_index >= MAX_LEAVES` — `400` (невалидный ввод). `leaf_index >= count` — `404` (валидный, но не существует). Разные семантики.
+5. **Валидация **перед** forward'ом.** Если проверять после вызова Merkle-сервиса — смысла нет, атака уже дошла.
+
+---
+
 ## Что дальше
 
-- **13.2** — расширенные LiteSVM тесты (негативные сценарии).
-- **13.3** — backend input validation audit.
 - **13.4** — frontend security review.
 - **13.5** — `deny.toml` + strict audit.
 - **13.6** — финальный чекпоинт.
