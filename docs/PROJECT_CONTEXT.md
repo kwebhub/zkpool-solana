@@ -684,8 +684,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
 - Stage 13 — Security (threat model, expanded tests) ✅
-- **Stage 14 — Finalization ← in progress (14.1–14.7 done)**
-- Stage 15 — Deferred: split deposit (after v0.1.0)
+- Stage 14 — Finalization ✅
+- **Stage 15 — Split deposit (deferred; content TBD) ← next**
 
 ### 7.10. Merkle service ordering dependency
 
