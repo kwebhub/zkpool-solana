@@ -478,9 +478,58 @@ contact_links:
 
 ---
 
+## 12.6. Финальный чекпоинт Stage 12
+
+**Дата:** 2026-09-29
+**Commit:** `d4a2c36`
+
+# ✅ Stage 12 завершён.
+
+### Итог
+
+**4 workflow:**
+
+| Файл | Назначение | Триггер |
+|---|---|---|
+| `ci.yml` | 7 jobs: тесты всех компонентов | push/PR в main |
+| `docker.yml` | сборка + публикация solana образа в GHCR | изменения в `infra/docker/**` |
+| `release.yml` | релиз артефактов (`.so`, IDL, бинари, web) | тег `v*.*.*` |
+| `security.yml` | аудит Rust/Node/лицензий | push/PR + еженедельно |
+
+**Шаблоны:**
+- `PULL_REQUEST_TEMPLATE.md` — checklist, соответствующий нашим правилам.
+- `ISSUE_TEMPLATE/bug_report.md`, `feature_request.md`, `config.yml`.
+- `dependabot.yml` — 10 update-блоков (7 cargo, 2 npm, 1 gh-actions).
+
+**7 jobs в CI:**
+1. `validate-spec` — spec.json vs все потребители.
+2. `onchain` — Anchor program (Rust 1.89.0).
+3. `litesvm` — интеграционные тесты (Rust 1.98.1).
+4. `backend` — Rust + release build.
+5. `prover` — Rust + release build.
+6. `merkle` — Node.js tests (23).
+7. `web` — TypeScript + build.
+
+### Known gaps
+
+1. **`merkle` job — placeholder.** Не устанавливает `nargo`, не компилирует схемы. `exit 0`. **TODO** — либо `noirup`, либо Docker-образ, либо кэш ACIRs как artifact.
+2. **`security.yml` — report-only.** Все аудиты с `|| true`. После triage уязвимостей в Stage 13 — убрать.
+3. **`cargo-deny` — без конфига.** Требует `deny.toml`. Пока job проходит с warning.
+4. **`release.yml` не запускался.** Первый прогон — на первом теге `v0.1.0`. Возможны падения (`avm install 1.1.2`, `anchor build --no-idl` в CI).
+
+### Уроки Stage 12
+
+1. **CI без зелёных галочек — бесполезен.** Placeholder'ы лучше красного CI, но их нужно закрывать.
+2. **Разные toolchain по job'ам — необходимость.** Onchain 1.89.0, LiteSVM 1.98.1, остальное stable.
+3. **Matrix strategy — для однотипных джобов.** 7 крейтов в security, 2 директории в pnpm audit. Один YAML-блок вместо семи.
+4. **`generate_release_notes: true`** избавляет от ручного CHANGELOG в workflow — но не в `CHANGELOG.md`. Для `CHANGELOG.md` — отдельный процесс (Stage 14).
+5. **Templates и dependabot — про коллаборацию.** Пока проект разрабатывается одним человеком, они не критичны. Но репозиторий — публичный портфолио-материал, шаблоны нужны.
+6. **`paths:` в docker.yml — экономия минут.** Не пересобирать образ на каждый коммит в README.
+
+---
+
 ## Что дальше
 
-- **12.3** — Release workflow (тегированные релизы).
-- **12.4** — Security workflow (`cargo audit`, `pnpm audit`).
-- **12.5** — Шаблоны: PR, issues, dependabot.
-- **12.6** — финальный чекпоинт.
+- **Stage 13** — Security: threat model, adversarial tests, расширенные проверки.
+- **Stage 14** — Finalization: README, CHANGELOG, v0.1.0 release.
+- **Stage 15** — Split deposit (deferred).
