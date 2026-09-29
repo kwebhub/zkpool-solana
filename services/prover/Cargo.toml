@@ -15,7 +15,7 @@ name = "zkpool-prover"
 path = "src/main.rs"
 
 [dependencies]
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 serde = { version = "1.0", features = ["derive"] }
