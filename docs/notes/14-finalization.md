@@ -657,6 +657,116 @@ advisories ok, bans ok, licenses ok, sources ok
 
 ---
 
+## 14.10. Release v0.1.0
+
+**Дата:** 2026-09-29
+**Commit:** `48302ed` (тег `v0.1.0`)
+
+### Что произошло
+
+Первый публичный релиз проекта. GitHub Actions workflow `release.yml` собрал и опубликовал артефакты.
+
+**Release URL:** https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0
+
+### Артефакты
+
+| Файл | Размер | Назначение |
+|---|---|---|
+| `zk_pool.so` | 205 KB | Anchor-программа (deployable) |
+| `zk_pool.json` | 16.8 KB | IDL программы |
+| `zkpool-backend` | 9.53 MB | Rust-бинарь backend'а |
+| `zkpool-prover` | 3.46 MB | Rust-бинарь prover'а |
+| `zkpool-web.tar.gz` | 1.16 MB | Vite-сборка фронтенда |
+| `SHA256SUMS` | 401 B | Хэши всех артефактов |
+
+Плюс автогенерируемые GitHub архивы `Source code (zip)` и `Source code (tar.gz)`.
+
+### Пайплайн workflow
+
+1. **Setup job** (1s) — Ubuntu latest, Node 24.
+2. **checkout@v4** (1s) — клонирование репозитория.
+3. **Install Rust (SBF)** (8s) — toolchain 1.89.0.
+4. **Install Solana CLI** (11s) — через `release.anza.xyz`.
+5. **Install Anchor** (2m 17s) — `avm install 1.1.2`.
+6. **Build on-chain program** (3m 46s) — `anchor build --no-idl`.
+7. **Build IDL** (0s) — `anchor idl build -o target/idl/zk_pool.json`. **Добавлено в этом этапе.**
+8. **Collect program binary + IDL** (0s) — `cp` в `artifacts/`.
+9. **Build backend** — `cargo build --release`.
+10. **Collect backend binary** — `cp`.
+11. **Build prover** — `cargo build --release`.
+12. **Collect prover binary** — `cp`.
+13. **Install Node.js** — setup-node@v4.
+14. **Install pnpm** — 12.5.1.
+15. **Install web deps** — `pnpm install --frozen-lockfile`.
+16. **Build web** — `pnpm build`.
+17. **Package web dist** — `tar czf`.
+18. **Generate SHA-256 checksums** — `sha256sum * > SHA256SUMS`.
+19. **Create Release** — `softprops/action-gh-release@v2`.
+
+**Total duration:** 6m 37s.
+
+### Два бага, которые пришлось починить
+
+**1. GitHub Actions не запускались вообще.**
+
+Симптом: workflow падали за 4 секунды, не начиная работу. Аннотация:
+
+> The job was not started because recent account payments have failed or your spending limit needs to be increased.
+
+Причина: приватный репозиторий с исчерпанным лимитом Actions-минут.
+
+**Фикс:** сделать репозиторий **публичным**. Публичные репы получают неограниченные Actions-минуты на стандартных раннерах. Бонус: портфолио теперь видно всем.
+
+**2. `anchor build --no-idl` не создаёт IDL.**
+
+Симптом:
+
+```
+cp: cannot stat 'onchain/target/idl/zk_pool.json': No such file or directory
+```
+
+Причина: флаг `--no-idl` буквально означает «не генерировать IDL». Мы использовали его, чтобы `anchor build` не требовал keypair для деплоя.
+
+**Фикс:** добавили отдельный шаг:
+
+```yaml
+- name: Build IDL
+  working-directory: onchain
+  run: anchor idl build -o target/idl/zk_pool.json
+```
+
+`anchor idl build` не требует keypair — генерирует IDL из скомпилированной программы.
+
+### Пере-тегирование
+
+Первый тег `v0.1.0` указывал на коммит `da93c91` (до фикса IDL). После фикса — удалили старый тег и создали новый на `48302ed`:
+
+```bash
+git tag -d v0.1.0
+git push origin :v0.1.0
+git tag -a v0.1.0 -m "..."
+git push origin v0.1.0
+```
+
+**Допустимо,** потому что: тег был на приватном репо, релиз ещё не существовал, никто его не использовал. В production-сценарии — только через `workflow_dispatch` или UI-кнопку «Re-run».
+
+### Грабли
+
+1. **Failed payment → 4-секундные падения всех workflow.** Симптом легко спутать с YAML-ошибкой. Всегда смотреть аннотации в Summary.
+2. **`--no-idl` — буквально.** Не «build без деплоя», а «build без IDL». IDL генерируется отдельной командой.
+3. **`anchor idl build -o <path>`** — работает без keypair.
+4. **Пере-тегирование — не всегда зло.** Пока релиз не опубликован и тег никто не скачал — можно.
+
+### Уроки
+
+1. **Довести CI до зелёного перед первым релизом.** Публикация релиза с падающим CI — плохой сигнал для портфолио.
+2. **Смотреть на аннотации, не только на логи.** Billing-issue не появляется в выводе job'а — только в аннотациях наверху.
+3. **Публичный репо — стандарт для портфолио.** Приватный — для коммерческой тайны, что не наш случай.
+4. **`--no-idl` = «без IDL», не «без деплоя».** Внимательно читать флаги Anchor.
+5. **Пере-тегирование допустимо до публикации артефактов.** После — только новый тег (`v0.1.1`).
+
+---
+
 ## Что дальше
 
 - **14.10** — тег `v0.1.0` + push → GitHub Release.
