@@ -57,6 +57,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/11-infra.md`
    - `docs/notes/12-engineering.md`
    - `docs/notes/13-security.md`
+   - `docs/notes/14-finalization.md` (in progress)
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -683,7 +684,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
 - Stage 13 — Security (threat model, expanded tests) ✅
-- **Stage 14 — Finalization ← next**
+- **Stage 14 — Finalization ← in progress (14.1 done)**
 - Stage 15 — Deferred: split deposit (after v0.1.0)
 
 ### 7.10. Merkle service ordering dependency
@@ -892,6 +893,8 @@ zkpool-solana/
 ├── .checkpoints/            ← gitignored
 ├── .secrets/                ← gitignored (wallet + program keypair)
 ├── Makefile                 ← `make up` / `down` / `reset` / ...
+├── LICENSE                  ← MIT
+├── .editorconfig
 ├── docs/
 │   ├── notes/               ← Russian, committed, PORTFOLIO MATERIAL
 │   │   ├── 00-checkpoints.md
@@ -1068,8 +1071,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 13.6 (final checkpoint — Stage 13 complete).
-**Next stage:** Stage 14 — Finalization.
+**Last completed stage:** Stage 14.1 (`.editorconfig` + `LICENSE` MIT).
+**Next stage:** Stage 14.2 — `README.md`.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1254,8 +1257,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 13.6** (final checkpoint — Stage 13 complete).
-5. Next task: **Stage 14 — Finalization**.
+4. Last completed stage: **Stage 14.1** (`.editorconfig` + `LICENSE`).
+5. Next task: **Stage 14.2** — `README.md`.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
