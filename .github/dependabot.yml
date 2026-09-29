@@ -1,0 +1,75 @@
+version: 2
+updates:
+  # Rust crates — onchain program
+  - package-ecosystem: cargo
+    directory: /onchain
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+
+  # Rust crates — tests
+  - package-ecosystem: cargo
+    directory: /tests
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+
+  # Rust crates — backend
+  - package-ecosystem: cargo
+    directory: /services/backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+
+  # Rust crates — prover
+  - package-ecosystem: cargo
+    directory: /services/prover
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, rust]
+
+  # Rust crates — scripts (pool-init, e2e-*)
+  - package-ecosystem: cargo
+    directory: /scripts/pool-init
+    schedule:
+      interval: weekly
+    labels: [dependencies, rust]
+
+  - package-ecosystem: cargo
+    directory: /scripts/e2e-deposit
+    schedule:
+      interval: weekly
+    labels: [dependencies, rust]
+
+  - package-ecosystem: cargo
+    directory: /scripts/e2e-withdraw
+    schedule:
+      interval: weekly
+    labels: [dependencies, rust]
+
+  # Node — merkle service
+  - package-ecosystem: npm
+    directory: /services/merkle
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, node]
+
+  # Node — web
+  - package-ecosystem: npm
+    directory: /web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, node]
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencies, ci]
