@@ -206,6 +206,90 @@ file: infra/docker/Dockerfile.solana
 
 ---
 
+## 12.3. Release workflow
+
+**Дата:** 2026-09-29
+**Commit:** `b7b5903`
+
+### Зачем
+
+При выпуске новой версии (тег `v0.1.0`) — нужно собрать все артефакты в одном месте: программу `.so`, IDL, Rust-бинари, web dist. Вручную — долго и легко ошибиться.
+
+### Триггер
+
+```yaml
+on:
+  push:
+    tags:
+      - "v*.*.*"
+```
+
+Только на тег вида `v0.1.0`, `v1.2.3-rc1`. Не на каждый commit.
+
+### Артефакты
+
+| Файл | Что |
+|---|---|
+| `zk_pool.so` | Anchor program binary (deployable) |
+| `zk_pool.json` | Anchor IDL (для клиентов) |
+| `zkpool-backend` | Rust binary (release) |
+| `zkpool-prover` | Rust binary (release) |
+| `zkpool-web.tar.gz` | Vite static build |
+| `SHA256SUMS` | Хэши всех артефактов |
+
+### Пайплайн
+
+1. **SBF toolchain** — Rust 1.89.0.
+2. **Solana CLI** — через `release.anza.xyz` installer.
+3. **Anchor** — через `avm install 1.1.2`.
+4. **`anchor build --no-idl`** — сборка program без деплоя. `--no-idl` отключает требование keypair.
+5. **Backend + prover** — `cargo build --release`.
+6. **Web** — `pnpm install --frozen-lockfile` + `pnpm build`.
+7. **`web/dist/` → tar.gz**.
+8. **SHA256SUMS** — `sha256sum * > SHA256SUMS` в `artifacts/`.
+9. **GitHub Release** — `softprops/action-gh-release@v2`.
+
+### Prerelease detection
+
+```yaml
+prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+```
+
+Тег `v0.1.0-rc1` → prerelease. `v0.1.0` → stable.
+
+### Release notes
+
+```yaml
+generate_release_notes: true
+```
+
+GitHub автоматически создаёт список коммитов с момента последнего тега. Группировка по conventional commits — из коробки.
+
+### Permissions
+
+```yaml
+permissions:
+  contents: write
+```
+
+Обязательно для создания Release. По умолчанию `GITHUB_TOKEN` read-only.
+
+### Грабли
+
+1. **Anchor в CI тянет Rust 1.89.0.** `avm install 1.1.2` + `avm use 1.1.2` — привязка toolchain.
+2. **Solana CLI установка — `release.anza.xyz`.** Старый `release.solana.com` устарел.
+3. **`anchor build --no-idl` — ключевой флаг.** Без него `anchor build` требует `target/deploy/zk_pool-keypair.json`, которого в CI нет.
+4. **`web/dist` — папка, а не файл.** `tar czf zkpool-web.tar.gz .` внутри `dist/`. Иначе архив будет содержать только `dist/`.
+
+### Уроки
+
+1. **Release = версионированный snapshot всей системы.** IDL + программа + бинари + web — всё согласовано.
+2. **`generate_release_notes: true`** избавляет от ручного CHANGELOG для каждой версии.
+3. **`prerelease` — единственная строка, которая отличает rc от stable.** Больше не нужно двух workflow.
+4. **SHA256SUMS** — для воспроизводимости и проверки integrity. Кто скачал артефакт, может сверить с официальным хэшем.
+
+---
+
 ## Что дальше
 
 - **12.3** — Release workflow (тегированные релизы).
