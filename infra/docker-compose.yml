@@ -16,6 +16,7 @@ services:
       - ../scripts:/home/ubuntu/scripts
       - ../tests:/home/ubuntu/tests
       - ../solana:/home/ubuntu/.config/solana
+      - ../deny.toml:/home/ubuntu/deny.toml:ro
     environment:
       - CARGO_TERM_COLOR=always
     ports:
