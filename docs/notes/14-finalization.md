@@ -256,11 +256,91 @@ GitHub автоматически показывает ссылку на это�
 
 ---
 
+## 14.5. `SECURITY.md`
+
+**Дата:** 2026-09-29
+**Commit:** `28553d4`
+
+### Зачем
+
+GitHub требует `SECURITY.md` для показа ссылки "Report a vulnerability" в Security-табе репозитория. Без него GitHub использует свою форму — не настраиваемую.
+
+Для портфолио: наличие `SECURITY.md` = "автор задумывался о безопасности".
+
+### Структура
+
+**8 секций:**
+
+1. **Supported versions.** Только `main`. Всё остальное — нет.
+2. **⚠️ Important context.** Ссылки на `DEMO-NOTICE.md` и `threat-model.md`. **Ключевая секция.**
+3. **How to report.** Через GitHub Security Advisories (private).
+4. **Response timeline.** 3 / 7 / 14 / 90 дней. Best-effort.
+5. **Scope.** In scope / out of scope / minimum bar.
+6. **What we do.** Автоматизация + ручные меры.
+7. **Disclosure policy.** Что мы будем / не будем делать.
+8. **Bug bounty.** Нет. Только credit.
+
+### Ключевые решения
+
+**Список known limitations в топе файла.**
+
+```
+- A1 — new_root не проверяется
+- A5 — phishing frontend
+- A6 — prover видит witness
+- A9 — commitment forgery
+- A10 — ROOT_HISTORY_SIZE = 10
+- Trusted setup без MPC
+- Single-keypair upgrade authority
+- Backend видит commitments + nullifiers
+```
+
+**Смысл:** исследователь сначала видит, что мы уже знаем. Если его находка **не** в списке — welcome. Если в списке — это discussion, не security report.
+
+Это снимает нагрузку с мейнтейнера и одновременно даёт понять "мы не игнорируем проблемы, мы их документируем".
+
+**Response timeline — best-effort.**
+
+```
+Acknowledgment:      3 business days
+Initial assessment:  7 business days
+Fix or mitigation:   14 business days
+Public disclosure:   after fix, or 90 days
+```
+
+**Best-effort only, because solo-maintained.**
+
+**Scope — три уровня.**
+
+- **In scope:** наши компоненты (on-chain program, backend, prover, merkle, frontend, circuits, scripts).
+- **Out of scope:** Solana L1, Anchor, Noir, Sunspot, третьи библиотеки — докладывать upstream.
+- **Minimum bar:** не принимаем теоретические атаки без демонстрации, "best practice" замечания, DoS при обычной нагрузке, typos.
+
+**Disclosure policy — "we will not / we will".**
+
+- **Не будем:** судиться, требовать молчания, игнорировать.
+- **Будем:** подтверждать, честно говорить "не можем пофиксить", давать credit.
+
+### Грабли
+
+1. **GitHub Security Advisories — единственный приватный канал.** Публичный issue для уязвимости — плохо. `config.yml` в `ISSUE_TEMPLATE/` уже ссылается на этот URL.
+2. **Threat model уже описывает 4 "not prevented" атаки.** Их перечисление в SECURITY.md — не "список багов", а "список известных ограничений". Явно это указано.
+3. **`v0.1.0` ещё нет.** Таблица "Supported versions" помечает `main` как supported, `< 0.1.0` — нет. После тега — обновить.
+
+### Уроки
+
+1. **`SECURITY.md` — про доверие.** Чем яснее политика, тем серьёзнее выглядит проект. Даже если это демо.
+2. **Known limitations в топе — защита от noise.** Исследователь не потратит 3 дня на анализ A1, если сразу видит "известно, документировано".
+3. **"We will not sue you" — не пустая фраза.** В некоторых юрисдикциях такое явное заявление снимает юридические риски с исследователя.
+4. **Bug bounty — не обязанность.** Отсутствие bounty явно обозначено. Исследователи выбирают проект по интересу, не по деньгам.
+5. **Response timeline — best-effort.** Обещать 3 дня в соло-проекте — обман. Честное "best-effort" лучше.
+
+---
+
 ## Что дальше
 
-- **14.5** — `SECURITY.md`.
 - **14.6** — `CHANGELOG.md`.
-- **14.7** — обновление `docs/DEMO-NOTICE.md`.
+- **14.7** — `docs/DEMO-NOTICE.md` update.
 - **14.8** — root `deny.toml` + strict security workflow.
-- **14.9** — тег `v0.1.0` + release.
+- **14.9** — tag `v0.1.0` + release.
 - **14.10** — финальный чекпоинт.
