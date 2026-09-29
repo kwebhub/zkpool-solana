@@ -98,9 +98,116 @@
 
 ---
 
+## 12.2. Docker build workflow
+
+**Дата:** 2026-09-29
+**Commit:** `bb5830b`
+
+### Зачем
+
+`solana` образ содержит всё: Rust, Anchor, Solana CLI, nargo, Sunspot, Node.js, pnpm. Сборка занимает 5–10 минут локально. В CI этот образ нужно публиковать, чтобы другие разработчики (или CI-джобы) могли его переиспользовать без пересборки.
+
+### Триггеры
+
+```yaml
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/docker/**"
+      - "infra/docker-compose.yml"
+      - ".github/workflows/docker.yml"
+  pull_request:
+    paths: ...
+  workflow_dispatch:
+```
+
+**`paths:` фильтр** — сборка только при изменениях в docker-related файлах. Не на каждый PR (экономия CI-минут).
+
+**`workflow_dispatch`** — можно запустить вручную через UI.
+
+### Публикация
+
+```yaml
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-solana
+```
+
+**Итоговое имя:** `ghcr.io/kwebhub/zkpool-solana-solana` (owner + repo + `-solana` суффикс для disambiguation).
+
+### Metadata action
+
+```yaml
+- uses: docker/metadata-action@v5
+  with:
+    images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+    tags: |
+      type=ref,event=branch
+      type=ref,event=pr
+      type=sha,prefix=sha-,format=short
+      type=raw,value=latest,enable={{is_default_branch}}
+```
+
+**Теги:**
+- `main` (branch name)
+- `pr-123` (на PR)
+- `sha-abc1234` (короткий SHA)
+- `latest` (только на main)
+
+### Push policy
+
+```yaml
+push: ${{ github.event_name != 'pull_request' }}
+```
+
+**На PR** — только build (проверить, что Dockerfile рабочий). **На main** — build + push.
+
+### Кэш
+
+```yaml
+cache-from: type=gha
+cache-to: type=gha,mode=max
+```
+
+**`type=gha`** — использует GitHub Actions Cache (не локальный Docker cache). Слои образа переиспользуются между сборками. Sunspot clone + nargo build — самые тяжёлые слои; после первого билда они кэшируются.
+
+### Permissions
+
+```yaml
+permissions:
+  contents: read
+  packages: write
+```
+
+**`packages: write`** — обязательно для публикации в GHCR. По умолчанию `GITHUB_TOKEN` имеет только `read`.
+
+### Dockerfile context
+
+```yaml
+context: .
+file: infra/docker/Dockerfile.solana
+```
+
+**Context = repo root**, не `infra/`. Dockerfile копирует файлы из корня репозитория (см. Stage 1). Если поставить `context: infra/`, COPY не найдёт нужные пути.
+
+### Грабли
+
+1. **`permissions: packages: write` обязателен.** Без него `docker login` проходит, но push падает с `denied`.
+2. **`context: .` не `context: infra/`.** Dockerfile использует пути от корня репозитория.
+3. **Sunspot clone — самый долгий слой.** При первом билде ~2–3 минуты. С gha cache — секунды.
+
+### Уроки
+
+1. **Paths filter — экономия.** Не пересобирать образ, если изменили только Rust-код или docs.
+2. **`metadata-action` генерирует несколько тегов сразу.** Каждый push в main → 4 тега.
+3. **`docker/login-action@v3`** + `secrets.GITHUB_TOKEN` — без явных секретов. GHCR использует токен actions.
+4. **`sha-` префикс** — сокращённый SHA. В `docker pull ghcr.io/...:sha-abc1234` — точно известная ревизия.
+
+---
+
 ## Что дальше
 
-- **12.2** — Docker build workflow (публикация образов в GHCR).
 - **12.3** — Release workflow (тегированные релизы).
 - **12.4** — Security workflow (`cargo audit`, `pnpm audit`).
 - **12.5** — Шаблоны: PR, issues, dependabot.
