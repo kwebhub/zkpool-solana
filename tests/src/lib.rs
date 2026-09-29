@@ -22,3 +22,6 @@ mod test_withdraw;
 
 #[cfg(test)]
 mod test_double_spend;
+
+#[cfg(test)]
+pub mod test_adversarial;
