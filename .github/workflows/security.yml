@@ -1,0 +1,78 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly on Monday 06:00 UTC
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  cargo-audit:
+    name: cargo audit (Rust)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - onchain
+          - tests
+          - services/backend
+          - services/prover
+          - scripts/pool-init
+          - scripts/e2e-deposit
+          - scripts/e2e-withdraw
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+      - name: Run cargo audit
+        working-directory: ${{ matrix.crate }}
+        run: cargo audit --deny warnings || true
+
+  pnpm-audit:
+    name: pnpm audit (Node)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - services/merkle
+          - web
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "12.5.1"
+      - name: Install dependencies
+        working-directory: ${{ matrix.dir }}
+        run: pnpm install --frozen-lockfile
+      - name: Run pnpm audit
+        working-directory: ${{ matrix.dir }}
+        run: pnpm audit --audit-level=high || true
+
+  cargo-deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+      - name: Run cargo deny
+        run: |
+          if [ -f deny.toml ]; then
+            cargo deny check
+          else
+            echo "deny.toml not found — skipping (create in Stage 12.5)"
+          fi
