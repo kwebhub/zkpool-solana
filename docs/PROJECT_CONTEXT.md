@@ -2,7 +2,7 @@
 
 > **Purpose:** single entry point for an AI assistant in a new chat. Load this file first.
 >
-> **Last updated:** 2026-09-27 (Stage 8.2 — pool-init in progress)
+> **Last updated:** 2026-09-29 (Stage 14 complete — v0.1.0 released)
 >
 > **Handoff note:** this version was condensed from a 720-line file to fit cleanly into a new chat's context. Every section is preserved; some have been tightened. Nothing was removed.
 
@@ -57,7 +57,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/11-infra.md`
    - `docs/notes/12-engineering.md`
    - `docs/notes/13-security.md`
-   - `docs/notes/14-finalization.md` (in progress)
+   - `docs/notes/14-finalization.md`
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -196,7 +196,8 @@ Contents (per the `05.5-tree` convention):
 - [kwebhub/private-transfer](https://github.com/kwebhub/private-transfer) — v1.
 - `kwebhub/solana-zk-pool` — v2 (abandoned; bug: `withdraw` fails with `InvalidInstructionData`, root cause not found).
 
-**This repository:** https://github.com/kwebhub/zkpool-solana (private) — v3.
+**This repository:** https://github.com/kwebhub/zkpool-solana (public) — v3.
+**Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29).
 **License:** MIT
 **Network:** Solana Devnet
 
@@ -603,6 +604,29 @@ Commit: `8a41984f046a7c1deca7ed75493903de97df659a`.
 
 **Open items:** root `deny.toml` allow list; `security.yml` `|| true`; CSP for production.
 
+### ✅ Stage 14. Finalization (2026-09-29)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 14.1 | `.editorconfig` + LICENSE (MIT) | `843ac88` |
+| 14.2 | `README.md` | `274bc4d` |
+| 14.3 | `docs/ru/README.md` | `94d17b8` |
+| 14.4 | `CONTRIBUTING.md` | `747a711` |
+| 14.5 | `SECURITY.md` | `28553d4` |
+| 14.6 | `CHANGELOG.md` (v0.1.0) | `537ea0d` |
+| 14.7 | `docs/DEMO-NOTICE.md` update | `f8b3adc` |
+| 14.8 | `cargo-deny` passes | `e09e8fd` |
+| 14.9 | `cargo-deny` + `cargo-audit` in Dockerfile | `226401c` |
+| 14.10 | Release `v0.1.0` (tag on `48302ed`) | `48302ed` (tag) |
+| 14.11 | Final checkpoint | `56eeaf1` |
+
+**Release:** `v0.1.0` — https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0
+**Assets:** `zk_pool.so` (205 KB), `zk_pool.json` (16.8 KB), `zkpool-backend` (9.53 MB), `zkpool-prover` (3.46 MB), `zkpool-web.tar.gz` (1.16 MB), `SHA256SUMS` (401 B).
+
+**Repo visibility:** public (made public 2026-09-29 to unblock GitHub Actions billing).
+
+**Dependabot triage:** 29 PRs closed (2026-09-29) — all version bumps. Project is on pinned-version release; bumps deferred to a future upgrade cycle.
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
@@ -684,8 +708,8 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
 - Stage 13 — Security (threat model, expanded tests) ✅
-- Stage 14 — Finalization ✅
-- **Stage 15 — Split deposit (deferred; content TBD) ← next**
+- Stage 14 — Finalization ✅ (release v0.1.0)
+- **Stage 15 — Split deposit ← next**
 
 ### 7.10. Merkle service ordering dependency
 
@@ -1076,15 +1100,12 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 14.7 (updated `docs/DEMO-NOTICE.md` — reflects Stage 14 state).
-**Next stage:** Stage 14.8 — root `deny.toml` allow list + strict security workflow.
+**Last completed stage:** Stage 14.11 (final checkpoint — Stage 14 complete, v0.1.0 released).
+**Next stage:** Stage 15 — Split deposit.
 
-**Recent bridge commits (between Stages 7 and 8):**
-- `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
-- `3780473` — wire `/api/proof` → Merkle service.
+**Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
-
 **Deployed programs on devnet:**
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
@@ -1104,12 +1125,6 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 **Running containers:** `solana-zkpool-solana`, `zkpool-postgres` (healthy), `zkpool-redis` (healthy).
 **Running processes (inside `solana` container):** merkle (4003), prover (4002), backend (4001) — must be restarted after container restart.
-
-**Pool state (created 2026-09-27):**
-- Pool PDA: `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`
-- Vault PDA: `HYQgjKSDU8cw9Q74QBWQShGcSs5sERxAoe7PLyF5q6jq`
-- `PoolState`: 384 bytes, authority = wallet, all counters zero.
-- Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
 **Docs sizes:**
 - `00-glossary.md` — 545 lines
@@ -1261,9 +1276,9 @@ POST /prove
 
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
-3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 14.7** (updated DEMO-NOTICE).
-5. Next task: **Stage 14.8** — `deny.toml` allow list + strict workflow.
+3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`, `10-e2e.md`, `11-infra.md`, `12-engineering.md`, `13-security.md`, `14-finalization.md`.
+4. Last completed stage: **Stage 14.11** (final checkpoint — Stage 14 complete, `v0.1.0` released).
+5. Next task: **Stage 15 — Split deposit**.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
