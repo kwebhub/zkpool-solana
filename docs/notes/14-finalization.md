@@ -417,9 +417,77 @@ Public disclosure:   after fix, or 90 days
 
 ---
 
+## 14.7. Обновление `docs/DEMO-NOTICE.md`
+
+**Дата:** 2026-09-29
+**Commit:** `f8b3adc`
+
+### Зачем
+
+`DEMO-NOTICE.md` был написан перед Stage 5 (2026-09-24) и устарел:
+
+1. **§4.1 "Secrets in `localStorage`"** — **неверно.** Stage 13.4 подтвердил: notes не сохраняются в браузере.
+2. **§5.1 "No CI/CD hardening — workflows will be added at Stage 10"** — Stage 12 добавил 4 workflow.
+3. **§7 "planned, Stages 4.5/5–8/11"** — всё сделано.
+4. **Отсутствовали ссылки на threat-model.** 12 сценариев не упомянуты.
+5. **§3.1 (prover)** — говорилось "race condition", но мы уже добавили mutex.
+
+### Что изменилось
+
+**Добавлено сверху:**
+```markdown
+**See also:**
+- [`threat-model.md`](threat-model.md) — 12 attack scenarios (A1–A12), 7 invariants.
+- [`SECURITY.md`](../SECURITY.md) — how to report vulnerabilities.
+- [`CHANGELOG.md`](../CHANGELOG.md) — release history.
+```
+
+**§2 (On-chain)** — добавлены A1, A9, A10 как ссылки на threat-model. Раньше были просто "known limitations".
+
+**§3.1 (prover)** — теперь:
+- "serialized by an async mutex" (вместо "race condition").
+- "Verified in Stage 7.4."
+
+**§3.2 (prover sees witness)** — добавлена ссылка A6. Усилено: "Client-side proving is the only architectural fix; a TEE is a mitigation, not a solution."
+
+**§4.1** — **полностью переписан.**
+- Было: "Secrets in `localStorage` in plaintext".
+- Стало: "Notes are not stored in the browser. Positive: no XSS surface. Negative: closing browser without saving = loss of funds."
+
+**§5.1 (CI/CD)** — теперь список 4 workflow с описанием. "What is missing: SHA pinning, OIDC, artifact signing".
+
+**§7 (What IS in the project)** — переписан. Полный список по компонентам, ~140 тестов, ссылка на CHANGELOG.
+
+**§8 (Bottom line)** — 8 шагов для production, со ссылками на threat-model ID.
+
+### Ключевые изменения в философии
+
+**Раньше:** "всё плохо, ничего нет".
+**Теперь:** "вот что есть, вот чего нет, вот рекомендации".
+
+**Почему это лучше:**
+
+- **Читатель видит объём работы.** Не 30 строк "чего не хватает", а полный список компонентов с тестами.
+- **Ссылки на threat-model.** Каждое ограничение = конкретный сценарий атаки.
+- **Рекомендации для production** — actionable. Не "улучшить безопасность", а "increase ROOT_HISTORY_SIZE".
+
+### Грабли
+
+1. **`localStorage` — было неверно.** Писали "secrets in localStorage", но в коде их никогда не было. Stage 13.4 явно проверил. Документ надо периодически сверять с кодом.
+2. **"Stage 10" в старом тексте.** Ссылался на будущее. Теперь — "Stage 12" в прошлом времени.
+3. **Ссылки `../SECURITY.md`** — из `docs/` в корень. Работают.
+
+### Уроки
+
+1. **DEMO-NOTICE — живой документ.** Обновлять после каждого значимого этапа. Иначе становится вредным (вводит в заблуждение).
+2. **Threat-model — естественное расширение DEMO-NOTICE.** DEMO-NOTICE — что не сделано простым языком. Threat-model — формализация.
+3. **Ссылки на ID атак (A1, A6, A10) — сильный приём.** Читатель может пойти в threat-model и увидеть детали, если хочет.
+4. **"Positive/Negative" для неоднозначных решений.** "Нет localStorage" — плюс для безопасности, минус для UX. Явно указать оба.
+
+---
+
 ## Что дальше
 
-- **14.7** — обновление `docs/DEMO-NOTICE.md` (устарел с Stage 5).
-- **14.8** — root `deny.toml` + strict security workflow.
+- **14.8** — root `deny.toml` (allow list) + strict security workflow.
 - **14.9** — тег `v0.1.0` + release.
 - **14.10** — финальный чекпоинт.
