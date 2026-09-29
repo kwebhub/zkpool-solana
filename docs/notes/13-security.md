@@ -309,7 +309,80 @@ Notes не сохраняются в браузере. Пользователь 
 
 ---
 
+## 13.5. `deny.toml` + строгий аудит
+
+**Дата:** 2026-09-29
+**Commits:** `1f35743`, `f31480f`
+
+### Что нашли
+
+`cargo deny check` на backend'е:
+
+```
+advisories FAILED, bans ok, licenses FAILED, sources ok
+```
+
+**Advisories FAILED:**
+```
+RUSTSEC-2024-0363 — sqlx 0.7.4 SQL injection via protocol smuggling
+  (encoding values > 4 GiB overflows the length prefix)
+  Fix: upgrade to >= 0.8.1
+```
+
+**Licenses FAILED:**
+```
+error[rejected]: failed to satisfy license requirements
+  ┌─ /home/ubuntu/services/backend/Cargo.toml
+  │ license = "MIT"
+  │            ━━━
+  │            rejected: license is not explicitly allowed
+```
+
+**Странно:** MIT был в нашем allow-списке. Причина — schema mismatch: `cargo-deny 0.20.2` не читает `version = 2` в `deny.toml` так, как мы ожидали.
+
+### Что сделано
+
+**1. `sqlx 0.7` → `0.8`:**
+
+```toml
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio", "tls-native-tls", "postgres", "uuid", "chrono", "json",
+] }
+```
+
+**Собралось без изменений в коде.** Backend перезапущен, `/api/health` → `{"db":true,"status":"ok"}`. Advisories: `ok`.
+
+**2. `cargo-deny init`:**
+
+`cargo-deny init` создал свежий `deny.toml` в `services/backend/`. Схема под 0.20.2 — корректная.
+
+**3. `make exec-c CMD='...'`** — новая цель в Makefile:
+
+```bash
+make exec-c CMD='ls -la /home/ubuntu'
+```
+
+Обёртка над `docker compose exec solana bash -ic '...'`. Полезно для ad-hoc команд без повторения длинного префикса.
+
+### Что осталось
+
+- **Root `deny.toml`** — пустой `allow` (после копирования свежего init). Нужно заполнить: MIT, Apache-2.0, BSD-3, ISC, Unicode-3.0, Zlib, OpenSSL, CC0-1.0, MPL-2.0.
+- **`licenses FAILED`** для наших собственных крейтов (`zkpool_backend v0.1.0` с `license = "MIT"`) — schema mismatch. После заполнения root `deny.toml` — проверить снова.
+- **`security.yml`** — `|| true` на audit steps. Убрать после того, как `cargo deny check` полностью зелёный.
+
+### Грабли
+
+1. **`cargo deny init` требует `Cargo.toml` в текущей директории.** `cd /home/ubuntu && cargo deny init` падает — нет `Cargo.toml` на уровне репозитория. `cd services/backend && cargo deny init` — работает.
+2. **`sqlx 0.8` не сломал код.** `SqlitePool` / `PgPool`, `Row::get`, `.bind()` — сигнатуры не изменились. Только версия.
+3. **`sqlx 0.8.6` всё ещё тянет `time`, `aws-lc-sys`** — компиляция дольше (49 сек vs 12 сек на 0.7). Но advisories OK.
+
+### Уроки
+
+1. **`cargo audit` vs `cargo deny check`.** Первое — только advisories. Второе — advisories + licenses + bans + sources. `cargo deny` строже, но требует правильной конфигурации.
+2. **RUSTSEC-2024-0363 — не теоретическая уязвимость.** Демонстрация эксплойта опубликована. Upgrade обязателен, не «recommended».
+3. **Version schema в `deny.toml` — меняется между версиями `cargo-deny`.** Наш старый `version = 2` не работает с 0.20.2. Всегда генерировать свежий через `cargo deny init`.
+4. **`advisories FAILED` — реально важно. `licenses FAILED` — часто про конфиг.** Разделять эти сигналы.
+
 ## Что дальше
 
-- **13.5** — `deny.toml` + strict audit.
-- **13.6** — финальный чекпоинт.
+- **13.6** — финальный чекпоинт Stage 13.

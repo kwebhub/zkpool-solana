@@ -663,7 +663,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
 - Stage 12 — Engineering processes (CI/CD, templates) ✅
-- **Stage 13 — Security (threat model, expanded tests) ← in progress (13.1–13.4 done)**
+- **Stage 13 — Security (threat model, expanded tests) ← in progress (13.1–13.5 done)**
 - Stage 14 — Finalization
 - Stage 15 — Deferred: split deposit (after v0.1.0)
 
@@ -825,6 +825,14 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
   - Symptom: `ComputationalBudgetExceeded` with `Proof verified successfully!` in logs.
   - Fix: prepend `ComputeBudgetInstruction::SetComputeUnitLimit(400_000)`.
   - Instruction data: `[2, u32 LE limit]`. Program ID: `ComputeBudget111111111111111111111111111111`.
+
+### From Stage 13 (security)
+
+- **`sqlx 0.7.4` has RUSTSEC-2024-0363** (SQL injection via protocol smuggling).
+  - Fix: upgrade to `sqlx 0.8`. No code changes required.
+- **`cargo-deny 0.20.2` schema is incompatible with `version = 2` in `deny.toml`.**
+  - Symptom: `licenses FAILED` on our own crates with `license = "MIT"` even when MIT is in the allow list.
+  - Fix: regenerate `deny.toml` via `cargo deny init` inside a crate directory (requires `Cargo.toml` present).
 
 ### From the backend↔prover wiring (2026-09-27)
 
@@ -1041,8 +1049,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 13.4 (frontend security review — no XSS, no storage, signAndSendTransaction only).
-**Next stage:** Stage 13.5 — `deny.toml` + strict security audit.
+**Last completed stage:** Stage 13.5 (sqlx 0.7→0.8 upgrade for RUSTSEC-2024-0363; deny.toml; make exec-c).
+**Next stage:** Stage 13.6 — final checkpoint for Stage 13.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1227,8 +1235,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 13.4** (frontend security review).
-5. Next task: **Stage 13.5** — `deny.toml` + strict security audit.
+4. Last completed stage: **Stage 13.5** (sqlx upgrade, deny.toml, make exec-c).
+5. Next task: **Stage 13.6** — final checkpoint for Stage 13.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
