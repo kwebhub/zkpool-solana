@@ -37,7 +37,7 @@ redis = { version = "0.25", features = [
   "connection-manager",
 ] }
 hex = "0.4"
-base64 = "0.21"
+base64 = "0.23"
 bs58 = "0.5"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
