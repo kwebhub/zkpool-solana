@@ -229,8 +229,87 @@ POST /api/root-preview {"commitments":["nothex"]}
 
 ---
 
+## 13.4. Frontend security review
+
+**Дата:** 2026-09-29
+**Commit:** (docs-only, no source changes)
+
+### Что проверяли
+
+1. XSS через `v-html`, `innerHTML`, `eval`, `Function(`.
+2. Хранение notes (`localStorage`, `sessionStorage`, cookies).
+3. Взаимодействие с кошельком (`signAndSendTransaction`, `signMessage`).
+4. Сетевые запросы (`fetch`, `http://`, `https://`).
+
+### Результаты
+
+**1. XSS — чисто.**
+
+```
+$ grep -rn "v-html\|innerHTML\|eval\|Function(" web/src/
+(no matches)
+```
+
+Vue-шаблоны используют `{{ ... }}` — авто-эскейпинг. Никаких `v-html`.
+
+**2. Хранение notes — чисто.**
+
+```
+$ grep -rn "localStorage\|sessionStorage\|document.cookie" web/src/
+(no matches)
+```
+
+Notes не сохраняются в браузере. Пользователь копирует JSON вручную. **Плюс для безопасности:** XSS не может украсть notes из storage.
+
+**Минус для UX:** при обновлении страницы всё теряется. Но это осознанное решение — notes слишком чувствительны для автоматического хранения.
+
+**3. Кошелёк — чисто.**
+
+Единственный используемый метод — `signAndSendTransaction`. Это:
+- **Атомарно** — пользователь видит транзакцию и подтверждает её.
+- **Прозрачно** — кошелёк показывает, что именно подписывается.
+- **Не `signMessage`** — нет риска, что пользователь подпишет произвольное сообщение (которое в некоторых протоколах может быть опасным).
+
+`makeNoopSigner` (`web/src/wallet/kitSigner.ts`) — **заглушка**, её `signTransactions` кидает ошибку. Реальное подписание идёт через `provider.signAndSendTransaction(base64)`. Noop нужен только чтобы Codama приняла вход.
+
+**4. Сетевые запросы — чисто.**
+
+- `https://api.devnet.solana.com` — hardcoded RPC.
+- `/circuits/*.json` — same-origin.
+- Никаких сторонних аналитик, CDN, `fetch` на внешние домены.
+- Остальные `https://` — doc-комментарии Codama.
+
+### Что осталось вне scope
+
+1. **`Content-Security-Policy`** — не установлен. Для production желателен:
+   ```
+   default-src 'self';
+   connect-src 'self' https://api.devnet.solana.com;
+   script-src 'self' 'wasm-unsafe-eval';  // для noir_js WASM
+   ```
+   Для dev — не критично.
+
+2. **SRI для WASM** — не нужен. WASM грузится из нашего origin (`noir_js` бандлится Vite).
+
+3. **XSS через сохранённый note.** Если пользователь вставит note в другой сервис (чат, email) — мы уже не контролируем. Vue auto-escape покрывает отображение **внутри** нашего приложения.
+
+4. **Phishing frontend** (A5 из threat model). Не защищено. Пользовательская ответственность.
+
+### Грабли
+
+1. **`grep` без `-E`** не работает с alternation `|`. Нужно `grep -rn "a\|b"` (bash) или `grep -rEn "a|b"`.
+2. **Comments в Codama** содержат `https://github.com/codama-idl/codama` — grep их подхватывает. Не настоящие запросы.
+
+### Уроки
+
+1. **Vue auto-escape — сильная защита.** Пока не используем `v-html` — XSS через пользовательский ввод практически невозможен.
+2. **Отсутствие storage — фича, не баг.** Notes не персистятся → их нельзя украсть через XSS из `localStorage`.
+3. **`signAndSendTransaction` предпочтительнее `signMessage`.** Первое — атомарная подпись транзакции, второе — произвольные байты. Для наших сценариев первого достаточно.
+4. **Same-origin circuits + hardcoded RPC = минимум внешних запросов.** Не даём XSS-скриптам возможности отправить данные на чужой домен (CSP усилит этот эффект в production).
+
+---
+
 ## Что дальше
 
-- **13.4** — frontend security review.
 - **13.5** — `deny.toml` + strict audit.
 - **13.6** — финальный чекпоинт.
