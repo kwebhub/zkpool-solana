@@ -38,12 +38,15 @@ jobs:
         working-directory: onchain
         run: anchor build --no-idl
 
+      - name: Build IDL
+        working-directory: onchain
+        run: anchor idl build -o target/idl/zk_pool.json
+
       - name: Collect program binary + IDL
         run: |
           mkdir -p artifacts
           cp onchain/target/deploy/zk_pool.so artifacts/
           cp onchain/target/idl/zk_pool.json artifacts/
-
       # ------------------------------------------------------------
       # Backend binary
       # ------------------------------------------------------------
