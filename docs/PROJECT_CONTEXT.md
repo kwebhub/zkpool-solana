@@ -55,6 +55,7 @@ This is the **single normative section** of this file. Everything else describes
    - `docs/notes/09-frontend.md`
    - `docs/notes/10-e2e.md`
    - `docs/notes/11-infra.md`
+   - `docs/notes/12-engineering.md` (in progress)
 5. Skim **section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
 6. Then go to **section 12** and start with **Next task**.
 
@@ -643,7 +644,7 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 - Stage 9 — Frontend (Vue 3 + TS + Pug + SCSS) ✅
 - Stage 10 — Full E2E (deposit → withdraw on devnet) ✅
 - Stage 11 — Infrastructure (Makefile, Prometheus, Grafana, port mappings) ✅
-- **Stage 12 — Engineering processes (CI/CD, templates) ← next**
+- **Stage 12 — Engineering processes (CI/CD, templates) ← in progress (12.1 done)**
 - Stage 13 — Security (threat model, expanded tests)
 - Stage 14 — Finalization
 - Stage 15 — Deferred: split deposit (after v0.1.0)
@@ -838,6 +839,9 @@ Public inputs (5): `root`, `nullifier_hash`, `recipient`, `recipient_binding`, `
 
 ```
 zkpool-solana/
+├── .github/                 ← CI/CD, templates
+│   ├── workflows/ci.yml
+│   └── (docker.yml, release.yml, security.yml — planned)
 ├── .checkpoints/            ← gitignored
 ├── .secrets/                ← gitignored (wallet + program keypair)
 ├── Makefile                 ← `make up` / `down` / `reset` / ...
@@ -1017,8 +1021,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last completed stage:** Stage 11.4 (final checkpoint — Stage 11 complete).
-**Next stage:** Stage 12 — Engineering processes (CI/CD, templates).
+**Last completed stage:** Stage 12.1 (CI workflow — 7 jobs, GitHub Actions).
+**Next stage:** Stage 12.2 — Docker build workflow.
 
 **Recent bridge commits (between Stages 7 and 8):**
 - `e1eae1d` — wire `/api/withdraw` → prover (hex in, base64 out).
@@ -1203,8 +1207,8 @@ POST /prove
 1. Read **section 0** first — especially 0.9 (document non-obvious), 0.10 (small steps), 0.11 (never delete info), 0.13 (record), 0.14 (record on push), 0.15 (checkpoint immediately after each sub-stage).
 2. Read this file completely.
 3. Read `docs/notes/00-glossary.md`, `00-zk-primer.md`, `01-setup.md`, `02-circuits.md`, `03-sunspot.md`, `04-anchor.md`, `05-backend.md`, `06-merkle.md`, `07-prover.md`, `08-pool-init.md`, `09-frontend.md`.
-4. Last completed stage: **Stage 11.4** (final checkpoint — Stage 11 complete).
-5. Next task: **Stage 12 — Engineering processes** (CI/CD, templates).
+4. Last completed stage: **Stage 12.1** (CI workflow).
+5. Next task: **Stage 12.2** — Docker build workflow.
 6. **One task at a time.** Only exception: `git commit ... && git push`.
 7. **Give files in full for new files; insertion point + block for existing.**
 8. **Never guess.** If ambiguous — ask.
