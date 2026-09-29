@@ -486,8 +486,114 @@ Public disclosure:   after fix, or 90 days
 
 ---
 
+## 14.8. `cargo-deny` наконец проходит
+
+**Дата:** 2026-09-29
+**Commit:** `e09e8fd`
+
+### Что было
+
+На протяжении Stage 13.5 и 14.8 `cargo deny check` падал с `licenses FAILED`. Что только не пробовали:
+- Перебирали SPDX-выражения в allow-списке (20+ штук).
+- Добавляли `version = 2`, убирали, снова добавляли.
+- Пытались `[licenses.private] ignore = true` и `private = { ignore = true }`.
+- Копировали конфиг из v2 проекта.
+
+Результат всегда одинаковый: `305 errors` — каждая зависимость отвергалась, включая `MIT OR Apache-2.0`.
+
+### Три реальные причины
+
+**1. Корневой `deny.toml` не был смонтирован в контейнер.**
+
+Volume'ы в `docker-compose.yml` — по подпапкам (`../onchain:/home/ubuntu/onchain`, и т.д.). Корень репозитория не смонтирован. Значит `/home/ubuntu/deny.toml` — не существует. При запуске `cargo deny --config /home/ubuntu/deny.toml`:
+
+```
+[WARN] config path '/home/ubuntu/deny.toml' doesn't exist, falling back to default config
+```
+
+Cargo-deny молча берёт **пустой дефолтный конфиг** (deny all). Отсюда 305 ошибок.
+
+**Диагностика:** `head -3` вывода. До этого смотрели только `tail -5`, где warning не виден.
+
+**Фикс:** добавили в `docker-compose.yml`:
+```yaml
+- ../deny.toml:/home/ubuntu/deny.toml:ro
+```
+
+**2. Порядок флагов `cargo deny --config` и подкоманды.**
+
+Правильно:
+```
+cargo deny --config /home/ubuntu/deny.toml check licenses
+```
+
+Неправильно (то, что пробовали сначала):
+```
+cargo deny check licenses --config /home/ubuntu/deny.toml
+```
+
+**3. `deny.toml` от v2 проекта.** Схема `version = 2` в `[licenses]` и `[advisories]` устарела в 0.20.2. Но главное — **`allow-osi-fsf-free` больше нет**: каждый SPDX-идентификатор нужно перечислять явно.
+
+**Однако** — если наш собственный crate исключён через `private = { ignore = true }`, а третьесторонние crates содержат только простые ID (`MIT`, `Apache-2.0`, `ISC`, `Unicode-3.0` и т.д.), то **сложных compound-выражений в allow-списке не нужно**. Простой список из 17 ID справляется.
+
+### Итоговый `deny.toml`
+
+```toml
+[graph]
+targets = [{ triple = "x86_64-unknown-linux-gnu" }]
+
+[licenses]
+confidence-threshold = 0.8
+private = { ignore = true }
+allow = ["0BSD", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause",
+         "BSD-3-Clause", "BSL-1.0", "CC0-1.0", "CDLA-Permissive-2.0", "ISC",
+         "MIT", "MIT-0", "MPL-2.0", "OpenSSL", "Unicode-3.0", "Unicode-DFS-2016",
+         "Unlicense", "Zlib"]
+
+[advisories]
+yanked = "warn"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "warn"
+unknown-git = "warn"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+```
+
+### Бонусный баг: `cargo-deny` пропадает при рекрейте контейнера
+
+`cargo install cargo-deny` пишет в `/home/ubuntu/.cargo/bin/` — **внутри контейнера, не в volume**. При `docker compose up -d --force-recreate solana` — бинарь теряется. Приходится переустанавливать (`cargo install cargo-deny --locked --version 0.20.2` — 1m 41s).
+
+**TODO:** добавить `cargo-deny` и `cargo-audit` в `infra/docker/Dockerfile.solana`. Тогда они сохранятся в образе.
+
+### Итог
+
+```
+advisories ok, bans ok, licenses ok, sources ok
+```
+
+### Грабли
+
+1. **`head` вместо `tail` для диагностики конфига.** `tail -5` показал только дерево зависимостей. Warning о ненайденном конфиге был в первых строках.
+2. **Volume mount только для подпапок.** Корневые файлы (deny.toml, Makefile, README.md) не видны в контейнере.
+3. **`private = { ignore = true }` — inline table, не секция `[licenses.private]`.** Разные синтаксисы, работающие по-разному.
+4. **Порядок флагов в clap-приложениях: глобальные до подкоманды.**
+
+### Уроки
+
+1. **Всегда смотреть полный вывод ошибки.** Warning в начале — критичен. `tail -5` систематически вводил в заблуждение.
+2. **Проверять, что файл виден в контейнере.** `ls /home/ubuntu/deny.toml` перед запуском — мгновенная диагностика.
+3. **v2-конфиг из прошлого проекта — не истина в последней инстанции.** Схема cargo-deny менялась между 0.18 → 0.19 → 0.20. `version = 2` жил в двух версиях, теперь устарел.
+4. **`private = { ignore = true }` — ключ к простоте.** Без него пришлось бы перечислять 20+ compound-выражений. С ним — 17 простых ID.
+5. **Не биться головой об конфиг бесконечно.** После 5–6 неудачных попыток — читать исходники инструмента (`src/licenses.rs`) и смотреть, как реально работает matching.
+
+---
+
 ## Что дальше
 
-- **14.8** — root `deny.toml` (allow list) + strict security workflow.
 - **14.9** — тег `v0.1.0` + release.
 - **14.10** — финальный чекпоинт.
