@@ -60,6 +60,25 @@ pub struct ProverResponse {
 impl WithdrawRequest {
     /// Validate shape before forwarding to the prover.
     pub fn validate(&self) -> Result<(), String> {
+        // All field-element hex strings must be 64 chars, valid hex.
+        for (name, v) in [
+            ("root", &self.root),
+            ("nullifier_hash", &self.nullifier_hash),
+            ("recipient_binding", &self.recipient_binding),
+            ("nullifier", &self.nullifier),
+            ("secret", &self.secret),
+            ("note_secret", &self.note_secret),
+        ] {
+            validate_hex64(name, v)?;
+        }
+
+        // `recipient` is a BN254 field element — up to 64 hex chars.
+        // It may be shorter than 64 (leading zeros elided) but no longer.
+        validate_hex_max("recipient", &self.recipient, 64)?;
+
+        // `amount` — hex, at most 64 chars.
+        validate_hex_max("amount", &self.amount, 64)?;
+
         if self.merkle_proof.len() != TREE_DEPTH {
             return Err(format!(
                 "merkle_proof must have {} elements, got {}",
@@ -67,6 +86,10 @@ impl WithdrawRequest {
                 self.merkle_proof.len()
             ));
         }
+        for (i, p) in self.merkle_proof.iter().enumerate() {
+            validate_hex_max(&format!("merkle_proof[{}]", i), p, 64)?;
+        }
+
         if self.is_even.len() != TREE_DEPTH {
             return Err(format!(
                 "is_even must have {} elements, got {}",
@@ -76,4 +99,34 @@ impl WithdrawRequest {
         }
         Ok(())
     }
+}
+
+/// Ensure a string is exactly 64 chars of lowercase hex.
+fn validate_hex64(name: &str, v: &str) -> Result<(), String> {
+    if v.len() != 64 {
+        return Err(format!("{} must be 64 hex chars, got {}", name, v.len()));
+    }
+    if !v.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("{} must be lowercase hex", name));
+    }
+    Ok(())
+}
+
+/// Ensure a string is at most `max` chars of lowercase hex.
+fn validate_hex_max(name: &str, v: &str, max: usize) -> Result<(), String> {
+    if v.is_empty() {
+        return Err(format!("{} must not be empty", name));
+    }
+    if v.len() > max {
+        return Err(format!(
+            "{} must be at most {} hex chars, got {}",
+            name,
+            max,
+            v.len()
+        ));
+    }
+    if !v.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("{} must be lowercase hex", name));
+    }
+    Ok(())
 }

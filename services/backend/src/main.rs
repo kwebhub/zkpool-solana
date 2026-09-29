@@ -270,8 +270,13 @@ async fn get_root(State(state): State<AppState>, Query(q): Query<PoolQuery>) -> 
 struct ProofQuery {
     #[serde(default)]
     pool_address: Option<String>,
+    /// Leaf index. Upper bound is 2^TREE_DEPTH = 1M. Reject anything larger
+    /// before forwarding to the Merkle service.
     leaf_index: u64,
 }
+
+/// Max leaves in a pool (2^TREE_DEPTH = 2^20).
+const MAX_LEAVES: u64 = 1 << 20;
 
 async fn get_proof(
     State(state): State<AppState>,
@@ -294,6 +299,18 @@ async fn get_proof(
                 .into_response();
         }
     };
+
+    // Reject out-of-bound before touching the DB or Merkle service.
+    if q.leaf_index >= MAX_LEAVES {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": format!("leaf_index must be < {}", MAX_LEAVES),
+                "leaf_index": q.leaf_index,
+            })),
+        )
+            .into_response();
+    }
 
     if q.leaf_index as usize >= rows.len() {
         return (
@@ -374,6 +391,15 @@ struct RootPreviewRequest {
     commitments: Vec<String>,
 }
 
+/// Upper bound for `/api/root-preview` payloads — matches the on-chain
+/// `MAX_LEAVES` (2^TREE_DEPTH = 2^20).
+const MAX_PREVIEW_COMMITMENTS: usize = 1 << 20;
+
+/// Ensure a string is exactly 64 chars of lowercase hex.
+fn is_hex64(s: &str) -> bool {
+    s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 /// `POST /api/root-preview` — compute the Merkle root for a hypothetical
 /// commitment list by proxying to the Merkle service `/root`.
 ///
@@ -384,6 +410,32 @@ async fn post_root_preview(
     State(state): State<AppState>,
     Json(req): Json<RootPreviewRequest>,
 ) -> impl IntoResponse {
+    // Validate shape and size before forwarding.
+    if req.commitments.len() > MAX_PREVIEW_COMMITMENTS {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({
+                "error": format!(
+                    "too many commitments: {} > {}",
+                    req.commitments.len(),
+                    MAX_PREVIEW_COMMITMENTS
+                ),
+            })),
+        )
+            .into_response();
+    }
+    for (i, c) in req.commitments.iter().enumerate() {
+        if !is_hex64(c) {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(json!({
+                    "error": format!("commitments[{}] must be 64-char hex", i),
+                })),
+            )
+                .into_response();
+        }
+    }
+
     let url = format!("{}/root", state.config.merkle_url);
     let body = json!({ "commitments": req.commitments });
 
