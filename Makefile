@@ -37,6 +37,20 @@ help:
 	@echo "    make build       — build backend, prover, merkle, web"
 	@echo "    make clean       — remove target/, node_modules/, dist/"
 	@echo ""
+	@echo "  Utility:"
+	@echo "    make exec-c CMD=\"...\"  — run a command inside the solana container"
+	@echo ""
+
+# ============================================================
+# Utility
+# ============================================================
+
+# Run an arbitrary command inside the solana container.
+# Usage: make exec-c CMD='ls -la /home/ubuntu'
+.PHONY: exec-c
+exec-c:
+	@if [ -z "$(CMD)" ]; then echo "usage: make exec-c CMD='<command>'"; exit 1; fi
+	@$(COMPOSE) exec $(CONTAINER) bash -ic '$(CMD)'
 
 # ============================================================
 # Lifecycle
