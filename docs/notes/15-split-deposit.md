@@ -467,6 +467,118 @@ Split deposit добавляет **новый** вектор для будуще
 
 ### 15.4 — Sunspot re-run + verifier upgrade
 
-**Дата:** — (в работе). **Commit:** —.
+**Дата:** 2026-09-30. **Commit:** — (зафиксируем в следующем коммите). **Checkpoint:** `.checkpoints/15.4-verifier/`.
 
-**← next**
+Пайплайн выполнен **полностью локально**, затем — upgrade на devnet **на месте**.
+
+**Что сделано:**
+
+1. **Witness** — `nargo execute` → `withdrawal.gz` (3888 B, было 3825). Новый witness содержит 53 значения (было 48): +1 scalar (`total_amount`) + 3 (`splits[3]`) + 1 (`note_index`).
+2. **`Prover.toml`** — пересобран новым скриптом `/tmp/stage-15.4/build-prover-toml.sh`. Формат: 13 строк TOML. Значения этого witness'а представляют ноту `splits[1] = 300 000` lamports из депозита `1 000 000` lamports.
+3. **`sunspot compile`** — `.ccs` 645 129 B, **nbConstraints 6308 → 6366** (+58 — стоимость C4 и C5). SHA `218c0524…`.
+4. **`sunspot setup`** — `.pk` 2 166 095 B (было 2 145 109), `.vk` **1 360 B** (было 972, +388). SHA `b05df8a3…` / `9a25f71d…`.
+5. **`sunspot deploy`** — `.so` **197 056 B** (было 87 312 — в 2.25 раза больше). SHA `f2c3bea0…`. Program ID **не изменился**.
+6. **`sunspot prove`** — proof **388 B** (было 324, +64). SHA `8c3ca4e9…`.
+7. **`sunspot verify`** — `✅ Verification successful!` (2.40 s, 6366 constraints).
+8. **`solana program deploy`** — upgrade на месте, tx `5z68jatu…`, Program ID `5t51iu6a…` сохранён, Authority `5iM6nzaC…` сохранена.
+
+**Артефакты чекпоинта `.checkpoints/15.4-verifier/`:**
+
+| Файл | Размер | SHA-256 (первые 8) |
+|---|---|---|
+| `withdrawal.json` | 46 113 B | `a49bc877…` |
+| `withdrawal.ccs` | 645 129 B | `218c0524…` |
+| `withdrawal.pk` | 2 166 095 B | `b05df8a3…` |
+| `withdrawal.vk` | 1 360 B | `9a25f71d…` |
+| `withdrawal.so` | 197 056 B | `f2c3bea0…` |
+| `withdrawal.gz` | 3 888 B | `b14d2314…` |
+| `withdrawal.proof` | 388 B | `8c3ca4e9…` |
+| `withdrawal.pw` | 204 B | `a6d3f877…` |
+
+---
+
+### Ключевое открытие: `sunspot deploy` перезаписывает keypair
+
+**Симптом (обнаружен чтением исходников до запуска):** `sunspot deploy` **всегда** перезаписывает `<vkName>-keypair.json` в директории VK.
+
+**Источник:** `~/sunspot/go/cmd/deploy.go`, шаги 3 и 4:
+
+```go
+// Step 4: Rename outputs
+originalKeypair := filepath.Join(vkDir, "verifier_bin-keypair.json")
+if err := os.Rename(originalKeypair, keypairPath); err != nil {
+        log.Fatalf("Failed to rename keypair.json: %v", err)
+}
+```
+
+`cargo build-sbf` создаёт **новый** keypair `verifier_bin-keypair.json` при каждой сборке, и `deploy.go` **безусловно** переименовывает его поверх `withdrawal-keypair.json`. Флага «reuse existing keypair» в CLI **нет** (`sunspot deploy --help` показывает только `-h`).
+
+**Последствие:** прямолинейный запуск `sunspot deploy` **уничтожил бы** оригинальный keypair, чей pubkey = `5t51iu6a…`. Program ID изменился бы. Стратегия upgrade-in-place стала бы невозможной.
+
+**Митигация (применена):**
+
+1. **Перед** `sunspot deploy` — забэкапить оригинальный keypair:
+   ```bash
+   cp circuits/withdrawal/target/withdrawal-keypair.json /tmp/stage-15.4/withdrawal-keypair.ORIGINAL.json
+   ```
+2. Запустить `sunspot deploy` (он перезапишет `withdrawal-keypair.json`).
+3. **Восстановить** оригинальный keypair поверх нового:
+   ```bash
+   cp /tmp/stage-15.4/withdrawal-keypair.ORIGINAL.json circuits/withdrawal/target/withdrawal-keypair.json
+   ```
+4. Проверить, что pubkey всё ещё `5t51iu6a…`:
+   ```bash
+   solana-keygen pubkey circuits/withdrawal/target/withdrawal-keypair.json
+   ```
+5. Только тогда — `solana program deploy --program-id <existing>`.
+
+**Урок:** `sunspot deploy` — не upgrade-инструмент, а build+keypair-замена. Для upgrade-in-place исходный keypair нужно спасать **до** вызова, а восстанавливать **после**.
+
+**Дополнительная страховка:** оригинальный `.so` (v0.1.0) лежит в `.checkpoints/03.3-sunspot-deploy/withdrawal.so` (87 312 B, `117fae71…`). Если новый `.so` окажется битым на chain — откат возможен одной командой `solana program deploy`.
+
+---
+
+### Второе открытие: proof вырос с 324 до 388 байт
+
+**Симптом:** после `sunspot prove` файл `withdrawal.proof` имеет размер **388 байт**, а не 324.
+
+**Причина — не установлена точно.** Возможные факторы:
+
+- `sunspot deploy` в этот раз собрал `.so` на **новом toolchain** (`solana-program 3.0.0`, `solana-bn254 3.1.2`, `solana-syscalls`), тогда как оригинальный `.so` (Stage 3.3) собирался с более старым окружением. Это могло изменить layout proof'а.
+- VK вырос 972 → 1 360 B (+388). Groth16 proof для BN254 обычно фиксирован (2×G1 + 1×G2 = 3 точки → 324 B). Но если Sunspot 1.0.0 для нового toolchain использует другой формат сериализации G2 — размер меняется на +64.
+- Это **не ошибка**: `sunspot verify` подтвердил `✅ Verification successful!`. Proof согласован с VK и `.so`.
+
+**Последствие:** on-chain константа `PROOF_LEN = 324` в `onchain/programs/zk_pool/src/constants.rs` **устарела**. Пока zk_pool не обновлён до `PROOF_LEN = 388`, инструкция `withdraw` будет отвергать новые proof'ы на шаге `require!(proof.len() == PROOF_LEN)`.
+
+**Это ожидаемое окно** между 15.4 и 15.5 (принято решение «A» — сначала верификатор, потом Anchor). Дизайн-док §4.1 предвидел этот класс риска.
+
+**TODO (15.5):** обновить в `constants.rs`:
+- `NR_PUBLIC_INPUTS: 5 → 6`
+- `PUBLIC_INPUTS_BYTES: 172 → 204`
+- `PROOF_LEN: 324 → 388`
+
+**TODO (15.5, тесты):** обновить assert'ы в `constants.rs`, `encoding.rs`, `instructions/withdraw.rs` под новые значения.
+
+---
+
+### Третье наблюдение: `.so` вырос в 2.25 раза
+
+**Факт:** `.so` 87 312 → **197 056 B**. Constraint count вырос только на **0.9 %** (6308 → 6366). Прирост `.so` в 2.25 раза **не объясняется** одними constraints.
+
+**Гипотеза:** новая сборка использует `solana-program 3.0.0` и `solana-bn254 3.1.2`, которые могли добавить новые зависимости (ark-ff 0.5.0 рядом с ark-ff 0.4.2 в графе сборки). Bundle вырос.
+
+**Практическое следствие:** rent вырос с 0.444 до **1.0019 SOL** (`solana program show` после апгрейда). Владелец программы (наш кошелёк) заплатил разницу.
+
+**Не блокирует.** Но для будущих апгрейдов — учитывать, что размер `.so` — не константа, а функция от toolchain и dependencies.
+
+---
+
+### Итог 15.4
+
+- ✅ Локальный пайплайн (compile → setup → deploy → prove → verify) полностью пройден.
+- ✅ Upgrade на месте: Program ID `5t51iu6a…` сохранён.
+- ✅ Роллбэк-путь существует: оригинальный `.so` в `.checkpoints/03.3-sunspot-deploy/`.
+- ⚠️ On-chain withdraw **временно сломан** — zk_pool ожидает 324 B proof, verifier возвращает 388 B. Окно закроется в 15.5.
+- ⚠️ Три on-chain константы (`NR_PUBLIC_INPUTS`, `PUBLIC_INPUTS_BYTES`, `PROOF_LEN`) должны быть обновлены в 15.5.
+
+**← next: 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, обновление трёх констант).**

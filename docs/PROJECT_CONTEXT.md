@@ -20,7 +20,7 @@ This is the **single normative section** of this file. Everything else describes
 **If you are starting a new chat:**
 
 Last completed stage: **Stage 15.3** (circuit change — split deposit constraints C4, C5).
-Next task: **Stage 15.4 — Sunspot re-run + verifier upgrade**.
+Next task: **Stage 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, `PROOF_LEN` 388, `NR_PUBLIC_INPUTS` 6)**.
 
 1. **Read section 0 completely**.
 2. **Chat communication: English, except if user ask Russian. Files on disk:**
@@ -1062,42 +1062,42 @@ make exec-c
 ### validate-spec / sync-circuits
 
 ```bash
-make exec-c 'cd /home/ubuntu && cargo run --manifest-path scripts/validate-spec/Cargo.toml --release'
+make exec-c CMD='cd /home/ubuntu && cargo run --manifest-path scripts/validate-spec/Cargo.toml --release'
 
-make exec-c 'cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- check'
+make exec-c CMD='cd /home/ubuntu && cargo run --manifest-path scripts/sync-circuits/Cargo.toml --release -- check'
 ```
 
 ### Anchor build / test / deploy
 
 ```bash
-make exec-c 'cd /home/ubuntu/onchain && anchor build'
+make exec-c CMD='cd /home/ubuntu/onchain && anchor build'
 
-make exec-c 'cd /home/ubuntu/onchain && cargo test -p zk_pool --lib'
+make exec-c CMD='cd /home/ubuntu/onchain && cargo test -p zk_pool --lib'
 
-make exec-c 'cd /home/ubuntu/onchain && anchor program deploy --provider.cluster devnet'
+make exec-c CMD='cd /home/ubuntu/onchain && anchor program deploy --provider.cluster devnet'
 ```
 
 ### LiteSVM tests (from project root `tests/`)
 
 ```bash
 
-make exec-c 'cd /home/ubuntu/tests && cargo test'
+make exec-c CMD='cd /home/ubuntu/tests && cargo test'
 ```
 
 ### Backend — build, run, smoke test
 
 ```bash
 # Build
-make exec-c 'cd /home/ubuntu/services/backend && cargo build --release'
+make exec-c CMD='cd /home/ubuntu/services/backend && cargo build --release'
 
 # Run in background
-make exec-c -d 'cd /home/ubuntu/services/backend && ./target/release/zkpool-backend > /tmp/backend.log 2>&1 &'
+make exec-c -d CMD='cd /home/ubuntu/services/backend && ./target/release/zkpool-backend > /tmp/backend.log 2>&1 &'
 
 # Tail logs
-make exec-c 'tail -30 /tmp/backend.log'
+make exec-c CMD='tail -30 /tmp/backend.log'
 
 # Kill
-make exec-c 'pkill -f zkpool-backend'
+make exec-c CMD='pkill -f zkpool-backend'
 ```
 
 ### Postgres / Redis
@@ -1130,9 +1130,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1, 15.2, 15.3 done)
-**Last completed stage:** Stage 15.3 (circuit change — split deposit constraints C4, C5).
-**Next stage:** Stage 15.4 — Sunspot re-run + verifier upgrade.
+**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1, 15.2, 15.3, 15.4 done)
+**Last completed stage:** Stage 15.4 (Sunspot re-run + verifier upgrade in place on devnet).
+**Next stage:** Stage 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, `PROOF_LEN` 388, `NR_PUBLIC_INPUTS` 6).
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
   - Stage 1 — Docker environment ✅
@@ -1157,7 +1157,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 **Deployed programs on devnet:**
-- Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (87 312 B).
+- Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (**197 056 B**, upgraded in Stage 15.4 — was 87 312 B; Program ID unchanged).
 - zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
 
 **Pool state (created 2026-09-27):**
@@ -1174,7 +1174,14 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `withdrawal.json` (v0.1.0) — `29ac2e677229f4518944c76161933416e2a083dee83da638a9dfd01226cc91db`
 - `withdrawal.json` (Stage 15.3, **current**) — `a49bc877135ae75713d2ab7cbe39a69151a606c328f48fe8163c0629787d3262`
 
-**Verifier on devnet still runs the v0.1.0 ACIR.** Program ID `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` will be upgraded **in place** in Stage 15.4 — Program ID unchanged, only the `.so` replaced.
+**Verifier artifacts (Stage 15.4, deployed in place on 2026-09-30):**
+- `withdrawal.ccs` — `218c0524ae950e1b9c99df489ebace8b3cc15ac121b5312fcf92e49ecfb85260` (645 129 B)
+- `withdrawal.pk` — `b05df8a3c906bc2fd3a1912896e6c8e7fbbab2e7625e809695f4cedf18ae284f` (2 166 095 B)
+- `withdrawal.vk` — `9a25f71d916d85154fa8280361e27833a4c6ac535e2ea89c1db65d374e92b5a3` (1 360 B)
+- `withdrawal.so` — `f2c3bea017b113100c31289b939d9f6d0c1d5a2602216d778000ac97260669ca` (197 056 B)
+- Upgrade tx: `5z68jatuiaScN5ff5NXYpgRsgfhT7om9FGSGErkcJJj5JDJXwKD4Zs7Bjet9ST28d5Q9G2quEXCTcwQdiq9KMKSV`
+
+**Verifier on devnet runs the Stage 15.3 ACIR. Program ID unchanged (`5t51iu6a…`). zk_pool still has `PROOF_LEN = 324` and `NR_PUBLIC_INPUTS = 5` — on-chain withdraw is currently broken until Stage 15.5 lands.** Expected window per design doc §4.1.
 
 **Running containers:** `solana-zkpool-solana`, `zkpool-postgres` (healthy), `zkpool-redis` (healthy).
 **Running processes (inside `solana` container):** merkle (4003), prover (4002), backend (4001) — must be restarted after container restart.
