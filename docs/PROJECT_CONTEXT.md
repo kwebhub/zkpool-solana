@@ -18,29 +18,29 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.6** (LiteSVM tests for `deposit_split`).
-Next task: **Stage 15.7 — Backend: N commitments per tx, +1 witness field**.
+Last completed stage: **Stage 15.7** (backend + prover: split-deposit witness fields).
+Next task: **Stage 15.8 — Frontend: split UI**.
 
 1. **Read section 0 completely**.
-2. **Chat communication: English, except if user ask Russian. Files on disk:**
+2. **Chat communication:** English, except if user ask Russian.
+3. **Files on disk:**
   - **English** by default — code, configs, docs at root level.
   - **Russian** only for `docs/ru/*.md` and `docs/notes/*.md`.
-3. The assistant gives **exactly one task** per message. Wait for the user to run it, paste the output, and only then give the next task.
+4. **Do not narrate reasoning in chat:** in the chat, assistant only write tasks, request files, and confirm task completion. After `git commit && git push`, assistant describe the actions performed, their causes and explanations, as well as errors and solutions in notes. Don't write your thoughts in the chat.
+5. The assistant gives **exactly one task** per message. Wait for the user to run it, paste the output, and only then give the next task.
   - **Do NOT** give multiple commands in one message.
   - **Do NOT** chain "then do X, then do Y".
-  - **Do not narrate reasoning in chat.** State the task; explain rationale in the notes *after* the push.
   - **Exception — `git add -A` with `git status` are always grouped** as one task and `git commit` with `git push` are always grouped** as one task:
-
   ```bash
   git add -A && git status
   git commit -m "..." && git push
   ```
-4. **After each `git commit && git push` of a sub-stage, not after documents:**
+6. **After each `git commit && git push` of a sub-stage, not after documents:**
   - create the checkpoint, save artifacts to `.checkpoints/NN-name/` with SHA-256 in `manifest.txt` and the commit hash in `commit.txt`
   - Update `docs/PROJECT_CONTEXT.md` (this file).
   - Add or update `docs/notes/NN-name.md` (Russian).
   - Commit and push.
-5. **Never guess.** If ambiguous — ask. Any non-obvious action required to complete a stage must be:
+7. **Never guess.** If ambiguous — use best practices. Any non-obvious action required to complete a stage must be:
   - Recorded in `PROJECT_CONTEXT.md`, section 8 (Known pitfalls).
   - Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, fix.
   - Examples:
@@ -48,10 +48,10 @@ Next task: **Stage 15.7 — Backend: N commitments per tx, +1 witness field**.
     - Adding packages to `workspace.exclude`.
     - Running `cargo fetch` in a sub-crate.
     - Any unusual CLI flag or env var.
-6. **CRITICAL:** `docs/notes/*.md` is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio.
-7. **Section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
-8. **Give files in full for new files; insertion point + block for existing.**
-9. **Test in small steps.** 20 lines, not 200. When working with a **new** library (LiteSVM, Anchor macros, sqlx, axum), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches, then expand. **How to check exact API:** read crate sources at `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
+8. **CRITICAL:** `docs/notes/*.md` is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio.
+9. **Section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
+10. **Give files in full for new files - one file per message; insertion point + block for existing.**
+11. **Test in small steps.** 20 lines, not 200. When working with a **new** library (LiteSVM, Anchor macros, sqlx, axum), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches, then expand. **How to check exact API:** read crate sources at `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
 
 ---
 
@@ -558,8 +558,8 @@ POST /prove
 | 15.4 | Sunspot re-run + verifier upgrade | `0f02d34` |
 | 15.5 | Anchor — `deposit_split`, `encode_public_inputs` +32 | `a66bee2` |
 | 15.6 | LiteSVM — adversarial for split | `131b2ac` |
-| 15.7 | Backend — N commitments per tx, +1 witness field | ← next |
-| 15.8 | Frontend — split UI | |
+| 15.7 | Backend + prover — split-deposit witness fields | `7936d3a` |
+| 15.8 | Frontend — split UI | ← next |
 | 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | |
 | 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | |
 
@@ -1129,9 +1129,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.6 done)
-**Last completed stage:** Stage 15.6 (LiteSVM tests for `deposit_split`).
-**Next stage:** Stage 15.7 — Backend: N commitments per tx, +1 witness field.
+**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.7 done)
+**Last completed stage:** Stage 15.7 (backend + prover: split-deposit witness fields).
+**Next stage:** Stage 15.8 — Frontend: split UI.
 
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
@@ -1151,7 +1151,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.6 done)
+  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.7 done)
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
@@ -1225,7 +1225,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.4 — Sunspot re-run + verifier upgrade. ✅ Commit `0f02d34`.
 - 15.5 — Anchor: `deposit_split`, constants updated, upgraded in place. ✅ Commit `a66bee2`.
 - 15.6 — LiteSVM tests for `deposit_split` (5 tests, 20 total). ✅ Commit `131b2ac`.
-- 15.7 — Backend: N commitments per tx, +1 witness field. **← next**
+- 15.7 — Backend + prover: split-deposit witness fields. ✅ Commit `7936d3a`.
+- 15.8 — Frontend: split UI. **← next**
 
 ---
 

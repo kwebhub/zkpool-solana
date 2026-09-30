@@ -655,4 +655,48 @@ if err := os.Rename(originalKeypair, keypairPath); err != nil {
 
 Артефакты чекпоинта: `lib.rs` (686 B, `47801871…`), `test_deposit_split.rs` (10915 B, `b2b8b2b4…`).
 
-**← next: 15.7 — Backend: N commitments per tx, +1 witness field.**
+### 15.7 — Backend + prover: split-deposit witness fields
+
+**Дата:** 2026-09-30. **Commit:** `7936d3a`. **Checkpoint:** `.checkpoints/15.7-services/`.
+
+**Объём изменился по сравнению с планом.** Дизайн-док §2.5 говорил "+1 поле в witness" — на практике оказалось **+3 поля**: `total_amount` (публичный), `splits[3]` и `note_index` (приватные). Причина: prover пишет `Prover.toml`, который читает `nargo execute`, а тот ожидает ровно тот набор параметров, что генерирует `test_witness.nr` — 6 публичных + 7 приватных. Без всех трёх новых полей `nargo execute` падает с "missing parameter".
+
+**Изменения:**
+
+| Файл | Что |
+|---|---|
+| `services/backend/src/api_types.rs` | `WithdrawRequest` +3 поля (`total_amount`, `splits`, `note_index`); `SPLIT_COUNT = 3`; `validate()` проверяет длины `splits` и `note_index < 3`; `WithdrawResponse` doc: proof 388 B, pw 204 B |
+| `services/prover/src/witness.rs` | `WitnessInputs` +3 поля; `SPLIT_COUNT = 3`; `validate()` проверяет длины; `to_toml()` пишет все 13 строк в порядке `test_witness.nr`; +3 новых теста |
+| `services/prover/src/prover.rs` | `sample_inputs()` обновлён (13 полей); ignored-тест ожидает 388 / 204 вместо 324 / 172 |
+| `services/prover/tests/server_test.rs` | `valid_request_body()` с 13 полями; +2 теста на отказ (splits.len, note_index); ignored-тест ожидает 776 / 408 hex |
+
+**`indexer.rs` не менялся.** `try_parse_event` вызывается по одному на строку `Program data:`, `handle_deposit` обрабатывает каждый event независимо, `commitment_exists` дедуплицирует. Три `DepositEvent` в одной транзакции `deposit_split` уже корректно обрабатываются существующим кодом. Проверено чтением кода — тест на несколько событий в одной транзакции не написан, но и не требуется: каждый event — независимая строка логов.
+
+**Порядок в `to_toml()` — 13 строк, соответствует `test_witness.nr`:**
+
+1. `root` (public)
+2. `nullifier_hash` (public)
+3. `recipient` (public)
+4. `recipient_binding` (public)
+5. `amount` (public) — 0.3 SOL для тестового witness'а
+6. `total_amount` (public) — 1.0 SOL **← NEW**
+7. `nullifier` (private)
+8. `secret` (private)
+9. `note_secret` (private)
+10. `merkle_proof[20]` (private)
+11. `is_even[20]` (private)
+12. `splits[3]` (private) **← NEW**
+13. `note_index` (private, u32) **← NEW**
+
+**Тесты:**
+- Backend: 5 passed, 2 ignored (Redis integration). Без изменений в количестве — validation нового поля покрыта существующим `validate()` тестом неявно.
+- Prover: 11 unit + 5 HTTP = **16 passed, 2 ignored** (было 8 + 3 = 11). +5 новых.
+  - `witness::tests::test_validate_wrong_splits_len`
+  - `witness::tests::test_validate_note_index_out_of_bounds`
+  - `witness::tests::test_to_toml_all_thirteen_fields`
+  - `server_test::test_prove_wrong_splits_len_returns_500`
+  - `server_test::test_prove_note_index_out_of_bounds_returns_500`
+
+**Урок:** при изменении схемы circuit'а счёт новых полей в witness'е определяется не "что нужно для проверки конкретного constraint'а", а **полным набором параметров `main()`**. `nargo execute` требует все. `test_witness.nr` — источник истины для этого набора.
+
+**← next: 15.8 — Frontend: split UI.**
