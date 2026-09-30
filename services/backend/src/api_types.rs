@@ -10,30 +10,43 @@ use serde::{Deserialize, Serialize};
 /// Merkle tree depth — must match the circuit, spec, and on-chain constant.
 pub const TREE_DEPTH: usize = 20;
 
+/// Number of splits per deposit — must match the circuit, spec, and
+/// on-chain `SPLIT_COUNT` (Stage 15).
+pub const SPLIT_COUNT: usize = 3;
+
 /// Request body for `POST /api/withdraw`.
 ///
 /// Field names and encoding (bare hex, no `0x`) match the prover service's
-/// `WitnessInputs` — see `services/prover/src/witness.rs`.
+/// `WitnessInputs` — see `services/prover/src/witness.rs`. The prover
+/// forwards them into `Prover.toml`, which `nargo execute` reads.
+///
+/// Stage 15: the circuit now has 6 public inputs (was 5) and 7 private
+/// inputs (was 5). Added:
+///   - public:  `total_amount` (aggregate deposit amount)
+///   - private: `splits[3]` (the split vector), `note_index` (u32)
 ///
 /// Hex strings:
 ///   - `root`, `nullifier_hash`, `recipient_binding`, `nullifier`, `secret`,
 ///     `note_secret`: 64-char bare hex (32 bytes)
-///   - `recipient`, `amount`: shorter hex is allowed (nargo pads)
+///   - `recipient`, `amount`, `total_amount`, `splits[i]`: shorter hex allowed
 ///   - `merkle_proof[i]`: any hex length; `"00"` for empty siblings
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WithdrawRequest {
-    // Public
+    // ---- public (6) ----
     pub root: String,
     pub nullifier_hash: String,
     pub recipient: String,
     pub recipient_binding: String,
     pub amount: String,
-    // Private
+    pub total_amount: String,
+    // ---- private ----
     pub nullifier: String,
     pub secret: String,
     pub note_secret: String,
     pub merkle_proof: Vec<String>,
     pub is_even: Vec<bool>,
+    pub splits: Vec<String>,
+    pub note_index: u32,
 }
 
 /// Response body from `/api/withdraw`.
@@ -42,9 +55,9 @@ pub struct WithdrawRequest {
 /// expects. The prover returns bare hex; the backend converts.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WithdrawResponse {
-    /// Base64-encoded Groth16 proof (324 bytes).
+    /// Base64-encoded Groth16 proof (388 bytes since Stage 15.4).
     pub proof: String,
-    /// Base64-encoded public witness (172 bytes).
+    /// Base64-encoded public witness (204 bytes since Stage 15.4/15.5).
     pub public_witness: String,
 }
 
@@ -76,8 +89,32 @@ impl WithdrawRequest {
         // It may be shorter than 64 (leading zeros elided) but no longer.
         validate_hex_max("recipient", &self.recipient, 64)?;
 
-        // `amount` — hex, at most 64 chars.
+        // `amount` — this note's amount in lamports (hex, at most 64 chars).
         validate_hex_max("amount", &self.amount, 64)?;
+
+        // `total_amount` — aggregate deposit amount (hex, at most 64 chars).
+        validate_hex_max("total_amount", &self.total_amount, 64)?;
+
+        // `splits` — exactly SPLIT_COUNT field elements.
+        if self.splits.len() != SPLIT_COUNT {
+            return Err(format!(
+                "splits must have {} elements, got {}",
+                SPLIT_COUNT,
+                self.splits.len()
+            ));
+        }
+        for (i, s) in self.splits.iter().enumerate() {
+            validate_hex_max(&format!("splits[{}]", i), s, 64)?;
+        }
+
+        // `note_index` — must be < SPLIT_COUNT (checked before array indexing
+        // in the circuit; we reject early here too).
+        if self.note_index as usize >= SPLIT_COUNT {
+            return Err(format!(
+                "note_index must be < {}, got {}",
+                SPLIT_COUNT, self.note_index
+            ));
+        }
 
         if self.merkle_proof.len() != TREE_DEPTH {
             return Err(format!(

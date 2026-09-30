@@ -194,13 +194,14 @@ mod tests {
 
     fn sample_inputs() -> WitnessInputs {
         WitnessInputs {
-            root: "1e8508c3c11def8bfecd33c4bf97ce7fd065fea15eafe55c47e35bd056f1c6b2".to_string(),
+            root: "0178bf57a93031d2ebc274f5134fff54be52fa57cb5e5f1052ce2fd7bac3bf80".to_string(),
             nullifier_hash: "1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4"
                 .to_string(),
             recipient: "062afbde1181c71c".to_string(),
             recipient_binding: "200cfdb247b0436ba0483327abcf8f83ed65f75a0db8d9ebbb611561d7d3b2e1"
                 .to_string(),
-            amount: "0f4240".to_string(),
+            amount: "0493e0".to_string(),
+            total_amount: "0f4240".to_string(),
             nullifier: "018abef7846071c7".to_string(),
             secret: "03157def08c0e38e".to_string(),
             note_secret: "04a03ce68d215555".to_string(),
@@ -208,6 +209,12 @@ mod tests {
                 .chain(std::iter::repeat("00".to_string()).take(19))
                 .collect(),
             is_even: vec![true; 20],
+            splits: vec![
+                "07a120".to_string(),
+                "0493e0".to_string(),
+                "030d40".to_string(),
+            ],
+            note_index: 1,
         }
     }
 
@@ -216,7 +223,8 @@ mod tests {
     async fn test_prove_real() {
         let prover = Prover::new(test_config());
         let r = prover.prove(&sample_inputs()).await.expect("prove");
-        assert_eq!(r.proof.len(), 324);
-        assert_eq!(r.public_witness.len(), 172);
+        // Stage 15.4: proof is 388 B (was 324), public witness 204 B (was 172).
+        assert_eq!(r.proof.len(), 388);
+        assert_eq!(r.public_witness.len(), 204);
     }
 }

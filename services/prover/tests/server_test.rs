@@ -1,7 +1,8 @@
-//! HTTP integration tests for the prover service.
+//! HTTP-level integration tests for the prover server.
 //!
-//! Uses `tower::ServiceExt::oneshot` for in-process requests — no port binding.
-//! The `/prove` test is `#[ignore]` (requires nargo + sunspot + artifacts).
+//! Uses `tower::ServiceExt::oneshot` — in-process requests, no port binding.
+//!
+//! Stage 15.7: `WitnessInputs` now has 13 fields (6 public + 7 private).
 
 use std::sync::Arc;
 
@@ -9,50 +10,51 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
 use tower::ServiceExt;
+
 use zkpool_prover::config::Config;
 use zkpool_prover::prover::Prover;
 use zkpool_prover::server::{build_router, AppState};
-use zkpool_prover::witness::WitnessInputs;
 
-fn test_config() -> Config {
-    Config {
+fn test_state() -> Arc<AppState> {
+    let config = Config {
         port: 4002,
         circuit_dir: "/home/ubuntu/circuits/withdrawal".to_string(),
         nargo_bin: "nargo".to_string(),
         sunspot_bin: "sunspot".to_string(),
         nargo_timeout_secs: 60,
         sunspot_timeout_secs: 60,
-    }
+    };
+    Arc::new(AppState {
+        prover: Prover::new(config),
+    })
 }
 
-fn make_app() -> axum::Router {
-    let prover = Prover::new(test_config());
-    let state = Arc::new(AppState { prover });
-    build_router(state)
-}
+fn valid_request_body() -> serde_json::Value {
+    let merkle_proof: Vec<String> = std::iter::once("07b5bad595e238e3".to_string())
+        .chain(std::iter::repeat("00".to_string()).take(19))
+        .collect();
+    let is_even: Vec<bool> = vec![true; 20];
 
-fn sample_inputs() -> WitnessInputs {
-    WitnessInputs {
-        root: "1e8508c3c11def8bfecd33c4bf97ce7fd065fea15eafe55c47e35bd056f1c6b2".to_string(),
-        nullifier_hash: "1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4"
-            .to_string(),
-        recipient: "062afbde1181c71c".to_string(),
-        recipient_binding: "200cfdb247b0436ba0483327abcf8f83ed65f75a0db8d9ebbb611561d7d3b2e1"
-            .to_string(),
-        amount: "0f4240".to_string(),
-        nullifier: "018abef7846071c7".to_string(),
-        secret: "03157def08c0e38e".to_string(),
-        note_secret: "04a03ce68d215555".to_string(),
-        merkle_proof: std::iter::once("07b5bad595e238e3".to_string())
-            .chain(std::iter::repeat("00".to_string()).take(19))
-            .collect(),
-        is_even: vec![true; 20],
-    }
+    serde_json::json!({
+        "root": "0178bf57a93031d2ebc274f5134fff54be52fa57cb5e5f1052ce2fd7bac3bf80",
+        "nullifier_hash": "1412cc9d862599e6869a1881c8562062b98537456d9035819288219b5cd3e6e4",
+        "recipient": "062afbde1181c71c",
+        "recipient_binding": "200cfdb247b0436ba0483327abcf8f83ed65f75a0db8d9ebbb611561d7d3b2e1",
+        "amount": "0493e0",
+        "total_amount": "0f4240",
+        "nullifier": "018abef7846071c7",
+        "secret": "03157def08c0e38e",
+        "note_secret": "04a03ce68d215555",
+        "merkle_proof": merkle_proof,
+        "is_even": is_even,
+        "splits": ["07a120", "0493e0", "030d40"],
+        "note_index": 1
+    })
 }
 
 #[tokio::test]
 async fn test_health() {
-    let app = make_app();
+    let app = build_router(test_state());
     let resp = app
         .oneshot(
             Request::builder()
@@ -62,16 +64,18 @@ async fn test_health() {
         )
         .await
         .unwrap();
+
     assert_eq!(resp.status(), StatusCode::OK);
+
     let body = resp.into_body().collect().await.unwrap().to_bytes();
-    let s = String::from_utf8(body.to_vec()).unwrap();
-    assert!(s.contains("\"status\":\"ok\""));
+    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v["status"], "ok");
 }
 
 #[tokio::test]
 async fn test_prove_bad_payload_returns_422() {
-    let app = make_app();
-    // Missing required fields -> axum's Json extractor returns 422.
+    // Empty JSON object — missing required fields.
+    let app = build_router(test_state());
     let resp = app
         .oneshot(
             Request::builder()
@@ -83,53 +87,102 @@ async fn test_prove_bad_payload_returns_422() {
         )
         .await
         .unwrap();
+
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]
 async fn test_prove_wrong_merkle_len_returns_500() {
-    let app = make_app();
-    let mut inputs = sample_inputs();
-    inputs.merkle_proof.pop(); // 19 instead of 20
-    let payload = serde_json::to_vec(&inputs).unwrap();
+    let app = build_router(test_state());
+    let mut body = valid_request_body();
+    // Truncate merkle_proof to 19 elements — validate() rejects.
+    body["merkle_proof"] = serde_json::json!(vec!["00"; 19]);
+
     let resp = app
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/prove")
                 .header("content-type", "application/json")
-                .body(Body::from(payload))
+                .body(Body::from(body.to_string()))
                 .unwrap(),
         )
         .await
         .unwrap();
+
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    let body = resp.into_body().collect().await.unwrap().to_bytes();
-    let s = String::from_utf8(body.to_vec()).unwrap();
-    assert!(s.contains("merkle_proof must have 20 elements"));
+}
+
+#[tokio::test]
+async fn test_prove_wrong_splits_len_returns_500() {
+    let app = build_router(test_state());
+    let mut body = valid_request_body();
+    // Two splits instead of three — validate() rejects.
+    body["splits"] = serde_json::json!(["07a120", "0493e0"]);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/prove")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[tokio::test]
+async fn test_prove_note_index_out_of_bounds_returns_500() {
+    let app = build_router(test_state());
+    let mut body = valid_request_body();
+    // note_index = 5 is >= SPLIT_COUNT = 3 — validate() rejects.
+    body["note_index"] = serde_json::json!(5);
+
+    let resp = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/prove")
+                .header("content-type", "application/json")
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
 #[tokio::test]
 #[ignore = "requires nargo + sunspot + circuit artifacts"]
 async fn test_prove_real() {
-    let app = make_app();
-    let payload = serde_json::to_vec(&sample_inputs()).unwrap();
+    let app = build_router(test_state());
+    let body = valid_request_body();
+
     let resp = app
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/prove")
                 .header("content-type", "application/json")
-                .body(Body::from(payload))
+                .body(Body::from(body.to_string()))
                 .unwrap(),
         )
         .await
         .unwrap();
+
     assert_eq!(resp.status(), StatusCode::OK);
-    let body = resp.into_body().collect().await.unwrap().to_bytes();
-    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let proof = v["proof"].as_str().unwrap();
-    let pw = v["public_witness"].as_str().unwrap();
-    assert_eq!(proof.len(), 648, "proof hex length");
-    assert_eq!(pw.len(), 344, "public witness hex length");
+
+    let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+    // Stage 15.4: 388 B proof = 776 hex chars, 204 B pw = 408 hex chars.
+    let proof_hex = v["proof"].as_str().unwrap();
+    let pw_hex = v["public_witness"].as_str().unwrap();
+    assert_eq!(proof_hex.len(), 388 * 2);
+    assert_eq!(pw_hex.len(), 204 * 2);
 }
