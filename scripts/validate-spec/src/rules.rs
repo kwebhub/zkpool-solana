@@ -1,28 +1,37 @@
 //! Validation rules for `circuits/withdrawal/spec.json`.
 //!
-//! Stage 2.1.2 — only spec-internal consistency.
-//! Rules for .nr, Rust, TypeScript are added in later sub-stages.
+//! Stage 2.1.2 — spec-internal consistency.
+//! Stage 15.2 — updated for split deposit: 6 public inputs, 5 constraints, SPLIT_COUNT.
 
 use crate::spec::Spec;
 use anyhow::{bail, Result};
 
-/// Expected number of public inputs.
-const EXPECTED_NR_PUBLIC_INPUTS: usize = 5;
+/// Expected number of public inputs (Stage 15: was 5, now 6 with total_amount).
+const EXPECTED_NR_PUBLIC_INPUTS: usize = 6;
 
-/// Expected total witness bytes: 12-byte header + 5 × 32-byte public inputs.
-const EXPECTED_WITNESS_BYTES: u64 = 172;
+/// Expected total witness bytes: 12-byte header + 6 × 32-byte public inputs.
+const EXPECTED_WITNESS_BYTES: u64 = 204;
 
 /// Expected header size in bytes.
 const EXPECTED_HEADER_BYTES: u64 = 12;
 
-/// Expected public section size in bytes.
-const EXPECTED_PUBLIC_SECTION_BYTES: u64 = 160;
+/// Expected public section size in bytes (Stage 15: 6 × 32 = 192).
+const EXPECTED_PUBLIC_SECTION_BYTES: u64 = 192;
 
-/// Expected sum of raw data bytes: 32+32+32+32+8 = 136.
-const EXPECTED_RAW_BYTES: u64 = 136;
+/// Expected sum of raw data bytes: 32+32+32+32+8+8 = 144.
+const EXPECTED_RAW_BYTES: u64 = 144;
 
 /// Expected tree depth.
 const EXPECTED_TREE_DEPTH: u64 = 20;
+
+/// Expected split count (Stage 15).
+const EXPECTED_SPLIT_COUNT: u64 = 3;
+
+/// Expected constraint ids in order (Stage 15: added C4, C5).
+const EXPECTED_CONSTRAINT_IDS: [&str; 5] = ["C1", "C2", "C3", "C4", "C5"];
+
+/// Expected length of `merkle_proof` and `is_even` private inputs.
+const EXPECTED_MERKLE_PROOF_LENGTH: u64 = 20;
 
 /// Runs all spec-internal validation rules.
 pub fn validate_all(spec: &Spec) -> Result<()> {
@@ -32,10 +41,12 @@ pub fn validate_all(spec: &Spec) -> Result<()> {
     rule_version(spec)?;
     rule_circuit_name(spec)?;
     rule_tree_depth(spec)?;
+    rule_split_count(spec)?;
     rule_nr_public_inputs(spec)?;
     rule_public_inputs_unique_names(spec)?;
     rule_public_inputs_bytes_sum(spec)?;
     rule_public_inputs_bytes_match_type(spec)?;
+    rule_private_inputs_lengths(spec)?;
     rule_witness_total_bytes(spec)?;
     rule_witness_header_bytes(spec)?;
     rule_witness_public_section_bytes(spec)?;
@@ -45,7 +56,7 @@ pub fn validate_all(spec: &Spec) -> Result<()> {
     rule_consumers_count(spec)?;
     rule_checkpoints_non_empty(spec)?;
 
-    println!("✅ All 15 rules passed.");
+    println!("✅ All 17 rules passed.");
     Ok(())
 }
 
@@ -77,6 +88,37 @@ fn rule_tree_depth(spec: &Spec) -> Result<()> {
         );
     }
     println!("  ✓ circuit.tree_depth == {}", EXPECTED_TREE_DEPTH);
+    Ok(())
+}
+
+fn rule_split_count(spec: &Spec) -> Result<()> {
+    if spec.circuit.split_count != EXPECTED_SPLIT_COUNT {
+        bail!(
+            "rule_split_count: expected split_count {}, got {}",
+            EXPECTED_SPLIT_COUNT,
+            spec.circuit.split_count
+        );
+    }
+    // The splits private input length must match split_count.
+    let splits = spec
+        .private_inputs
+        .iter()
+        .find(|pi| pi.name == "splits")
+        .ok_or_else(|| {
+            anyhow::anyhow!("rule_split_count: private_inputs[] has no entry named \"splits\"")
+        })?;
+    match splits.length {
+        Some(len) if len == EXPECTED_SPLIT_COUNT => {}
+        other => bail!(
+            "rule_split_count: splits.length must equal split_count {} (got {:?})",
+            EXPECTED_SPLIT_COUNT,
+            other
+        ),
+    }
+    println!(
+        "  ✓ circuit.split_count == {} and splits.length == {}",
+        EXPECTED_SPLIT_COUNT, EXPECTED_SPLIT_COUNT
+    );
     Ok(())
 }
 
@@ -134,7 +176,7 @@ fn rule_public_inputs_bytes_sum(spec: &Spec) -> Result<()> {
         );
     }
 
-    // Sum of raw data bytes — sanity check, expected 32+32+32+32+8 = 136.
+    // Sum of raw data bytes — sanity check, expected 32+32+32+32+8+8 = 144.
     let raw_sum: u64 = spec.public_inputs.iter().map(|pi| pi.bytes).sum();
     if raw_sum != EXPECTED_RAW_BYTES {
         bail!(
@@ -185,6 +227,38 @@ fn rule_public_inputs_bytes_match_type(spec: &Spec) -> Result<()> {
         }
     }
     println!("  ✓ public_inputs[].bytes match declared types");
+    Ok(())
+}
+
+fn rule_private_inputs_lengths(spec: &Spec) -> Result<()> {
+    // merkle_proof and is_even must have length == TREE_DEPTH.
+    for name in ["merkle_proof", "is_even"] {
+        let pi = spec
+            .private_inputs
+            .iter()
+            .find(|pi| pi.name == name)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "rule_private_inputs_lengths: private_inputs[] has no entry named {:?}",
+                    name
+                )
+            })?;
+        match pi.length {
+            Some(len) if len == EXPECTED_MERKLE_PROOF_LENGTH => {}
+            other => bail!(
+                "rule_private_inputs_lengths: {:?}.length must be {} (got {:?})",
+                name,
+                EXPECTED_MERKLE_PROOF_LENGTH,
+                other
+            ),
+        }
+    }
+    // splits.length is validated in rule_split_count.
+    // note_index has no length (scalar).
+    println!(
+        "  ✓ private_inputs: merkle_proof.length == is_even.length == {}",
+        EXPECTED_MERKLE_PROOF_LENGTH
+    );
     Ok(())
 }
 
@@ -243,20 +317,22 @@ fn rule_witness_public_section_bytes(spec: &Spec) -> Result<()> {
 }
 
 fn rule_constraints(spec: &Spec) -> Result<()> {
-    if spec.constraints.len() != 3 {
+    if spec.constraints.len() != EXPECTED_CONSTRAINT_IDS.len() {
         bail!(
-            "rule_constraints: expected 3 constraints, got {}",
+            "rule_constraints: expected {} constraints, got {}",
+            EXPECTED_CONSTRAINT_IDS.len(),
             spec.constraints.len()
         );
     }
     let ids: Vec<&str> = spec.constraints.iter().map(|c| c.id.as_str()).collect();
-    if ids != ["C1", "C2", "C3"] {
+    if ids != EXPECTED_CONSTRAINT_IDS {
         bail!(
-            "rule_constraints: expected ids [\"C1\", \"C2\", \"C3\"], got {:?}",
+            "rule_constraints: expected ids {:?}, got {:?}",
+            EXPECTED_CONSTRAINT_IDS,
             ids
         );
     }
-    println!("  ✓ constraints == [C1, C2, C3]");
+    println!("  ✓ constraints == {:?}", EXPECTED_CONSTRAINT_IDS);
     Ok(())
 }
 

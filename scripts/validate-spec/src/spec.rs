@@ -28,6 +28,7 @@ pub struct Circuit {
     pub package: String,
     pub entrypoint: String,
     pub tree_depth: u64,
+    pub split_count: u64,
     pub nr_public_inputs: u64,
 }
 
@@ -181,6 +182,7 @@ pub fn print_summary(spec: &Spec) -> Result<()> {
     println!("  version:            {}", spec.version);
     println!("  circuit name:       {}", spec.circuit.name);
     println!("  tree depth:         {}", spec.circuit.tree_depth);
+    println!("  split count:        {}", spec.circuit.split_count);
     println!("  nr public inputs:   {}", spec.circuit.nr_public_inputs);
     println!("  public inputs:      {} entries", spec.public_inputs.len());
     println!(
