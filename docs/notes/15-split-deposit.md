@@ -625,4 +625,34 @@ if err := os.Rename(originalKeypair, keypairPath); err != nil {
 
 **Урок про `anchor program deploy --program-id`:** этот флаг ожидает **base58 Program ID**, а не путь к keypair-файлу (в отличие от `solana program deploy`). Симптом: `error: invalid value ... Invalid Base58 string`. Фикс: либо передать base58-строку, либо — что проще — не передавать флаг вообще, положившись на `Anchor.toml` + дефолтный путь `target/deploy/<program>.json`. Второй вариант применён.
 
-**← next: 15.6 — LiteSVM adversarial tests for split.**
+### 15.6 — LiteSVM tests для `deposit_split`
+
+**Дата:** 2026-09-30. **Commit:** `131b2ac`. **Checkpoint:** `.checkpoints/15.6-litesvm/`.
+
+Новый файл `tests/src/test_deposit_split.rs` (348 строк) + одна строка в `tests/src/lib.rs`.
+
+**Пять тестов:**
+
+| Тест | Что проверяет |
+|---|---|
+| `deposit_split_happy_path` | Успешный split; vault +`total_amount`; `next_leaf_index += 3`; `total_deposits += 1`; в истории **только** финальный root |
+| `deposit_split_sum_mismatch_rejected` | `total_amount - 1` при корректных сплитах — отклонение (`SplitSumMismatch`) |
+| `deposit_split_below_minimum_rejected` | Один из сплитов `= 100` lamports < `MIN_DEPOSIT_AMOUNT` — отклонение (`DepositBelowMinimum`) |
+| `deposit_split_unchanged_root_rejected` | Второй split с тем же финальным root — отклонение (`RootUnchanged`) |
+| `deposit_split_sum_overflow_rejected` | `[u64::MAX, u64::MAX, u64::MAX]` — `checked_add` overflow → `SplitSumMismatch` |
+
+**Дискриминатор:** `sha256("global:deposit_split")[..8]` = `[0x32, 0x11, 0x82, 0x11, 0x77, 0xdc, 0xae, 0x76]`. Вычислен через `echo -n "global:deposit_split" | sha256sum` — не угадан.
+
+**Borsh-сериализация `DepositSplitArgs`:** 3×32 + 3×32 + 3×8 + 8 = 232 байта после дискриминатора. Без length-prefix (все поля — фиксированного размера, никаких `Vec`).
+
+**Ошибка при первом прогоне (в тестах, не в программе):** `DepositBelowMinimum` на happy-path.
+
+- **Причина:** тестовые суммы `[500_000, 300_000, 200_000]` lamports — все три ниже `MIN_DEPOSIT_AMOUNT = 1_000_000` (0.001 SOL). On-chain проверка **пер-сплит**, а не по сумме.
+- **Фикс:** масштабированы до `[500_000_000, 300_000_000, 200_000_000]` lamports (0.5 + 0.3 + 0.2 = 1.0 SOL). Те же тесты, корректные суммы.
+- **Урок:** `MIN_DEPOSIT_AMOUNT` в `deposit_split` применяется к **каждому** сплиту, а не к `total_amount`. Тесты должны это отражать.
+
+**Результат:** 20 / 20 passed (было 15). 5 новых, 0 сломано.
+
+Артефакты чекпоинта: `lib.rs` (686 B, `47801871…`), `test_deposit_split.rs` (10915 B, `b2b8b2b4…`).
+
+**← next: 15.7 — Backend: N commitments per tx, +1 witness field.**

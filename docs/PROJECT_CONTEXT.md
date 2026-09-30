@@ -1,6 +1,5 @@
 # PROJECT_CONTEXT.md
 
-
 ## Setup
 
 * Laptop Model: Dell Latitude 5330
@@ -19,8 +18,8 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.5** (Anchor: `deposit_split` + constants updated, upgraded in place on devnet).
-Next task: **Stage 15.6 — LiteSVM adversarial tests for split**.
+Last completed stage: **Stage 15.6** (LiteSVM tests for `deposit_split`).
+Next task: **Stage 15.7 — Backend: N commitments per tx, +1 witness field**.
 
 1. **Read section 0 completely**.
 2. **Chat communication: English, except if user ask Russian. Files on disk:**
@@ -558,8 +557,8 @@ POST /prove
 | 15.3 | Circuit change (C4, C5, new ACIR) | `1fc9a5d` |
 | 15.4 | Sunspot re-run + verifier upgrade | `0f02d34` |
 | 15.5 | Anchor — `deposit_split`, `encode_public_inputs` +32 | `a66bee2` |
-| 15.6 | LiteSVM — adversarial for split | ← next |
-| 15.7 | Backend — N commitments per tx, +1 witness field | |
+| 15.6 | LiteSVM — adversarial for split | `131b2ac` |
+| 15.7 | Backend — N commitments per tx, +1 witness field | ← next |
 | 15.8 | Frontend — split UI | |
 | 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | |
 | 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | |
@@ -1130,9 +1129,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.5 done)
-**Last completed stage:** Stage 15.5 (Anchor: `deposit_split` + constants updated, upgraded in place on devnet).
-**Next stage:** Stage 15.6 — LiteSVM adversarial tests for split.
+**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.6 done)
+**Last completed stage:** Stage 15.6 (LiteSVM tests for `deposit_split`).
+**Next stage:** Stage 15.7 — Backend: N commitments per tx, +1 witness field.
 
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
@@ -1152,7 +1151,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.5 done)
+  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.6 done)
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
@@ -1225,8 +1224,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.3 — circuit change (`main.nr`, `test_witness.nr`), new ACIR. ✅ Commit `1fc9a5d`.
 - 15.4 — Sunspot re-run + verifier upgrade. ✅ Commit `0f02d34`.
 - 15.5 — Anchor: `deposit_split`, constants updated, upgraded in place. ✅ Commit `a66bee2`.
-- 15.6 — LiteSVM adversarial tests for split. **← next**
-- 15.7–15.10 — Backend, frontend, E2E, final docs.
+- 15.6 — LiteSVM tests for `deposit_split` (5 tests, 20 total). ✅ Commit `131b2ac`.
+- 15.7 — Backend: N commitments per tx, +1 witness field. **← next**
 
 ---
 
