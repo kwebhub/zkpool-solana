@@ -18,6 +18,9 @@ mod test_pool;
 mod test_deposit;
 
 #[cfg(test)]
+mod test_deposit_split;
+
+#[cfg(test)]
 mod test_withdraw;
 
 #[cfg(test)]
