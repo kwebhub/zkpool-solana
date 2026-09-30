@@ -403,4 +403,70 @@ Split deposit добавляет **новый** вектор для будуще
 - `docs/notes/04-anchor.md` — `encode_public_inputs`, layout публичных входов.
 - `docs/notes/10-e2e.md` — полный E2E, найденные баги.
 - `docs/threat-model.md` — 12 атак, 7 инвариантов.
-- `docs/PROJECT_CONTEXT.md` §7.6 — история решения о split deposit.
+
+---
+
+## 9. Прогресс
+
+> **Заполняется по ходу Stage 15.**
+
+### 15.1 — Дизайн-док
+
+**Дата:** 2026-09-30. **Commit:** `2285ed4`. **Checkpoint:** `.checkpoints/15.1-design/`.
+
+Создан этот документ. Зафиксированы решения:
+- **Путь 2** — схема вывода меняется.
+- **N = 3, фиксированное.**
+- **Upgrade на месте** — Program ID verifier'а не меняется.
+- **Breaking change** — нотам v0.1.0 несовместимы, версия → v0.2.0.
+
+Артефакт чекпоинта: `15-split-deposit.md` (24771 B, SHA-256 `8e194799731d17f5658058eac8698e1d8657d1fc62133c1c3374dfef3b41369d`).
+
+### 15.2 — `spec.json` + `validate-spec`
+
+**Дата:** 2026-09-30. **Commit:** `cec750e`. **Checkpoint:** `.checkpoints/15.2-spec/`.
+
+Обновлены три файла:
+
+| Файл | Что |
+|---|---|
+| `circuits/withdrawal/spec.json` | +1 публичный вход `total_amount`, +2 приватных `splits[3]` / `note_index`, +2 constraints C4/C5, `circuit.split_count = 3`, `nr_public_inputs = 6`, `witness_layout` 172 → 204 |
+| `scripts/validate-spec/src/rules.rs` | константы обновлены (6 / 204 / 192 / 144), +2 новых правила `rule_split_count`, `rule_private_inputs_lengths`, `rule_constraints` ожидает 5 id |
+| `scripts/validate-spec/src/spec.rs` | +1 поле `split_count: u64` в `Circuit`, +1 строка в `print_summary` |
+
+Попутно **исправлены устаревшие пути потребителей** в `consumers_of_public_layout[]`:
+- `anchor`: `instructions.rs` → `encoding.rs` (функция `encode_public_inputs` там).
+- `frontend`: `services/poseidon.ts` → `noir/poseidon.ts` (функция `poseidon2Hash`).
+- `frontend`: obligations обновлены под 6 публичных входов и новые приватные.
+
+**Результат:** `validate-spec` — 17 правил, все зелёные.
+
+Артефакты чекпоинта: `spec.json` (8210 B, `ab61481a…8ab49`), `rules.rs` (12969 B, `4199ad04…7abfe`), `spec.rs` (5665 B, `1287d890…81c1b`).
+
+### 15.3 — Изменение схемы
+
+**Дата:** 2026-09-30. **Commit:** `1fc9a5d`. **Checkpoint:** `.checkpoints/15.3-circuit/`.
+
+Обновлены `circuits/withdrawal/src/main.nr` и `test_witness.nr`:
+- `global SPLIT_COUNT: u32 = 3;`
+- Публичные входы: 6 (добавлен `total_amount` в конец).
+- Приватные входы: 7 (добавлены `splits: [Field; 3]`, `note_index: u32`).
+- C4: `splits[0] + splits[1] + splits[2] == total_amount`.
+- C5: bounds-check `note_index < SPLIT_COUNT`, затем `splits[note_index]` через if/else, затем `== amount`.
+- `test_witness.nr` печатает новые поля в `Prover.toml` — порядок: 6 public, 7 private (3 scalar + 20 merkle_proof + 20 is_even + 3 splits + 1 note_index = **52 строки**, было 48).
+
+**Тесты:** 24 в `withdrawal` (было 16). Все проходят.
+**Новый ACIR:** `a49bc877135ae75713d2ab7cbe39a69151a606c328f48fe8163c0629787d3262` (было `29ac2e67…91db`). Размер 46113 B (было 41414 B).
+
+**Ошибка при компиляции:** `error: Fields cannot be compared, try casting to an integer first`.
+- Причина: `assert((note_index as Field) < (SPLIT_COUNT as Field))`.
+- Фикс: сравнивать как `u32` — `assert(note_index < SPLIT_COUNT)`. Оба операнда уже `u32`.
+- Урок: в Noir `<`, `>=` работают только на целочисленных типах, не на `Field`.
+
+Артефакты чекпоинта: `main.nr` (8542 B, `a8663293…a14a3`), `test_witness.nr` (3709 B, `ec993029…20bdf`), `withdrawal.json` (46113 B, `a49bc877…d3262`).
+
+### 15.4 — Sunspot re-run + verifier upgrade
+
+**Дата:** — (в работе). **Commit:** —.
+
+**← next**
