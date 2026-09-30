@@ -1,33 +1,34 @@
 //! Public inputs encoding for the verifier program.
 //!
 //! The `withdraw` instruction calls the verifier via CPI. The verifier
-//! expects a single blob of bytes: a 12-byte header followed by 5 × 32-byte
-//! public inputs.
+//! expects a single blob of bytes: a 12-byte header followed by 6 × 32-byte
+//! public inputs (204 bytes total).
 //!
 //! The layout is defined in `circuits/withdrawal/spec.json` (section
 //! `witness_layout`) and must match:
-//!   - `withdrawal.pw` produced by `sunspot prove` (stage 3.5),
-//!   - the blob produced by the frontend (stage 8).
+//!   - `withdrawal.pw` produced by `sunspot prove` (stage 15.4),
+//!   - the blob produced by the frontend (stage 15.8).
 //!
 //! If this layout ever changes, update `spec.json` and all three layers
 //! simultaneously, then run `validate-spec`.
 //!
-//! ## Layout
+//! ## Layout (Stage 15.4)
 //!
 //! ```text
 //! [12-byte header]
-//!   NR_PUBLIC_INPUTS (u32 BE) = 5
+//!   NR_PUBLIC_INPUTS (u32 BE) = 6
 //!   0                 (u32 BE) = 0
-//!   NR_PUBLIC_INPUTS (u32 BE) = 5
-//! [5 × 32 bytes, in this order]
+//!   NR_PUBLIC_INPUTS (u32 BE) = 6
+//! [6 × 32 bytes, in this order]
 //!   root
 //!   nullifier_hash
 //!   recipient            (reduced to BN254)
 //!   recipient_binding
 //!   amount               (u64 BE, right-aligned in a 32-byte word)
+//!   total_amount         (u64 BE, right-aligned in a 32-byte word)
 //! ```
 //!
-//! Total: 12 + 5 × 32 = 172 bytes.
+//! Total: 12 + 6 × 32 = 204 bytes.
 
 use anchor_lang::prelude::*;
 
@@ -44,20 +45,23 @@ pub const BN254_PRIME_BE: [u8; 32] = [
     0x28, 0x33, 0xe8, 0x48, 0x79, 0xb9, 0x70, 0x91, 0x43, 0xe1, 0xf5, 0x93, 0xf0, 0x00, 0x00, 0x01,
 ];
 
-/// Encodes the 5 public inputs into a 172-byte blob expected by the verifier.
+/// Encodes the 6 public inputs into a 204-byte blob expected by the verifier.
 ///
 /// Public inputs, in order:
 ///   [0] root
 ///   [1] nullifier_hash
 ///   [2] recipient             (Solana Pubkey, reduced to BN254)
 ///   [3] recipient_binding
-///   [4] amount                (u64, right-aligned in 32 bytes)
+///   [4] amount                (this note's amount, u64, right-aligned in 32 bytes)
+///   [5] total_amount          (aggregate deposit amount, u64, right-aligned in 32 bytes)
+#[allow(clippy::too_many_arguments)]
 pub fn encode_public_inputs(
     root: &[u8; 32],
     nullifier_hash: &[u8; 32],
     recipient: &Pubkey,
     recipient_binding: &[u8; 32],
     amount: u64,
+    total_amount: u64,
 ) -> [u8; PUBLIC_INPUTS_BYTES] {
     let mut out = [0u8; PUBLIC_INPUTS_BYTES];
 
@@ -69,7 +73,7 @@ pub fn encode_public_inputs(
     out[4..8].copy_from_slice(&0u32.to_be_bytes());
     out[8..12].copy_from_slice(&NR_PUBLIC_INPUTS.to_be_bytes());
 
-    // ----- 5 × 32 bytes -----
+    // ----- 6 × 32 bytes -----
     // [0] root
     out[12..44].copy_from_slice(root);
 
@@ -87,6 +91,10 @@ pub fn encode_public_inputs(
     //     24 leading zeros, then 8 bytes of u64 BE.
     out[140..164].copy_from_slice(&[0u8; 24]);
     out[164..172].copy_from_slice(&amount.to_be_bytes());
+
+    // [5] total_amount — same shape as amount.
+    out[172..196].copy_from_slice(&[0u8; 24]);
+    out[196..204].copy_from_slice(&total_amount.to_be_bytes());
 
     out
 }
@@ -160,21 +168,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_encode_length_is_172() {
-        let root = [1u8; 32];
-        let nullifier_hash = [2u8; 32];
-        let recipient = Pubkey::new_from_array([3u8; 32]);
-        let recipient_binding = [4u8; 32];
-        let amount = 1_000_000;
-
+    fn test_encode_length_is_204() {
         let out = encode_public_inputs(
-            &root,
-            &nullifier_hash,
-            &recipient,
-            &recipient_binding,
-            amount,
+            &[1u8; 32],
+            &[2u8; 32],
+            &Pubkey::new_from_array([3u8; 32]),
+            &[4u8; 32],
+            300_000,
+            1_000_000,
         );
-        assert_eq!(out.len(), 172);
+        assert_eq!(out.len(), 204);
     }
 
     #[test]
@@ -185,10 +188,11 @@ mod tests {
             &Pubkey::new_from_array([0u8; 32]),
             &[0u8; 32],
             0,
+            0,
         );
-        assert_eq!(&out[0..4], &[0, 0, 0, 5]);
+        assert_eq!(&out[0..4], &[0, 0, 0, 6]);
         assert_eq!(&out[4..8], &[0, 0, 0, 0]);
-        assert_eq!(&out[8..12], &[0, 0, 0, 5]);
+        assert_eq!(&out[8..12], &[0, 0, 0, 6]);
     }
 
     #[test]
@@ -199,6 +203,7 @@ mod tests {
         let recipient = Pubkey::new_from_array(recipient_bytes);
         let recipient_binding = [0xccu8; 32];
         let amount = 0x123456789abcdef0u64;
+        let total_amount = 0xfedcba9876543210u64;
 
         let out = encode_public_inputs(
             &root,
@@ -206,6 +211,7 @@ mod tests {
             &recipient,
             &recipient_binding,
             amount,
+            total_amount,
         );
 
         assert_eq!(&out[12..44], &root);
@@ -215,6 +221,24 @@ mod tests {
         assert_eq!(&out[108..140], &recipient_binding);
         assert_eq!(&out[140..164], &[0u8; 24]);
         assert_eq!(&out[164..172], &amount.to_be_bytes());
+        assert_eq!(&out[172..196], &[0u8; 24]);
+        assert_eq!(&out[196..204], &total_amount.to_be_bytes());
+    }
+
+    #[test]
+    fn test_amount_and_total_amount_are_distinct() {
+        let out = encode_public_inputs(
+            &[0u8; 32],
+            &[0u8; 32],
+            &Pubkey::new_from_array([0u8; 32]),
+            &[0u8; 32],
+            300_000,
+            1_000_000,
+        );
+        // amount at [164..172]
+        assert_eq!(&out[164..172], &300_000u64.to_be_bytes());
+        // total_amount at [196..204]
+        assert_eq!(&out[196..204], &1_000_000u64.to_be_bytes());
     }
 
     #[test]

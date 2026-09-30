@@ -1,11 +1,12 @@
 //! Instruction: `withdraw` — withdraw SOL from the pool.
 //!
 //! The caller provides:
-//!   - `proof`:             324-byte Groth16 proof.
+//!   - `proof`:             388-byte Groth16 proof (Sunspot 1.0.0, Stage 15.4).
 //!   - `nullifier_hash`:    public input, prevents double-spend.
 //!   - `root`:              public input, must be in the roots history.
 //!   - `recipient`:         public input, must equal the `to` account.
-//!   - `amount`:            public input, must be the transferred amount.
+//!   - `amount`:            public input, this note's amount (one of the splits).
+//!   - `total_amount`:      public input, aggregate deposit amount (Stage 15).
 //!   - `recipient_binding`: public input, ties the proof to `recipient`.
 //!
 //! ## Flow
@@ -13,7 +14,7 @@
 //!   1. Validate proof length.
 //!   2. Validate `recipient` matches the `to` account.
 //!   3. Validate `root` is in the pool's roots history.
-//!   4. Encode the 5 public inputs into a 172-byte blob.
+//!   4. Encode the 6 public inputs into a 204-byte blob.
 //!   5. Invoke the verifier program via CPI with `[proof || public_witness]`.
 //!   6. Create the `NullifierRecord` PDA — this fails if it already exists,
 //!      which is how double-spend is prevented.
@@ -23,9 +24,9 @@
 //! ## The critical part
 //!
 //! Step 4 uses `encode_public_inputs`, which MUST produce the exact same
-//! 172 bytes that:
-//!   - `sunspot prove` writes to `withdrawal.pw` (stage 3.5),
-//!   - the frontend will produce (stage 8).
+//! 204 bytes that:
+//!   - `sunspot prove` writes to `withdrawal.pw` (stage 15.4),
+//!   - the frontend produces (stage 15.8).
 //!
 //! This is where v2 broke (`InvalidInstructionData`). The layout is defined
 //! in `circuits/withdrawal/spec.json`; any change requires updating all
@@ -46,7 +47,7 @@
 //! let public_witness_bytes = &instruction_data[proof_len..];
 //! ```
 //!
-//! `12 + NR_INPUTS * 32 = 12 + 5 * 32 = 172` matches `PUBLIC_INPUTS_BYTES`.
+//! `12 + NR_INPUTS * 32 = 12 + 6 * 32 = 204` matches `PUBLIC_INPUTS_BYTES`.
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::instruction::Instruction;
@@ -104,7 +105,7 @@ pub struct Withdraw<'info> {
     /// CHECK: recipient can be any account; we only send lamports to it.
     pub to: UncheckedAccount<'info>,
 
-    /// Verifier program (deployed in stage 3.4).
+    /// Verifier program (deployed in stage 3.4, upgraded in place in stage 15.4).
     /// CHECK: address is validated against VERIFIER_PROGRAM_ID.
     #[account(address = VERIFIER_PROGRAM_ID)]
     pub verifier_program: UncheckedAccount<'info>,
@@ -122,6 +123,7 @@ pub fn handler_withdraw(
     recipient: Pubkey,
     amount: u64,
     recipient_binding: [u8; 32],
+    total_amount: u64,
 ) -> Result<()> {
     // ----- 1. Validate proof length -----
     require!(proof.len() == PROOF_LEN, ZkPoolError::InvalidProofLength);
@@ -139,13 +141,14 @@ pub fn handler_withdraw(
         ZkPoolError::UnknownRoot
     );
 
-    // ----- 4. Encode public inputs (172 bytes) -----
+    // ----- 4. Encode public inputs (204 bytes) -----
     let public_inputs = encode_public_inputs(
         &root,
         &nullifier_hash,
         &recipient,
         &recipient_binding,
         amount,
+        total_amount,
     );
     debug_assert_eq!(public_inputs.len(), PUBLIC_INPUTS_BYTES);
 
@@ -154,7 +157,7 @@ pub fn handler_withdraw(
     // Layout expected by verifier-bin:
     //   [proof: PROOF_LEN bytes][public_witness: PUBLIC_INPUTS_BYTES bytes]
     //
-    // The verifier computes proof_len = total - 172, so PROOF MUST COME FIRST.
+    // The verifier computes proof_len = total - 204, so PROOF MUST COME FIRST.
     let mut data = Vec::with_capacity(PROOF_LEN + PUBLIC_INPUTS_BYTES);
     data.extend_from_slice(&proof);
     data.extend_from_slice(&public_inputs);
@@ -206,10 +209,11 @@ pub fn handler_withdraw(
     });
 
     msg!(
-        "Withdraw: nullifier_hash_first_byte={}, recipient={}, amount={}",
+        "Withdraw: nullifier_hash_first_byte={}, recipient={}, amount={}, total_amount={}",
         nullifier_hash[0],
         recipient,
-        amount
+        amount,
+        total_amount
     );
 
     Ok(())

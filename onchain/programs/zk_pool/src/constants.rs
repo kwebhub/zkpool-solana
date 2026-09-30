@@ -45,33 +45,52 @@ pub const ROOT_HISTORY_SIZE: usize = 10;
 pub const EMPTY_ROOT: [u8; 32] = [0u8; 32];
 
 // ============================================================
+// Split deposit (Stage 15)
+// ============================================================
+
+/// Number of splits per `deposit_split` call.
+///
+/// Must equal:
+///   - `spec.json` → `circuit.split_count` (3),
+///   - `circuits/withdrawal/src/main.nr` → `global SPLIT_COUNT` (3).
+///
+/// The withdrawal circuit's C4 and C5 constraints assume exactly this
+/// many splits. Changing it requires rebuilding the circuit, the verifier,
+/// and updating every layer.
+pub const SPLIT_COUNT: usize = 3;
+
+// ============================================================
 // ZK proof
 // ============================================================
 
 /// Number of public inputs for the withdrawal circuit.
 ///
-/// Must equal `spec.json` → `circuit.nr_public_inputs` (5).
+/// Must equal `spec.json` → `circuit.nr_public_inputs` (6).
 /// Public inputs, in order:
 ///   [0] root
 ///   [1] nullifier_hash
 ///   [2] recipient
 ///   [3] recipient_binding
-///   [4] amount
-pub const NR_PUBLIC_INPUTS: u32 = 5;
+///   [4] amount               (this note's amount)
+///   [5] total_amount         (aggregate deposit amount)
+pub const NR_PUBLIC_INPUTS: u32 = 6;
 
 /// Total size of the encoded public inputs (bytes).
 ///
-/// Layout: 12-byte header + 5 × 32-byte fields = 172 bytes.
-/// Must equal `spec.json` → `witness_layout.total_bytes` (172).
-pub const PUBLIC_INPUTS_BYTES: usize = 172;
+/// Layout: 12-byte header + 6 × 32-byte fields = 204 bytes.
+/// Must equal `spec.json` → `witness_layout.total_bytes` (204).
+pub const PUBLIC_INPUTS_BYTES: usize = 204;
 
-/// Length of the Groth16 proof (bytes).
+/// Length of the Groth16 proof (bytes), as produced by Sunspot 1.0.0
+/// with the Stage 15.4 toolchain.
 ///
-/// Groth16 proofs are constant-size: 2 G1 points (32 bytes each) +
-/// 1 G2 point (64 bytes) + metadata.
-pub const PROOF_LEN: usize = 324;
+/// Stage 3.3 produced 324-byte proofs. Stage 15.4 rebuild produced
+/// 388-byte proofs against the new VK. The verifier on devnet was
+/// upgraded in place (Stage 15.4); this constant must match its output
+/// format.
+pub const PROOF_LEN: usize = 388;
 
-/// Verifier program ID (deployed in stage 3.4).
+/// Verifier program ID (deployed in stage 3.4; upgraded in place in stage 15.4).
 ///
 /// The `withdraw` instruction calls this program via CPI to verify the
 /// Groth16 proof. If the circuit is ever changed, the verifier program
@@ -85,6 +104,7 @@ pub const VERIFIER_PROGRAM_ID: Pubkey = pubkey!("5t51iu6apRxgLbt91eVZ6YYzHsnmBCV
 /// Minimum deposit amount, in lamports (0.001 SOL).
 ///
 /// Prevents spam deposits that would fill the Merkle tree with dust.
+/// In `deposit_split`, this applies to **each** individual split amount.
 pub const MIN_DEPOSIT_AMOUNT: u64 = 1_000_000;
 
 // ============================================================
@@ -112,21 +132,26 @@ mod tests {
     }
 
     #[test]
+    fn test_split_count() {
+        assert_eq!(SPLIT_COUNT, 3);
+    }
+
+    #[test]
     fn test_nr_public_inputs() {
-        assert_eq!(NR_PUBLIC_INPUTS, 5);
+        assert_eq!(NR_PUBLIC_INPUTS, 6);
     }
 
     #[test]
     fn test_public_inputs_bytes() {
-        // 12-byte header + 5 × 32 = 172
+        // 12-byte header + 6 × 32 = 204
         assert_eq!(PUBLIC_INPUTS_BYTES, 12 + (NR_PUBLIC_INPUTS as usize) * 32);
-        assert_eq!(PUBLIC_INPUTS_BYTES, 172);
+        assert_eq!(PUBLIC_INPUTS_BYTES, 204);
     }
 
     #[test]
     fn test_proof_len() {
-        // Groth16 proof size (constant)
-        assert_eq!(PROOF_LEN, 324);
+        // Groth16 proof size as produced by Sunspot 1.0.0 (Stage 15.4 toolchain)
+        assert_eq!(PROOF_LEN, 388);
     }
 
     #[test]
@@ -148,8 +173,6 @@ mod tests {
 
     #[test]
     fn test_verifier_program_id_parses() {
-        // The pubkey! macro validates at compile time, but we double-check
-        // the exact address string here.
         let expected = "5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ";
         assert_eq!(VERIFIER_PROGRAM_ID.to_string(), expected);
     }

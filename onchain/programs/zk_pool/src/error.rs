@@ -26,6 +26,15 @@ pub enum ZkPoolError {
     RootUnchanged,
 
     // ============================================================
+    // DepositSplit (Stage 15.5)
+    // ============================================================
+    #[msg("Split amount sum does not equal total_amount")]
+    SplitSumMismatch,
+
+    #[msg("Not enough room in the Merkle tree for all splits")]
+    NotEnoughRoom,
+
+    // ============================================================
     // Withdraw
     // ============================================================
     #[msg("Unknown Merkle root: must be in the recent roots history")]

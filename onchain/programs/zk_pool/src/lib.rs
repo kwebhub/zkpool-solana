@@ -1,6 +1,7 @@
 //! zk_pool — private SOL transfers on Solana using ZK proofs.
 //!
 //! Stage 4.1.8: unit tests for discriminators, constants, state, events.
+//! Stage 15.5:  `deposit_split` instruction.
 
 use anchor_lang::prelude::*;
 
@@ -30,7 +31,7 @@ pub mod zk_pool {
         instructions::pool::handler_pool(ctx)
     }
 
-    /// Deposit SOL into the pool.
+    /// Deposit SOL into the pool (single commitment).
     ///
     /// **Trust model:** does NOT verify that `new_root` is the correct
     /// result of inserting `commitment`. See `docs/DEMO-NOTICE.md`.
@@ -41,6 +42,19 @@ pub mod zk_pool {
         amount: u64,
     ) -> Result<()> {
         instructions::deposit::handler_deposit(ctx, commitment, new_root, amount)
+    }
+
+    /// Deposit SOL into the pool with a 3-way split (Stage 15).
+    ///
+    /// Creates `SPLIT_COUNT` (= 3) commitments in one transaction. Emits
+    /// one `DepositEvent` per commitment, advances `next_leaf_index` by 3,
+    /// but adds only the final root to `PoolState.roots` and increments
+    /// `total_deposits` by 1.
+    ///
+    /// **Trust model:** does NOT verify that `new_roots[i]` are correct
+    /// Merkle roots. See `docs/DEMO-NOTICE.md`.
+    pub fn deposit_split(ctx: Context<DepositSplit>, args: DepositSplitArgs) -> Result<()> {
+        instructions::deposit_split::handler_deposit_split(ctx, args)
     }
 
     /// Withdraw SOL from the pool using a Groth16 proof.
@@ -57,6 +71,7 @@ pub mod zk_pool {
         recipient: Pubkey,
         amount: u64,
         recipient_binding: [u8; 32],
+        total_amount: u64,
     ) -> Result<()> {
         instructions::withdraw::handler_withdraw(
             ctx,
@@ -66,6 +81,7 @@ pub mod zk_pool {
             recipient,
             amount,
             recipient_binding,
+            total_amount,
         )
     }
 }
