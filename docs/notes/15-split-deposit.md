@@ -581,4 +581,48 @@ if err := os.Rename(originalKeypair, keypairPath); err != nil {
 - ⚠️ On-chain withdraw **временно сломан** — zk_pool ожидает 324 B proof, verifier возвращает 388 B. Окно закроется в 15.5.
 - ⚠️ Три on-chain константы (`NR_PUBLIC_INPUTS`, `PUBLIC_INPUTS_BYTES`, `PROOF_LEN`) должны быть обновлены в 15.5.
 
-**← next: 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, обновление трёх констант).**
+### 15.5 — Anchor change
+
+**Дата:** 2026-09-30. **Commit:** `a66bee2`. **Checkpoint:** `.checkpoints/15.5-anchor/`.
+
+Обновлены 7 файлов Anchor-программы:
+
+| Файл | Что |
+|---|---|
+| `constants.rs` | `NR_PUBLIC_INPUTS: 5 → 6`, `PUBLIC_INPUTS_BYTES: 172 → 204`, `PROOF_LEN: 324 → 388`, + новый `SPLIT_COUNT: 3`; обновлены тесты |
+| `error.rs` | + два новых варианта: `SplitSumMismatch`, `NotEnoughRoom` |
+| `encoding.rs` | `encode_public_inputs` принимает `total_amount: u64`, выход 204 байта; + тесты |
+| `instructions.rs` | + `pub mod deposit_split;` + re-export |
+| `instructions/deposit_split.rs` | **НОВЫЙ файл** — 182 строки |
+| `instructions/withdraw.rs` | + параметр `total_amount: u64`, обновлён doc-комментарий |
+| `lib.rs` | + инструкция `deposit_split` с `DepositSplitArgs` |
+
+**Решения по `deposit_split` (зафиксированы):**
+- Аргументы — одна структура `DepositSplitArgs` (не плоский список): Codama генерирует типизированный клиент, IDL чище.
+- `add_root` — **один** вызов, с финальным корнем. Промежуточные корни не хранятся (транзакция атомарна, любой из трёх note'ов выводится против финального корня).
+- `total_deposits` — **+1** за вызов (одна операция депозита, не три).
+- `next_leaf_index` — три последовательных `checked_add(1)`, по одному на commitment.
+- `Σ amounts[i] == total_amount` — проверяется **on-chain** + в схеме (C4).
+- SOL-перевод — **один** `transfer(total_amount)`.
+- События — **три** `DepositEvent`, каждый со своим промежуточным корнем.
+
+**Тесты:**
+- `cargo check -p zk_pool` — чисто.
+- `cargo test -p zk_pool --lib` — **39 / 39** passed (было 37).
+- Новые тесты: `test_split_count`, `test_encode_length_is_204`, `test_amount_and_total_amount_are_distinct`.
+
+**Сборка:**
+- `zk_pool.so` — **222 144 B** (было 210 000), SHA-256 `d4eee2d5ffc6d89337f917ea05c9b75b081203705fe79f17ed60e4370b86c735`.
+- `zk_pool.json` (IDL) — **21 739 B** (было 16 800), SHA-256 `5ecbaed8a7497e70e407b0b9db32153967a5d8549b93cf89df3b9134cf1be29d`.
+
+**Upgrade на devnet (in place):**
+- Program ID `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` — **не изменился**.
+- Upgrade tx: `5cZwCsBhxyB4qJACcLHUoGhQcrrxW6cH84R2jZU7D8hEdVb1FPvMMibSP2sNJdqT2ZVkU6rybr4dUHXpkLC5X47h`
+- Data extended: 210 000 → 222 144 B (rent доплачен до 1.129 SOL).
+- IDL metadata: `C931NVVbVKu4mjh1wjgh7bmFx6j6TfML89ut1GsRQHXk`.
+
+**Окно поломки 15.4 → 15.5 закрыто.** После апгрейда zk_pool on-chain `withdraw` принимает 388-байтовые proof'ы и 204-байтовые public inputs, совпадающие с новым verifier'ом.
+
+**Урок про `anchor program deploy --program-id`:** этот флаг ожидает **base58 Program ID**, а не путь к keypair-файлу (в отличие от `solana program deploy`). Симптом: `error: invalid value ... Invalid Base58 string`. Фикс: либо передать base58-строку, либо — что проще — не передавать флаг вообще, положившись на `Anchor.toml` + дефолтный путь `target/deploy/<program>.json`. Второй вариант применён.
+
+**← next: 15.6 — LiteSVM adversarial tests for split.**

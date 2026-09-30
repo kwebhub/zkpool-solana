@@ -19,8 +19,8 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.3** (circuit change — split deposit constraints C4, C5).
-Next task: **Stage 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, `PROOF_LEN` 388, `NR_PUBLIC_INPUTS` 6)**.
+Last completed stage: **Stage 15.5** (Anchor: `deposit_split` + constants updated, upgraded in place on devnet).
+Next task: **Stage 15.6 — LiteSVM adversarial tests for split**.
 
 1. **Read section 0 completely**.
 2. **Chat communication: English, except if user ask Russian. Files on disk:**
@@ -556,9 +556,9 @@ POST /prove
 | 15.1 | Design doc | `2285ed4` |
 | 15.2 | `spec.json` + `rules.rs` + `spec.rs` | `cec750e` |
 | 15.3 | Circuit change (C4, C5, new ACIR) | `1fc9a5d` |
-| 15.4 | Sunspot re-run + verifier upgrade | ← next |
-| 15.5 | Anchor — `deposit_split`, `encode_public_inputs` +32 | |
-| 15.6 | LiteSVM — adversarial for split | |
+| 15.4 | Sunspot re-run + verifier upgrade | `0f02d34` |
+| 15.5 | Anchor — `deposit_split`, `encode_public_inputs` +32 | `a66bee2` |
+| 15.6 | LiteSVM — adversarial for split | ← next |
 | 15.7 | Backend — N commitments per tx, +1 witness field | |
 | 15.8 | Frontend — split UI | |
 | 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | |
@@ -1130,9 +1130,10 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1, 15.2, 15.3, 15.4 done)
-**Last completed stage:** Stage 15.4 (Sunspot re-run + verifier upgrade in place on devnet).
-**Next stage:** Stage 15.5 — Anchor change (`deposit_split`, `encode_public_inputs` +32, `PROOF_LEN` 388, `NR_PUBLIC_INPUTS` 6).
+**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.5 done)
+**Last completed stage:** Stage 15.5 (Anchor: `deposit_split` + constants updated, upgraded in place on devnet).
+**Next stage:** Stage 15.6 — LiteSVM adversarial tests for split.
+
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
   - Stage 1 — Docker environment ✅
@@ -1151,14 +1152,14 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1, 15.2, 15.3 done)
+  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.5 done)
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 **Deployed programs on devnet:**
 - Verifier: `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` (**197 056 B**, upgraded in Stage 15.4 — was 87 312 B; Program ID unchanged).
-- zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (210 000 B, rent 1.068 SOL).
+- zk_pool: `8cGzkFK9H15mcpndAaY7ApCJhkHcujttR4E2D8rS6LCm` (**222 144 B**, upgraded in Stage 15.5 — was 210 000 B; Program ID unchanged).
 
 **Pool state (created 2026-09-27):**
 - Pool PDA: `B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf`
@@ -1181,7 +1182,16 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `withdrawal.so` — `f2c3bea017b113100c31289b939d9f6d0c1d5a2602216d778000ac97260669ca` (197 056 B)
 - Upgrade tx: `5z68jatuiaScN5ff5NXYpgRsgfhT7om9FGSGErkcJJj5JDJXwKD4Zs7Bjet9ST28d5Q9G2quEXCTcwQdiq9KMKSV`
 
-**Verifier on devnet runs the Stage 15.3 ACIR. Program ID unchanged (`5t51iu6a…`). zk_pool still has `PROOF_LEN = 324` and `NR_PUBLIC_INPUTS = 5` — on-chain withdraw is currently broken until Stage 15.5 lands.** Expected window per design doc §4.1.
+**On-chain state after Stage 15.5.** Both programs on devnet are consistent with the Stage 15.3 ACIR:
+
+- Verifier (`5t51iu6a…`) — upgraded in place (Stage 15.4), 197 056 B, runs the new `.vk`.
+- zk_pool (`8cGzkFK9H…`) — upgraded in place (Stage 15.5), 222 144 B, `PROOF_LEN = 388`, `NR_PUBLIC_INPUTS = 6`.
+
+**The 15.4 → 15.5 broken window is closed.** On-chain `withdraw` now expects 388-byte proofs and 204-byte public inputs.
+
+**zk_pool upgrade tx:** `5cZwCsBhxyB4qJACcLHUoGhQcrrxW6cH84R2jZU7D8hEdVb1FPvMMibSP2sNJdqT2ZVkU6rybr4dUHXpkLC5X47h`
+**New zk_pool `.so`:** `d4eee2d5ffc6d89337f917ea05c9b75b081203705fe79f17ed60e4370b86c735` (222 144 B)
+**New zk_pool IDL:** `5ecbaed8a7497e70e407b0b9db32153967a5d8549b93cf89df3b9134cf1be29d` (21 739 B)
 
 **Running containers:** `solana-zkpool-solana`, `zkpool-postgres` (healthy), `zkpool-redis` (healthy).
 **Running processes (inside `solana` container):** merkle (4003), prover (4002), backend (4001) — must be restarted after container restart.
@@ -1213,8 +1223,10 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.1 — design doc (`docs/notes/15-split-deposit.md`). ✅ Commit `2285ed4`.
 - 15.2 — `spec.json` + `rules.rs` + `spec.rs` updated. ✅ Commit `cec750e`.
 - 15.3 — circuit change (`main.nr`, `test_witness.nr`), new ACIR. ✅ Commit `1fc9a5d`.
-- 15.4 — Sunspot re-run + verifier upgrade. **← next**
-- 15.5–15.10 — Anchor, LiteSVM, backend, frontend, E2E, final docs.
+- 15.4 — Sunspot re-run + verifier upgrade. ✅ Commit `0f02d34`.
+- 15.5 — Anchor: `deposit_split`, constants updated, upgraded in place. ✅ Commit `a66bee2`.
+- 15.6 — LiteSVM adversarial tests for split. **← next**
+- 15.7–15.10 — Backend, frontend, E2E, final docs.
 
 ---
 
