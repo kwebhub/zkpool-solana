@@ -25,6 +25,10 @@ pub const SPLIT_COUNT: usize = 3;
 ///   - public:  `total_amount` (aggregate deposit amount)
 ///   - private: `splits[3]` (the split vector), `note_index` (u32)
 ///
+/// Legacy single-commitment notes (created via `deposit`, not
+/// `deposit_split`) carry a `splits` array of length 1. Both shapes are
+/// accepted: length-1 vectors are treated as `total_amount == amount`.
+///
 /// Hex strings:
 ///   - `root`, `nullifier_hash`, `recipient_binding`, `nullifier`, `secret`,
 ///     `note_secret`: 64-char bare hex (32 bytes)
@@ -95,10 +99,11 @@ impl WithdrawRequest {
         // `total_amount` — aggregate deposit amount (hex, at most 64 chars).
         validate_hex_max("total_amount", &self.total_amount, 64)?;
 
-        // `splits` — exactly SPLIT_COUNT field elements.
-        if self.splits.len() != SPLIT_COUNT {
+        // `splits` — length 1 (legacy single-commitment deposit) or
+        // SPLIT_COUNT (Stage 15 split deposit).
+        if self.splits.len() != 1 && self.splits.len() != SPLIT_COUNT {
             return Err(format!(
-                "splits must have {} elements, got {}",
+                "splits must have 1 or {} elements, got {}",
                 SPLIT_COUNT,
                 self.splits.len()
             ));
@@ -107,12 +112,13 @@ impl WithdrawRequest {
             validate_hex_max(&format!("splits[{}]", i), s, 64)?;
         }
 
-        // `note_index` — must be < SPLIT_COUNT (checked before array indexing
-        // in the circuit; we reject early here too).
-        if self.note_index as usize >= SPLIT_COUNT {
+        // `note_index` — must be < splits.len() (checked before array
+        // indexing in the circuit; we reject early here too).
+        if self.note_index as usize >= self.splits.len() {
             return Err(format!(
-                "note_index must be < {}, got {}",
-                SPLIT_COUNT, self.note_index
+                "note_index must be < splits.len() ({}), got {}",
+                self.splits.len(),
+                self.note_index
             ));
         }
 

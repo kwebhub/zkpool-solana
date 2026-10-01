@@ -12,12 +12,20 @@
 //!
 //! Stage 15: witness now carries `total_amount` (public), `splits[3]` and
 //! `note_index` (private). Proof is 388 B, public witness 204 B.
+//!
+//! Legacy single-commitment notes (created via `deposit`, not
+//! `deposit_split`) carry a `splits` array of length 1. The circuit
+//! hard-codes `splits: [Field; 3]`, so we pad a length-1 vector to
+//! `[amount, 0, 0]` with `note_index = 0`. Both constraints C4
+//! (`Σ splits[i] == total_amount`) and C5 (`splits[note_index] == amount`)
+//! then hold.
 
 import { address, type Address } from "@solana/kit";
 import { getCommitments, getProof, getRoot, postWithdraw } from "../api/client";
 import { poseidon2Hash } from "../noir/poseidon";
 import { reduceToFieldHex } from "./reduce";
 import type { ParsedNote } from "./parseNote";
+import { SPLIT_COUNT } from "../constants";
 
 export interface WithdrawWitness {
   /** Public inputs (bare hex, 64 chars each). */
@@ -32,9 +40,9 @@ export interface WithdrawWitness {
   amount: string;
   /** Aggregate deposit amount in lamports (decimal string). */
   totalAmount: string;
-  /** Split vector (3 bare-hex strings). */
+  /** Split vector, padded to length `SPLIT_COUNT` (bare-hex strings). */
   splits: string[];
-  /** Index of this note in `splits`. */
+  /** Index of this note in `splits` (0 for legacy single notes). */
   noteIndex: number;
   /** Merkle proof (20 hex strings, bare). */
   merkleProof: string[];
@@ -82,11 +90,17 @@ export async function buildWitness(
   }
   const root = rootOrNull;
 
-  // 6. Compute `total_amount` = Σ splits[i]. All values are hex; parse to
-  //    BigInt and re-emit as hex (bare, 64-char padded — matches the
-  //    circuit's field representation).
-  const splitsBn: bigint[] = note.splits.map((s) => BigInt("0x" + s));
-  const totalBn = splitsBn.reduce((acc, v) => acc + v, 0n);
+  // 6. The circuit hard-codes `splits` as `[Field; 3]`. A legacy
+  //    single-commitment note (length-1 vector) is padded with two
+  //    zeros: `[amount, 0, 0]`, `note_index = 0`, and
+  //    `total_amount = amount`. C4 (`Σ splits[i] == total_amount`) and
+  //    C5 (`splits[note_index] == amount`) both hold.
+  const splitsPadded: string[] =
+    note.splits.length === SPLIT_COUNT
+      ? note.splits
+      : [note.amount, "0".repeat(64), "0".repeat(64)];
+  const noteIndexPadded: number = note.splits.length === SPLIT_COUNT ? note.noteIndex : 0;
+  const totalBn = splitsPadded.reduce((acc, s) => acc + BigInt("0x" + s), 0n);
   const totalAmountHex = totalBn.toString(16).padStart(64, "0");
 
   // 7. Groth16 proof via backend → prover.
@@ -102,8 +116,8 @@ export async function buildWitness(
     note_secret: note.noteSecret,
     merkle_proof: proof,
     is_even,
-    splits: note.splits,
-    note_index: note.noteIndex,
+    splits: splitsPadded,
+    note_index: noteIndexPadded,
   });
 
   return {
@@ -114,8 +128,8 @@ export async function buildWitness(
     recipientBinding,
     amount: BigInt("0x" + note.amount).toString(),
     totalAmount: totalBn.toString(),
-    splits: note.splits,
-    noteIndex: note.noteIndex,
+    splits: splitsPadded,
+    noteIndex: noteIndexPadded,
     merkleProof: proof,
     isEven: is_even,
     proofBase64,

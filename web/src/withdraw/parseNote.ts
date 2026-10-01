@@ -17,6 +17,11 @@
 //! Stage 15: `splits` and `note_index` are new. Notes created before
 //! Stage 15 are **not** compatible — the circuit requires all three
 //! split vectors and the note's own index. See `docs/notes/15-split-deposit.md`.
+//!
+//! Legacy single-commitment notes (created via `deposit`, not
+//! `deposit_split`) carry a `splits` array of length 1. Both shapes are
+//! accepted here; the withdrawal circuit treats a length-1 vector as
+//! `total_amount == amount`.
 
 import { SPLIT_COUNT } from "../constants";
 
@@ -29,9 +34,13 @@ export interface ParsedNote {
   nullifierHash: string;
   txSignature: string;
   poolPda: string;
-  /** Split vector — exactly SPLIT_COUNT bare-hex field elements. */
+  /**
+   * Split vector.
+   * - length 1   → legacy single-commitment note (its own amount is total).
+   * - length `SPLIT_COUNT` → Stage 15 split note.
+   */
   splits: string[];
-  /** Index of this note in `splits` (0, 1, or 2). */
+  /** Index of this note in `splits`. For length-1 vectors, always 0. */
   noteIndex: number;
 }
 
@@ -77,10 +86,10 @@ export function parseNote(input: string | Record<string, unknown>): ParsedNote {
 
   // ---- splits ----
   if (!Array.isArray(raw.splits)) {
-    throw new Error(`note.splits must be an array of ${SPLIT_COUNT} hex strings`);
+    throw new Error(`note.splits must be an array of 1 or ${SPLIT_COUNT} hex strings`);
   }
-  if (raw.splits.length !== SPLIT_COUNT) {
-    throw new Error(`note.splits must have ${SPLIT_COUNT} elements, got ${raw.splits.length}`);
+  if (raw.splits.length !== 1 && raw.splits.length !== SPLIT_COUNT) {
+    throw new Error(`note.splits must have 1 or ${SPLIT_COUNT} elements, got ${raw.splits.length}`);
   }
   const splits: string[] = raw.splits.map((s, i) => requireHexFlexible(s, `splits[${i}]`));
 
@@ -88,8 +97,8 @@ export function parseNote(input: string | Record<string, unknown>): ParsedNote {
   if (typeof raw.note_index !== "number" || !Number.isInteger(raw.note_index)) {
     throw new Error(`note.note_index must be an integer`);
   }
-  if (raw.note_index < 0 || raw.note_index >= SPLIT_COUNT) {
-    throw new Error(`note.note_index must be in [0, ${SPLIT_COUNT})`);
+  if (raw.note_index < 0 || raw.note_index >= splits.length) {
+    throw new Error(`note.note_index must be in [0, ${splits.length})`);
   }
 
   return {

@@ -180,6 +180,11 @@ async function sendInstruction(
   provider: WalletContext["provider"],
   ix: Parameters<typeof appendTransactionMessageInstruction>[0],
 ): Promise<string> {
+  const signAndSend = provider.signAndSendTransaction;
+  if (!signAndSend) {
+    throw new Error("wallet does not support signAndSendTransaction");
+  }
+
   const rpc = createSolanaRpc(RPC_URL);
   const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
 
@@ -194,7 +199,10 @@ async function sendInstruction(
   const compiled = compileTransaction(message);
   const wireBase64 = getBase64EncodedWireTransaction(compiled);
 
-  const { signature } = await provider.signAndSendTransaction!(wireBase64);
+  const { signature } = await signAndSend.call(provider, {
+    serialize: () => Uint8Array.from(atob(wireBase64), (c) => c.charCodeAt(0)),
+    message: { version: 0 },
+  } as never);
   void confirmSignature(rpc, signature);
   return signature;
 }

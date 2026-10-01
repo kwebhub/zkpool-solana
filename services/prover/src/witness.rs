@@ -25,9 +25,9 @@
 //!  12. splits[3]         (private)                             ← NEW
 //!  13. note_index        (private, u32)                        ← NEW
 //!
-//! `nargo execute` matches by **name**, not by order, but writing in the
-//! same order as `test_witness.nr` keeps the two sources of truth aligned
-//! for human review and for future diffing.
+//! Legacy single-commitment notes (created via `deposit`, not
+//! `deposit_split`) carry a `splits` array of length 1. Both shapes are
+//! accepted: length-1 vectors are treated as `total_amount == amount`.
 
 use anyhow::{bail, Result};
 
@@ -74,17 +74,17 @@ impl WitnessInputs {
                 self.is_even.len()
             );
         }
-        if self.splits.len() != SPLIT_COUNT {
+        if self.splits.len() != 1 && self.splits.len() != SPLIT_COUNT {
             bail!(
-                "splits must have {} elements, got {}",
+                "splits must have 1 or {} elements, got {}",
                 SPLIT_COUNT,
                 self.splits.len()
             );
         }
-        if self.note_index as usize >= SPLIT_COUNT {
+        if self.note_index as usize >= self.splits.len() {
             bail!(
-                "note_index must be < {}, got {}",
-                SPLIT_COUNT,
+                "note_index must be < splits.len() ({}), got {}",
+                self.splits.len(),
                 self.note_index
             );
         }
@@ -226,6 +226,14 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_single_split_ok() {
+        let mut w = sample();
+        w.splits = vec!["07a120".to_string()];
+        w.note_index = 0;
+        w.validate().expect("legacy single split is valid");
+    }
+
+    #[test]
     fn test_validate_wrong_merkle_len() {
         let mut w = sample();
         w.merkle_proof.pop();
@@ -240,9 +248,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_wrong_splits_len() {
+    fn test_validate_two_splits_rejected() {
         let mut w = sample();
-        w.splits.pop();
+        w.splits = vec!["07a120".to_string(), "0493e0".to_string()];
         assert!(w.validate().is_err());
     }
 
@@ -251,6 +259,14 @@ mod tests {
         let mut w = sample();
         w.note_index = 5;
         assert!(w.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_note_index_ok_for_single_split() {
+        let mut w = sample();
+        w.splits = vec!["07a120".to_string()];
+        w.note_index = 0;
+        w.validate().expect("index 0 valid for length-1 vector");
     }
 
     #[test]

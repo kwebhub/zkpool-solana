@@ -8,6 +8,10 @@
 //!   5. Poll for confirmation.
 //!
 //! Stage 15: proof is 388 B (was 324); instruction carries `total_amount`.
+//!
+//! Phantom compatibility: `provider.signAndSendTransaction` expects an
+//! object with `serialize()` and `message.version`, not a base64 string.
+//! Same workaround as in `useDeposit.ts`.
 
 import { ref, shallowRef } from "vue";
 import {
@@ -104,7 +108,14 @@ export function useWithdraw() {
       const wireBase64 = getBase64EncodedWireTransaction(compiled);
 
       // 7. Sign + send via wallet.
-      const { signature } = await provider.signAndSendTransaction(wireBase64);
+      //    Phantom expects an object exposing `serialize()` and
+      //    `message.version`, not a base64 string. Same workaround as
+      //    `useDeposit.ts`.
+      const signAndSend = provider.signAndSendTransaction;
+      const { signature } = await signAndSend.call(provider, {
+        serialize: () => Uint8Array.from(atob(wireBase64), (c) => c.charCodeAt(0)),
+        message: { version: 0 },
+      } as never);
 
       // 8. Poll for confirmation (best-effort).
       void confirmSignature(rpc, signature);
