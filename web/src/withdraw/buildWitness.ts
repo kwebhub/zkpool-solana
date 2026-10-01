@@ -9,6 +9,9 @@
 //!   6. Call `/api/withdraw` → Groth16 proof + public witness (base64).
 //!
 //! Returns everything needed to build the on-chain `withdraw` instruction.
+//!
+//! Stage 15: witness now carries `total_amount` (public), `splits[3]` and
+//! `note_index` (private). Proof is 388 B, public witness 204 B.
 
 import { address, type Address } from "@solana/kit";
 import { getCommitments, getProof, getRoot, postWithdraw } from "../api/client";
@@ -25,15 +28,21 @@ export interface WithdrawWitness {
   /** Recipient as BN254 field element (bare hex, 64 chars). */
   recipientFieldHex: string;
   recipientBinding: string;
-  /** Amount in lamports (decimal string). */
+  /** This note's amount in lamports (decimal string). */
   amount: string;
+  /** Aggregate deposit amount in lamports (decimal string). */
+  totalAmount: string;
+  /** Split vector (3 bare-hex strings). */
+  splits: string[];
+  /** Index of this note in `splits`. */
+  noteIndex: number;
   /** Merkle proof (20 hex strings, bare). */
   merkleProof: string[];
   /** Side flags (20 booleans). */
   isEven: boolean[];
-  /** Groth16 proof (base64, 324 bytes decoded). */
+  /** Groth16 proof (base64, 388 bytes decoded). */
   proofBase64: string;
-  /** Public witness (base64, 172 bytes decoded). */
+  /** Public witness (base64, 204 bytes decoded). */
   publicWitnessBase64: string;
 }
 
@@ -73,18 +82,28 @@ export async function buildWitness(
   }
   const root = rootOrNull;
 
-  // 6. Groth16 proof via backend → prover.
+  // 6. Compute `total_amount` = Σ splits[i]. All values are hex; parse to
+  //    BigInt and re-emit as hex (bare, 64-char padded — matches the
+  //    circuit's field representation).
+  const splitsBn: bigint[] = note.splits.map((s) => BigInt("0x" + s));
+  const totalBn = splitsBn.reduce((acc, v) => acc + v, 0n);
+  const totalAmountHex = totalBn.toString(16).padStart(64, "0");
+
+  // 7. Groth16 proof via backend → prover.
   const { proof: proofBase64, public_witness: publicWitnessBase64 } = await postWithdraw({
     root,
     nullifier_hash: nullifierHash,
     recipient: recipientFieldHex,
     recipient_binding: recipientBinding,
     amount: note.amount,
+    total_amount: totalAmountHex,
     nullifier: note.nullifier,
     secret: note.secret,
     note_secret: note.noteSecret,
     merkle_proof: proof,
     is_even,
+    splits: note.splits,
+    note_index: note.noteIndex,
   });
 
   return {
@@ -94,6 +113,9 @@ export async function buildWitness(
     recipientFieldHex,
     recipientBinding,
     amount: BigInt("0x" + note.amount).toString(),
+    totalAmount: totalBn.toString(),
+    splits: note.splits,
+    noteIndex: note.noteIndex,
     merkleProof: proof,
     isEven: is_even,
     proofBase64,

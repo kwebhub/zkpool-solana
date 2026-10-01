@@ -7,5 +7,6 @@
  */
 
 export * from "./deposit";
+export * from "./depositSplit";
 export * from "./pool";
 export * from "./withdraw";

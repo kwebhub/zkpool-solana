@@ -24,22 +24,26 @@ export const ZK_POOL_ERROR__DEPOSIT_BELOW_MINIMUM = 0x1772; // 6002
 export const ZK_POOL_ERROR__TREE_FULL = 0x1773; // 6003
 /** RootUnchanged: New root must differ from the current root */
 export const ZK_POOL_ERROR__ROOT_UNCHANGED = 0x1774; // 6004
+/** SplitSumMismatch: Split amount sum does not equal total_amount */
+export const ZK_POOL_ERROR__SPLIT_SUM_MISMATCH = 0x1775; // 6005
+/** NotEnoughRoom: Not enough room in the Merkle tree for all splits */
+export const ZK_POOL_ERROR__NOT_ENOUGH_ROOM = 0x1776; // 6006
 /** UnknownRoot: Unknown Merkle root: must be in the recent roots history */
-export const ZK_POOL_ERROR__UNKNOWN_ROOT = 0x1775; // 6005
+export const ZK_POOL_ERROR__UNKNOWN_ROOT = 0x1777; // 6007
 /** NullifierAlreadyUsed: Nullifier has already been used */
-export const ZK_POOL_ERROR__NULLIFIER_ALREADY_USED = 0x1776; // 6006
+export const ZK_POOL_ERROR__NULLIFIER_ALREADY_USED = 0x1778; // 6008
 /** RecipientMismatch: Recipient in instruction does not match recipient in proof */
-export const ZK_POOL_ERROR__RECIPIENT_MISMATCH = 0x1777; // 6007
+export const ZK_POOL_ERROR__RECIPIENT_MISMATCH = 0x1779; // 6009
 /** AmountMismatch: Amount in instruction does not match amount in proof */
-export const ZK_POOL_ERROR__AMOUNT_MISMATCH = 0x1778; // 6008
+export const ZK_POOL_ERROR__AMOUNT_MISMATCH = 0x177a; // 6010
 /** InsufficientVaultBalance: Vault balance is insufficient */
-export const ZK_POOL_ERROR__INSUFFICIENT_VAULT_BALANCE = 0x1779; // 6009
+export const ZK_POOL_ERROR__INSUFFICIENT_VAULT_BALANCE = 0x177b; // 6011
 /** ProofVerificationFailed: Proof verification failed */
-export const ZK_POOL_ERROR__PROOF_VERIFICATION_FAILED = 0x177a; // 6010
+export const ZK_POOL_ERROR__PROOF_VERIFICATION_FAILED = 0x177c; // 6012
 /** InvalidProofLength: Invalid proof length */
-export const ZK_POOL_ERROR__INVALID_PROOF_LENGTH = 0x177b; // 6011
+export const ZK_POOL_ERROR__INVALID_PROOF_LENGTH = 0x177d; // 6013
 /** InvalidPublicInputsLength: Invalid public inputs length */
-export const ZK_POOL_ERROR__INVALID_PUBLIC_INPUTS_LENGTH = 0x177c; // 6012
+export const ZK_POOL_ERROR__INVALID_PUBLIC_INPUTS_LENGTH = 0x177e; // 6014
 
 export type ZkPoolError =
   | typeof ZK_POOL_ERROR__AMOUNT_MISMATCH
@@ -47,12 +51,14 @@ export type ZkPoolError =
   | typeof ZK_POOL_ERROR__INSUFFICIENT_VAULT_BALANCE
   | typeof ZK_POOL_ERROR__INVALID_PROOF_LENGTH
   | typeof ZK_POOL_ERROR__INVALID_PUBLIC_INPUTS_LENGTH
+  | typeof ZK_POOL_ERROR__NOT_ENOUGH_ROOM
   | typeof ZK_POOL_ERROR__NULLIFIER_ALREADY_USED
   | typeof ZK_POOL_ERROR__POOL_ALREADY_INITIALIZED
   | typeof ZK_POOL_ERROR__POOL_NOT_INITIALIZED
   | typeof ZK_POOL_ERROR__PROOF_VERIFICATION_FAILED
   | typeof ZK_POOL_ERROR__RECIPIENT_MISMATCH
   | typeof ZK_POOL_ERROR__ROOT_UNCHANGED
+  | typeof ZK_POOL_ERROR__SPLIT_SUM_MISMATCH
   | typeof ZK_POOL_ERROR__TREE_FULL
   | typeof ZK_POOL_ERROR__UNKNOWN_ROOT;
 
@@ -64,12 +70,14 @@ if (process.env["NODE_ENV"] !== "production") {
     [ZK_POOL_ERROR__INSUFFICIENT_VAULT_BALANCE]: `Vault balance is insufficient`,
     [ZK_POOL_ERROR__INVALID_PROOF_LENGTH]: `Invalid proof length`,
     [ZK_POOL_ERROR__INVALID_PUBLIC_INPUTS_LENGTH]: `Invalid public inputs length`,
+    [ZK_POOL_ERROR__NOT_ENOUGH_ROOM]: `Not enough room in the Merkle tree for all splits`,
     [ZK_POOL_ERROR__NULLIFIER_ALREADY_USED]: `Nullifier has already been used`,
     [ZK_POOL_ERROR__POOL_ALREADY_INITIALIZED]: `Pool is already initialized`,
     [ZK_POOL_ERROR__POOL_NOT_INITIALIZED]: `Pool is not initialized`,
     [ZK_POOL_ERROR__PROOF_VERIFICATION_FAILED]: `Proof verification failed`,
     [ZK_POOL_ERROR__RECIPIENT_MISMATCH]: `Recipient in instruction does not match recipient in proof`,
     [ZK_POOL_ERROR__ROOT_UNCHANGED]: `New root must differ from the current root`,
+    [ZK_POOL_ERROR__SPLIT_SUM_MISMATCH]: `Split amount sum does not equal total_amount`,
     [ZK_POOL_ERROR__TREE_FULL]: `Merkle tree is full`,
     [ZK_POOL_ERROR__UNKNOWN_ROOT]: `Unknown Merkle root: must be in the recent roots history`,
   };

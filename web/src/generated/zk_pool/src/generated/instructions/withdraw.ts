@@ -108,6 +108,7 @@ export type WithdrawInstructionData = {
   recipient: Address;
   amount: bigint;
   recipientBinding: ReadonlyUint8Array;
+  totalAmount: bigint;
 };
 
 export type WithdrawInstructionDataArgs = {
@@ -117,6 +118,7 @@ export type WithdrawInstructionDataArgs = {
   recipient: Address;
   amount: number | bigint;
   recipientBinding: ReadonlyUint8Array;
+  totalAmount: number | bigint;
 };
 
 export function getWithdrawInstructionDataEncoder(): Encoder<WithdrawInstructionDataArgs> {
@@ -129,6 +131,7 @@ export function getWithdrawInstructionDataEncoder(): Encoder<WithdrawInstruction
       ["recipient", getAddressEncoder()],
       ["amount", getU64Encoder()],
       ["recipientBinding", fixEncoderSize(getBytesEncoder(), 32)],
+      ["totalAmount", getU64Encoder()],
     ]),
     (value) => ({ ...value, discriminator: WITHDRAW_DISCRIMINATOR }),
   );
@@ -143,6 +146,7 @@ export function getWithdrawInstructionDataDecoder(): Decoder<WithdrawInstruction
     ["recipient", getAddressDecoder()],
     ["amount", getU64Decoder()],
     ["recipientBinding", fixDecoderSize(getBytesDecoder(), 32)],
+    ["totalAmount", getU64Decoder()],
   ]);
 }
 
@@ -186,7 +190,7 @@ export type WithdrawAsyncInput<
    * Must match the `recipient` public input.
    */
   to: TAccountTo;
-  /** Verifier program (deployed in stage 3.4). */
+  /** Verifier program (deployed in stage 3.4, upgraded in place in stage 15.4). */
   verifierProgram?: TAccountVerifierProgram;
   /** Solana system program. */
   systemProgram?: TAccountSystemProgram;
@@ -196,6 +200,7 @@ export type WithdrawAsyncInput<
   recipient: WithdrawInstructionDataArgs["recipient"];
   amount: WithdrawInstructionDataArgs["amount"];
   recipientBinding: WithdrawInstructionDataArgs["recipientBinding"];
+  totalAmount: WithdrawInstructionDataArgs["totalAmount"];
 };
 
 export async function getWithdrawInstructionAsync<
@@ -403,7 +408,7 @@ export type WithdrawInput<
    * Must match the `recipient` public input.
    */
   to: TAccountTo;
-  /** Verifier program (deployed in stage 3.4). */
+  /** Verifier program (deployed in stage 3.4, upgraded in place in stage 15.4). */
   verifierProgram?: TAccountVerifierProgram;
   /** Solana system program. */
   systemProgram?: TAccountSystemProgram;
@@ -413,6 +418,7 @@ export type WithdrawInput<
   recipient: WithdrawInstructionDataArgs["recipient"];
   amount: WithdrawInstructionDataArgs["amount"];
   recipientBinding: WithdrawInstructionDataArgs["recipientBinding"];
+  totalAmount: WithdrawInstructionDataArgs["totalAmount"];
 };
 
 export function getWithdrawInstruction<
@@ -583,7 +589,7 @@ export type ParsedWithdrawInstruction<
      * Must match the `recipient` public input.
      */
     to: TAccountMetas[4];
-    /** Verifier program (deployed in stage 3.4). */
+    /** Verifier program (deployed in stage 3.4, upgraded in place in stage 15.4). */
     verifierProgram: TAccountMetas[5];
     /** Solana system program. */
     systemProgram: TAccountMetas[6];

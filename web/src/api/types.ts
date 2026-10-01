@@ -1,6 +1,9 @@
 //! TypeScript types for the backend HTTP API.
 //!
 //! All types mirror `services/backend/src/main.rs` responses.
+//!
+//! Stage 15: the circuit now has 6 public inputs (was 5) and 7 private
+//! inputs (was 5). The wire format mirrors `services/backend/src/api_types.rs`.
 
 /** Bare-hex string (no `0x` prefix). */
 export type Hex = string;
@@ -57,25 +60,37 @@ export interface ProofResponse {
 
 // ---- /api/withdraw ----
 
+/**
+ * Request body for `POST /api/withdraw`.
+ *
+ * Field names and encoding match `services/backend/src/api_types.rs`.
+ * Stage 15 additions:
+ *   - `total_amount` (public, aggregate deposit amount)
+ *   - `splits` (private, 3 field elements)
+ *   - `note_index` (private, u32 in [0, 3))
+ */
 export interface WithdrawRequest {
-  // Public
+  // Public (6)
   root: Hex;
   nullifier_hash: Hex;
   recipient: Hex;
   recipient_binding: Hex;
   amount: Hex;
-  // Private
+  total_amount: Hex;
+  // Private (7)
   nullifier: Hex;
   secret: Hex;
   note_secret: Hex;
   merkle_proof: Hex[];
   is_even: boolean[];
+  splits: Hex[];
+  note_index: number;
 }
 
 export interface WithdrawResponse {
-  /** Base64-encoded Groth16 proof (324 bytes). */
+  /** Base64-encoded Groth16 proof (388 bytes since Stage 15.4). */
   proof: Base64;
-  /** Base64-encoded public witness (172 bytes). */
+  /** Base64-encoded public witness (204 bytes since Stage 15.4). */
   public_witness: Base64;
 }
 

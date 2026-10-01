@@ -6,6 +6,8 @@
 //!   3. Build the on-chain `withdraw` instruction via Codama.
 //!   4. Sign + send via wallet `signAndSendTransaction`.
 //!   5. Poll for confirmation.
+//!
+//! Stage 15: proof is 388 B (was 324); instruction carries `total_amount`.
 
 import { ref, shallowRef } from "vue";
 import {
@@ -26,6 +28,9 @@ import { buildWitness, type WithdrawWitness } from "../withdraw/buildWitness";
 import { hexToBytes } from "../withdraw/reduce";
 
 const RPC_URL = "https://api.devnet.solana.com";
+
+/** Groth16 proof length after Stage 15.4 (was 324). */
+const PROOF_LEN = 388;
 
 export interface WithdrawResult {
   signature: string;
@@ -62,10 +67,10 @@ export function useWithdraw() {
       // 2. Assemble witness + get Groth16 proof from backend.
       const witness = await buildWitness(note, recipientBase58);
 
-      // 3. Decode the base64 Groth16 proof → 324 bytes.
+      // 3. Decode the base64 Groth16 proof → 388 bytes.
       const proofBytes = base64ToBytes(witness.proofBase64);
-      if (proofBytes.length !== 324) {
-        throw new Error(`unexpected proof length: ${proofBytes.length}, expected 324`);
+      if (proofBytes.length !== PROOF_LEN) {
+        throw new Error(`unexpected proof length: ${proofBytes.length}, expected ${PROOF_LEN}`);
       }
 
       // 4. Build the on-chain withdraw instruction.
@@ -79,6 +84,7 @@ export function useWithdraw() {
         recipient: recipientAddr,
         amount: BigInt(witness.amount),
         recipientBinding: hexToBytes(witness.recipientBinding),
+        totalAmount: BigInt(witness.totalAmount),
       });
 
       // 5. Fetch blockhash and build the transaction message.

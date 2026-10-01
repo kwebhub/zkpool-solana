@@ -9,8 +9,16 @@
 //!   "commitment":    "<bare hex, 64 chars>",
 //!   "nullifier_hash":"<bare hex, 64 chars>",
 //!   "tx_signature":  "<base58>",
-//!   "pool_pda":      "<base58>"
+//!   "pool_pda":      "<base58>",
+//!   "splits":        ["<bare hex>", "<bare hex>", "<bare hex>"],
+//!   "note_index":    <0 | 1 | 2>
 //! }
+//!
+//! Stage 15: `splits` and `note_index` are new. Notes created before
+//! Stage 15 are **not** compatible — the circuit requires all three
+//! split vectors and the note's own index. See `docs/notes/15-split-deposit.md`.
+
+import { SPLIT_COUNT } from "../constants";
 
 export interface ParsedNote {
   nullifier: string;
@@ -21,13 +29,26 @@ export interface ParsedNote {
   nullifierHash: string;
   txSignature: string;
   poolPda: string;
+  /** Split vector — exactly SPLIT_COUNT bare-hex field elements. */
+  splits: string[];
+  /** Index of this note in `splits` (0, 1, or 2). */
+  noteIndex: number;
 }
 
 const HEX64_RE = /^[0-9a-f]{64}$/;
+const HEX_RE = /^[0-9a-f]+$/;
 
 function requireHex64(v: unknown, name: string): string {
   if (typeof v !== "string" || !HEX64_RE.test(v)) {
     throw new Error(`note.${name} must be a 64-char bare hex string`);
+  }
+  return v;
+}
+
+/** Accepts any non-empty bare-hex string (leading zeros elided). */
+function requireHexFlexible(v: unknown, name: string): string {
+  if (typeof v !== "string" || v.length === 0 || v.length > 64 || !HEX_RE.test(v)) {
+    throw new Error(`note.${name} must be a bare hex string (up to 64 chars)`);
   }
   return v;
 }
@@ -54,6 +75,23 @@ export function parseNote(input: string | Record<string, unknown>): ParsedNote {
     raw = input;
   }
 
+  // ---- splits ----
+  if (!Array.isArray(raw.splits)) {
+    throw new Error(`note.splits must be an array of ${SPLIT_COUNT} hex strings`);
+  }
+  if (raw.splits.length !== SPLIT_COUNT) {
+    throw new Error(`note.splits must have ${SPLIT_COUNT} elements, got ${raw.splits.length}`);
+  }
+  const splits: string[] = raw.splits.map((s, i) => requireHexFlexible(s, `splits[${i}]`));
+
+  // ---- note_index ----
+  if (typeof raw.note_index !== "number" || !Number.isInteger(raw.note_index)) {
+    throw new Error(`note.note_index must be an integer`);
+  }
+  if (raw.note_index < 0 || raw.note_index >= SPLIT_COUNT) {
+    throw new Error(`note.note_index must be in [0, ${SPLIT_COUNT})`);
+  }
+
   return {
     nullifier: requireHex64(raw.nullifier, "nullifier"),
     secret: requireHex64(raw.secret, "secret"),
@@ -63,5 +101,7 @@ export function parseNote(input: string | Record<string, unknown>): ParsedNote {
     nullifierHash: requireHex64(raw.nullifier_hash, "nullifier_hash"),
     txSignature: requireString(raw.tx_signature, "tx_signature"),
     poolPda: requireString(raw.pool_pda, "pool_pda"),
+    splits,
+    noteIndex: raw.note_index,
   };
 }

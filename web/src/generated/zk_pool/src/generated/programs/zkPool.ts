@@ -44,13 +44,17 @@ import {
 } from "../accounts";
 import {
   getDepositInstructionAsync,
+  getDepositSplitInstructionAsync,
   getPoolInstructionAsync,
   getWithdrawInstructionAsync,
   parseDepositInstruction,
+  parseDepositSplitInstruction,
   parsePoolInstruction,
   parseWithdrawInstruction,
   type DepositAsyncInput,
+  type DepositSplitAsyncInput,
   type ParsedDepositInstruction,
+  type ParsedDepositSplitInstruction,
   type ParsedPoolInstruction,
   type ParsedWithdrawInstruction,
   type PoolAsyncInput,
@@ -136,6 +140,7 @@ export function identifyZkPoolEvent(
 
 export enum ZkPoolInstruction {
   Deposit,
+  DepositSplit,
   Pool,
   Withdraw,
 }
@@ -154,6 +159,17 @@ export function identifyZkPoolInstruction(
     )
   ) {
     return ZkPoolInstruction.Deposit;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([50, 17, 130, 17, 119, 220, 174, 118]),
+      ),
+      0,
+    )
+  ) {
+    return ZkPoolInstruction.DepositSplit;
   }
   if (
     containsBytes(
@@ -190,6 +206,9 @@ export type ParsedZkPoolInstruction<
       instructionType: ZkPoolInstruction.Deposit;
     } & ParsedDepositInstruction<TProgram>)
   | ({
+      instructionType: ZkPoolInstruction.DepositSplit;
+    } & ParsedDepositSplitInstruction<TProgram>)
+  | ({
       instructionType: ZkPoolInstruction.Pool;
     } & ParsedPoolInstruction<TProgram>)
   | ({
@@ -206,6 +225,13 @@ export function parseZkPoolInstruction<TProgram extends string>(
       return {
         instructionType: ZkPoolInstruction.Deposit,
         ...parseDepositInstruction(instruction),
+      };
+    }
+    case ZkPoolInstruction.DepositSplit: {
+      assertIsInstructionWithAccounts(instruction);
+      return {
+        instructionType: ZkPoolInstruction.DepositSplit,
+        ...parseDepositSplitInstruction(instruction),
       };
     }
     case ZkPoolInstruction.Pool: {
@@ -250,6 +276,10 @@ export type ZkPoolPluginInstructions = {
   deposit: (
     input: DepositAsyncInput,
   ) => ReturnType<typeof getDepositInstructionAsync> & SelfPlanAndSendFunctions;
+  depositSplit: (
+    input: DepositSplitAsyncInput,
+  ) => ReturnType<typeof getDepositSplitInstructionAsync> &
+    SelfPlanAndSendFunctions;
   pool: (
     input: PoolAsyncInput,
   ) => ReturnType<typeof getPoolInstructionAsync> & SelfPlanAndSendFunctions;
@@ -290,6 +320,11 @@ export function zkPoolProgram() {
             addSelfPlanAndSendFunctions(
               client,
               getDepositInstructionAsync(input),
+            ),
+          depositSplit: (input) =>
+            addSelfPlanAndSendFunctions(
+              client,
+              getDepositSplitInstructionAsync(input),
             ),
           pool: (input) =>
             addSelfPlanAndSendFunctions(client, getPoolInstructionAsync(input)),

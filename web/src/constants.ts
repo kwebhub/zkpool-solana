@@ -16,6 +16,12 @@ export const POOL_PDA: Address = address("B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqd
 /** Merkle tree depth — must match `spec.json` and on-chain constant. */
 export const TREE_DEPTH = 20;
 
+/**
+ * Number of splits per deposit — must match `spec.json` (`circuit.split_count`)
+ * and on-chain `constants::SPLIT_COUNT`.
+ */
+export const SPLIT_COUNT = 3;
+
 /** Minimum deposit in lamports — must match `constants::MIN_DEPOSIT_AMOUNT`. */
 export const MIN_DEPOSIT_AMOUNT = 1_000_000n;
 
