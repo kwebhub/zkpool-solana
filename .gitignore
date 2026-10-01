@@ -91,3 +91,4 @@ Prover.toml
 # ============================================================
 services/merkle/circuits/
 web/public/circuits/
+scripts/e2e-notes/
