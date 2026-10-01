@@ -756,3 +756,71 @@ dist/assets/index-B-L5Zye2.js              183.78 kB
 Артефакты чекпоинта: 8 файлов, зафиксированы в `manifest.txt`.
 
 **← next: 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals.**
+
+### 15.9 — E2E: 1 SOL → 3 ноты → 3 вывода
+
+**Дата:** 2026-10-01. **Commit:** `8c2a1f6`. **Checkpoint:** `.checkpoints/15.9-e2e/`.
+
+**Что сделано:**
+
+1. **Новый скрипт** `scripts/e2e-deposit-split/` (Rust CLI) — выполняет split-депозит 1 SOL через три ноты 0.5 + 0.3 + 0.2.
+   - Вызывает Merkle `POST /hashes` × 3 для получения commitments и nullifier_hashes.
+   - `GET /api/commitments` — существующие commitments.
+   - `POST /api/root-preview` × 3 (кумулятивно) — три промежуточных корня + финальный.
+   - Собирает `deposit_split` instruction: дискриминатор `[0x32, 0x11, 0x82, 0x11, 0x77, 0xdc, 0xae, 0x76]`, три commitment'а, три new_root'а, три суммы + total.
+   - Знак + отправка + подтверждение.
+   - Печатает три JSON-ноты для последующего вывода.
+
+2. **Обновлён `scripts/e2e-withdraw/`:**
+   - Читает `splits` и `note_index` из JSON-ноты.
+   - Вычисляет `total_amount = Σ splits[i]`.
+   - Отправляет `total_amount` в `/api/withdraw` вместе с `splits` и `note_index`.
+   - Проверяет длину proof (388 B).
+   - Собирает `withdraw` instruction с новым 8-м аргументом `total_amount` (Borsh `u64 LE`).
+   - `SetComputeUnitLimit(1_400_000)` вместо `400_000`.
+
+**Результаты на devnet:**
+
+| Шаг | Транзакция |
+|---|---|
+| Split deposit (1 SOL → 3 ноты) | `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh` |
+| Withdraw note 0 (0.5 SOL) | `5EegK3FXPttNGypB9Ve6RCbjtuMYSnvCwrb4ozb5MK6jsaDj6VKvyH8eb8XxtYav9tDhVYKbiRE6LPCHGLVuEsgZ` |
+| Withdraw note 1 (0.3 SOL) | `3KdWSWWYaN62WvG7xdcdKLmkoCfLvoE5p8zNa9B8BrZ7swhfwvfUo3dtJkksobNAeHudrs5q7wdqstDNMHsfAApT` |
+| Withdraw note 2 (0.2 SOL) | `2PStboyuYhhHJqhBnHDevj8isc9betwi5JodhjtwZqcc7fDcckdn55vCQGM5gM49cSJCSRkDVp2YwodfKYPD9dR9` |
+| Double-spend attempt on note 0 | rejected (`Allocate: account ... already in use`) |
+
+**Все три получателя:** `3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP`.
+
+**Проверка indexer'а:**
+- `GET /api/commitments` — `count: 5`. Три новых commitment'а на leaf_indices 2, 3, 4, все с одной `tx_signature` — `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`.
+- `GET /api/root` — `114bf763e1a2d342ccbe83ca70c8221e3dffbff9bf2512a08da631df0840ea85` — совпадает с финальным корнем, вычисленным скриптом.
+- `GET /api/proof?leaf_index=2` — 20 элементов, `is_even[0]=true, is_even[1]=false, is_even[2..]=true`.
+
+**Проблемы, найденные и решённые:**
+
+1. **Compute budget exceeded.** Первая попытка вывода упала с `exceeded CUs meter at BPF instruction`, `ProgramFailedToComplete`. Верификатор Groth16 на новом circuit'е потребляет **381 911 CU** (было ~182k в v0.1.0). Лимит 400 000 исчерпался. Фикс: `SetComputeUnitLimit(1_400_000)`.
+   - **Урок:** `PROOF_LEN`, `NR_PUBLIC_INPUTS` **и** CU budget — все три привязаны к схеме. При каждом изменении схемы проверять бюджет CU на devnet.
+
+2. **Stale prover binary.** Сорцы `witness.rs` содержат `note_index`, но HTTP `POST /prove` возвращает `Failed to deserialize... missing field 'note_index'`. Причина: старый бинарь остался работать на порту 4002 — предыдущий процесс не был убит `pkill`, или был запущен из другой оболочки и осиротел. Диагностика: `pgrep -a zkpool-prover` → PID, `ls -la /proc/<PID>/exe` → путь работающего бинаря. Фикс: kill всех совпадающих PID, `cargo clean` + `cargo build --release`, запуск нового бинаря.
+   - **Урок:** `strings target/release/<bin> | grep <field>` подтверждает наличие поля в **файле**; `ls -la /proc/<PID>/exe` подтверждает **какой файл запущен**. Это независимые проверки.
+
+3. **Stale backend binary.** То же самое для `zkpool-backend` — backend строит `WithdrawRequest` из старой lib (`grep -c total_amount` → 0). Фикс: `cargo build --release` + перезапуск.
+   - **Урок:** при изменении wire-контракта между сервисами — **все** сервисы по цепочке (backend → prover) нужно пересобрать и перезапустить.
+
+4. **HTTP 400 на `/api/withdraw`.** После пересборки backend'а — но до пересборки prover'а — backend отвечал `400 invalid witness`. Диагностика через backend log: `prover 5xx: status=500 Internal Server Error, body={"error":"nargo execute failed ... Expected argument 'note_index', but none was found"}`.
+   - **Урок:** 400 от backend'а может быть следствием 500 от prover'а. Всегда смотреть **оба** лога.
+
+5. **`make exec-c CMD='...'` не принимает составные команды.** Попытка `make exec-c CMD='cmd1; cmd2; cmd3'` падает с `syntax error near unexpected token`. Makefile оборачивает `CMD` в `bash -ic`, где многострочные сложные команды ломаются.
+   - **Урок:** `make exec-c` — только для **одиночных** команд. Для составных использовать `docker compose exec solana bash -ic '...'`.
+
+**Финальная проверка:**
+- Все три ноты выведены на один адрес.
+- Double-spend protection работает (Anchor `init` на `NullifierRecord` PDA).
+- Indexer обрабатывает три `DepositEvent` в одной транзакции без изменений в коде.
+
+**Артефакты чекпоинта `.checkpoints/15.9-e2e/`:**
+- `deposit-split-Cargo.toml` — `4d0e80fc5fd2099950e1bd1db6d69a70d322419096cf2c276ce654bcb328cc9e`
+- `deposit-split-main.rs` — `0eddd5cbe617c628106f8a448998289232570307feab6864e9c7e223320b2468`
+- `withdraw-main.rs` — `2b7ded4f4539f08dc10bcc2a4af9906d2d82bb3f85c4f0e37791ef2e9752254e`
+
+**← next: 15.10 — Final checkpoint + CHANGELOG → v0.2.0.**
