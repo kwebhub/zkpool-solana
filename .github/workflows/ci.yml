@@ -81,12 +81,14 @@ jobs:
           curl -sSfL "https://release.anza.xyz/stable/install" | sh
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
-      - name: Install Anchor
+      - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 avm --locked
-          echo "$HOME/.avm/bin" >> "$GITHUB_PATH"
-          "$HOME/.avm/bin/avm" install 1.1.2
-          "$HOME/.avm/bin/avm" use 1.1.2
+          # Install the Anchor CLI binary directly from the release tag.
+          # `avm` is not needed — we want a fixed version and nothing else.
+          curl -L "https://github.com/coral-xyz/anchor/releases/download/v0.31.1/anchor-0.31.1-x86_64-unknown-linux-gnu" \
+            -o /usr/local/bin/anchor
+          chmod +x /usr/local/bin/anchor
+          anchor --version
 
       - name: Build zk_pool.so
         working-directory: onchain
