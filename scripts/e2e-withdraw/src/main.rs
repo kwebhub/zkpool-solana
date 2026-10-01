@@ -1,5 +1,8 @@
 //! e2e-withdraw — end-to-end withdrawal script.
 //!
+//! Stage 15.9: supports the split-deposit note format (`splits`, `note_index`)
+//! and the 6-public-input withdrawal circuit.
+//!
 //! Pipeline:
 //!   1. Read note JSON from a file (path via argv[1]).
 //!   2. Reduce recipient → BN254 field element.
@@ -43,6 +46,11 @@ const NULLIFIER_RECORD_SEED: &[u8] = b"nullifier_record";
 const WITHDRAW_DISCRIMINATOR: [u8; 8] = [183, 18, 70, 156, 148, 109, 161, 34];
 const SYSTEM_PROGRAM_STR: &str = "11111111111111111111111111111111";
 
+/// Groth16 proof length in bytes (Stage 15.4 — was 324).
+const PROOF_LEN: usize = 388;
+/// Number of splits per deposit.
+const SPLIT_COUNT: usize = 3;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let note_path = std::env::args()
@@ -71,8 +79,45 @@ async fn main() -> Result<()> {
         .context("missing note_secret")?;
     let amount_hex = note["amount"].as_str().context("missing amount")?;
     let commitment = note["commitment"].as_str().context("missing commitment")?;
+    let splits: Vec<String> = note["splits"]
+        .as_array()
+        .context("missing splits")?
+        .iter()
+        .map(|v| v.as_str().unwrap_or("").to_string())
+        .collect();
+    let note_index: u64 = note["note_index"].as_u64().context("missing note_index")?;
+
+    if splits.len() != SPLIT_COUNT {
+        bail!(
+            "splits must have {} elements, got {}",
+            SPLIT_COUNT,
+            splits.len()
+        );
+    }
+    if note_index as usize >= SPLIT_COUNT {
+        bail!("note_index must be < {}, got {}", SPLIT_COUNT, note_index);
+    }
+
+    // total_amount = Σ splits[i]
+    let total_amount_u64: u64 = splits
+        .iter()
+        .map(|s| u64::from_str_radix(s, 16))
+        .collect::<Result<Vec<u64>, _>>()?
+        .iter()
+        .sum();
+    let total_amount_hex = format!("{:064x}", total_amount_u64);
 
     println!("commitment:   {}", commitment);
+    println!(
+        "amount:       {} (0x{})",
+        u64::from_str_radix(amount_hex, 16)?,
+        amount_hex
+    );
+    println!(
+        "total_amount: {} (0x{})",
+        total_amount_u64, total_amount_hex
+    );
+    println!("note_index:   {}", note_index);
 
     // ---- 2. Recipient reduction ----
     let recipient_pubkey = Pubkey::from_str(&recipient_str)?;
@@ -83,7 +128,6 @@ async fn main() -> Result<()> {
     println!("recpt(field): {}", recipient_field_hex);
 
     // ---- 3. Compute recipient_binding via Merkle /hash ----
-    //    recipient_binding = hash_2(note_secret, recipient_reduced)
     let hash_body = json!({
         "left": note_secret,
         "right": recipient_field_hex,
@@ -171,11 +215,14 @@ async fn main() -> Result<()> {
         "recipient": recipient_field_hex,
         "recipient_binding": recipient_binding,
         "amount": amount_hex,
+        "total_amount": total_amount_hex,
         "nullifier": nullifier,
         "secret": secret,
         "note_secret": note_secret,
         "merkle_proof": merkle_proof,
         "is_even": is_even,
+        "splits": splits,
+        "note_index": note_index,
     });
     let withdraw_resp: Value = client
         .post(format!("{}/api/withdraw", BACKEND_URL))
@@ -197,8 +244,12 @@ async fn main() -> Result<()> {
     let proof_bytes = base64::engine::general_purpose::STANDARD.decode(proof_b64)?;
     let _pw_bytes = base64::engine::general_purpose::STANDARD.decode(pw_b64)?;
     println!("proof:        {} bytes", proof_bytes.len());
-    if proof_bytes.len() != 324 {
-        bail!("unexpected proof length: {}", proof_bytes.len());
+    if proof_bytes.len() != PROOF_LEN {
+        bail!(
+            "unexpected proof length: {}, expected {}",
+            proof_bytes.len(),
+            PROOF_LEN
+        );
     }
 
     // ---- 8. Build the withdraw instruction ----
@@ -229,9 +280,10 @@ async fn main() -> Result<()> {
     let root_bytes = hex::decode(&root)?;
     let nullifier_hash_bytes = hex::decode(nullifier_hash_from_note(&note)?)?;
     let recipient_binding_bytes = hex::decode(&recipient_binding)?;
+    let total_amount_bytes = hex::decode(&total_amount_hex)?;
     let amount_u64: u64 = u64::from_str_radix(amount_hex, 16)?;
 
-    // Data layout (Anchor Borsh):
+    // Data layout (Anchor Borsh), Stage 15.5:
     //   [disc(8)]
     //   || proof: Vec<u8> = u32 LE length + bytes
     //   || nullifier_hash: [u8; 32]
@@ -239,7 +291,8 @@ async fn main() -> Result<()> {
     //   || recipient: Pubkey (32)
     //   || amount: u64 (LE)
     //   || recipient_binding: [u8; 32]
-    let mut ix_data = Vec::with_capacity(8 + 4 + 324 + 32 + 32 + 32 + 8 + 32);
+    //   || total_amount: u64 (LE)
+    let mut ix_data = Vec::with_capacity(8 + 4 + PROOF_LEN + 32 + 32 + 32 + 8 + 32 + 8);
     ix_data.extend_from_slice(&WITHDRAW_DISCRIMINATOR);
     ix_data.extend_from_slice(&(proof_bytes.len() as u32).to_le_bytes());
     ix_data.extend_from_slice(&proof_bytes);
@@ -248,6 +301,8 @@ async fn main() -> Result<()> {
     ix_data.extend_from_slice(&recipient_pubkey.to_bytes());
     ix_data.extend_from_slice(&amount_u64.to_le_bytes());
     ix_data.extend_from_slice(&recipient_binding_bytes);
+    ix_data.extend_from_slice(&total_amount_u64.to_le_bytes());
+    let _ = total_amount_bytes; // not needed in the wire format
 
     let system_program = Pubkey::from_str(SYSTEM_PROGRAM_STR)?;
     let ix = Instruction {
@@ -265,12 +320,10 @@ async fn main() -> Result<()> {
     };
 
     // ---- 9. Send ----
-    // Prepend a ComputeBudget setComputeUnitLimit instruction (default 200k
-    // is not enough — the verifier CPI alone consumes ~182k).
     let compute_budget_id = Pubkey::from_str(COMPUTE_BUDGET_PROGRAM_STR)?;
     let mut cb_data = Vec::with_capacity(5);
     cb_data.push(SET_COMPUTE_UNIT_LIMIT_IX);
-    cb_data.extend_from_slice(&400_000u32.to_le_bytes());
+    cb_data.extend_from_slice(&1_400_000u32.to_le_bytes());
     let compute_budget_ix = Instruction {
         program_id: compute_budget_id,
         accounts: vec![],
