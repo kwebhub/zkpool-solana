@@ -11,6 +11,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 Nothing yet.
 
+### Fixed — since v0.2.0
+
+- **fix 16 — Phantom-compatible `signAndSendTransaction`.** See entry under `[0.2.0]`.
+- **fix 16 — legacy single-notes in a Stage 15 circuit.** See entry under `[0.2.0]`.
+
 ---
 
 ## [0.2.0] — 2026-10-01
@@ -84,6 +89,8 @@ Split a single deposit into three unequal commitments in one transaction. Breaks
 - **Noir `Field` comparison.** `assert((note_index as Field) < (SPLIT_COUNT as Field))` failed with `Fields cannot be compared`. Fixed by comparing as `u32` directly.
 - **Prover/backend stale binaries.** `cargo build --release` + restart is required after every wire-format change. Documented in `docs/PROJECT_CONTEXT.md` §8.11.
 - **Backend 400 on `/api/withdraw`** masked a prover 500. Diagnosed by tailing **both** logs.
+- **fix 16 — Phantom-compatible `signAndSendTransaction`.** The first UI interaction with Phantom revealed that Phantom's `signAndSendTransaction` expects an object `{ serialize, message: { version: 0 } }`, not a base64 string. Applied in `web/src/composables/useDeposit.ts` and `web/src/composables/useWithdraw.ts`. Symptom: `TypeError: Cannot use 'in' operator to search for 'version' in AQAAAA…` with `chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/solana.js` in the stack.
+- **fix 16 — legacy single-notes in a Stage 15 circuit.** The circuit hard-codes `splits: [Field; 3]`; legacy single-notes carry `splits: [amount]` (length 1). Client pads to `[amount, 0, 0]`, `note_index = 0`, `total_amount = amount`. Backend and prover accept `splits.len()` ∈ `{1, SPLIT_COUNT}`. No circuit / verifier / on-chain changes. Applied in `web/src/withdraw/buildWitness.ts`, `web/src/withdraw/parseNote.ts`, `services/backend/src/api_types.rs`, `services/prover/src/witness.rs`.
 
 ### Known limitations
 
