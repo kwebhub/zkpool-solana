@@ -573,6 +573,32 @@ POST /prove
 | 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | `8c2a1f6` |
 | 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | ← next |
 
+### ✅ Fix 16. Phantom compatibility + legacy single-note withdrawal (2026-10-01)
+
+| # | Sub-stage | Commit |
+|---|---|---|
+| 16.1 | Phantom-compatible `signAndSendTransaction` (frontend, `useDeposit` + `useWithdraw`) | `1aa9ffe` |
+| 16.2 | Padding length-1 `splits` to `[amount, 0, 0]` (frontend, backend, prover) | `1aa9ffe` |
+| 16.3 | Note `docs/notes/16-phantom-compat.md` + `PROJECT_CONTEXT.md` §8.12 entries | `daec7d1` |
+| 16.4 | UI verification: split deposit 0.5+0.3+0.2 → 3 withdrawals → double-spend rejected | `ae50e9e` |
+
+**Reason:** unplanned — the first UI interaction with Phantom revealed a wire-format incompatibility between `@solana/kit`'s output and Phantom's `signAndSendTransaction`. Then the UI withdraw path hit the Stage 15 architectural break for legacy single-notes.
+
+**Fix 1 — Phantom wire format:**
+- `provider.signAndSendTransaction` in Phantom expects an object `{ serialize, message: { version: 0 } }`, not a base64 string.
+- Applied in `web/src/composables/useDeposit.ts` and `web/src/composables/useWithdraw.ts`.
+
+**Fix 2 — legacy single-notes in a Stage 15 circuit:**
+- Circuit hard-codes `splits: [Field; 3]`. Legacy single-notes carry `splits: [amount]` (length 1).
+- Client pads to `[amount, 0, 0]`, `note_index = 0`, `total_amount = amount`. Both C4 and C5 hold.
+- Backend and prover accept `splits.len()` ∈ `{1, SPLIT_COUNT}`.
+- **No circuit / verifier / on-chain changes.** Program IDs unchanged.
+
+**Verified in the UI (Phantom):**
+- Single deposit → withdraw: 0.01 SOL, recipient balance `1.001 → 1.011`.
+- Split deposit 0.5+0.3+0.2 → 3 withdrawals: recipient balance `1.011 → 2.011`.
+- Double-spend on a spent note: rejected by Phantom simulation ("This transaction reverted during simulation").
+
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
 - `docs/notes/00-checkpoints.md`, `00-glossary.md`, `00-zk-primer.md`.
