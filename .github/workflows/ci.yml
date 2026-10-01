@@ -133,24 +133,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "24"
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: "12.5.1"
+
       - name: Install dependencies
         working-directory: services/merkle
         run: pnpm install --frozen-lockfile
-      - name: Generate test circuits
-        # Tests need hash2.json / hashes.json / withdrawal.json in
-        # services/merkle/circuits/. In CI these are built via nargo.
+
+      # The Merkle service tests require the compiled ACIRs
+      # (hash2.json, hashes.json, withdrawal.json) under
+      # services/merkle/circuits/. These are gitignored build artifacts,
+      # so CI must build them from the Noir sources before running tests.
+      #
+      # We install nargo via noirup (the same installer used in the local
+      # Docker environment) and compile the three circuits.
+      - name: Install nargo
         run: |
-          echo "TODO: build circuits via nargo — see Stage 12.5"
-          # Placeholder: fail this step until circuit build is wired.
-          exit 0
+          curl -L https://raw.githubusercontent.com/noir-lang/noirup/refs/heads/main/install | bash
+          echo "$HOME/.nargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.nargo/bin/noirup" --version v1.0.0-rc.2
+
+      - name: Compile circuits
+        run: |
+          set -e
+          for c in poseidon hash2 hashes withdrawal; do
+            (cd "circuits/$c" && nargo compile)
+          done
+
+      - name: Sync circuits into services/merkle/circuits
+        run: |
+          set -e
+          mkdir -p services/merkle/circuits
+          cp circuits/hash2/target/hash2.json           services/merkle/circuits/
+          cp circuits/hashes/target/hashes.json         services/merkle/circuits/
+          cp circuits/withdrawal/target/withdrawal.json services/merkle/circuits/
+
       - name: Run tests
         working-directory: services/merkle
         run: pnpm test
