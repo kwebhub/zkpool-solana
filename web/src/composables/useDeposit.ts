@@ -1,6 +1,10 @@
-//! Deposit composable: generate note → preview root → build + send tx.
+//! Deposit composable: generate note(s) → preview root → build + send tx.
 //!
-//! Uses the wallet's `signAndSendTransaction` for a single-call flow:
+//! Stage 15: two flows.
+//!   - `deposit(amount)`      — legacy single-commitment `deposit` (v0.1.0).
+//!   - `depositSplit(amounts)` — new 3-way `deposit_split`.
+//!
+//! Both use the wallet's `signAndSendTransaction`:
 //! 1. Build kit `Instruction` via Codama.
 //! 2. Build kit `TransactionMessage`.
 //! 3. Convert to wire format (base64).
@@ -17,18 +21,23 @@ import {
   compileTransaction,
   getBase64EncodedWireTransaction,
 } from "@solana/kit";
-import { getDepositInstructionAsync } from "../client";
+import { getDepositInstructionAsync, getDepositSplitInstructionAsync } from "../client";
 import { getCommitments, postRootPreview } from "../api/client";
-import { generateNote, type DepositNote } from "../deposit/generateNote";
+import { generateNote, generateSplitNotes, type DepositNote } from "../deposit/generateNote";
 import { useWalletStore } from "../stores/wallet";
 import { makeNoopSigner } from "../wallet/kitSigner";
+import { SPLIT_COUNT } from "../constants";
 
 const RPC_URL = "https://api.devnet.solana.com";
 
 export interface DepositResult {
   signature: string;
-  note: DepositNote;
+  /** Single note for `deposit`, array for `depositSplit`. */
+  notes: DepositNote[];
+  /** Final new root after all insertions. */
   newRoot: string;
+  /** Only present for split deposits. */
+  intermediateRoots?: string[];
 }
 
 export function useDeposit() {
@@ -37,20 +46,18 @@ export function useDeposit() {
   const error = ref<string | null>(null);
   const result = shallowRef<DepositResult | null>(null);
 
+  /**
+   * Legacy: single-commitment deposit.
+   *
+   * @param amountLamports deposit amount in lamports
+   */
   async function deposit(amountLamports: bigint): Promise<DepositResult | null> {
     loading.value = true;
     error.value = null;
     try {
-      const walletAddr = wallet.addr;
-      const provider = wallet.provider;
-      if (!walletAddr || !provider) {
-        throw new Error("wallet not connected");
-      }
-      if (!provider.signAndSendTransaction) {
-        throw new Error("wallet does not support signAndSendTransaction");
-      }
+      const { walletAddr, provider } = requireWallet(wallet);
 
-      // 1. Generate note + commitment (browser-side noir_js).
+      // 1. Generate note + commitment.
       const note = await generateNote(amountLamports);
 
       // 2. Fetch current commitments + preview new root.
@@ -60,9 +67,6 @@ export function useDeposit() {
       const { root: newRoot } = await postRootPreview(commitmentHexes);
 
       // 3. Build the deposit instruction.
-      //    Codama requires a TransactionSigner for `depositor`. We supply
-      //    a noop signer — real signing happens via the wallet provider
-      //    on the serialized wire transaction (step 7).
       const ix = await getDepositInstructionAsync({
         depositor: makeNoopSigner(walletAddr),
         commitment: hexToBytes(note.commitment),
@@ -70,30 +74,9 @@ export function useDeposit() {
         amount: amountLamports,
       });
 
-      // 4. Fetch a recent blockhash.
-      const rpc = createSolanaRpc(RPC_URL);
-      const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
-
-      // 5. Build the transaction message.
-      const message = appendTransactionMessageInstruction(
-        ix,
-        setTransactionMessageLifetimeUsingBlockhash(
-          latestBlockhash,
-          setTransactionMessageFeePayer(walletAddr, createTransactionMessage({ version: 0 })),
-        ),
-      );
-
-      // 6. Compile to wire format (base64).
-      const compiled = compileTransaction(message);
-      const wireBase64 = getBase64EncodedWireTransaction(compiled);
-
-      // 7. Sign + send via wallet.
-      const { signature } = await provider.signAndSendTransaction(wireBase64);
-
-      // 8. Poll for confirmation (best-effort; does not block the return).
-      void confirmSignature(rpc, signature);
-
-      const out: DepositResult = { signature, note, newRoot };
+      // 4-7. Send.
+      const signature = await sendInstruction(walletAddr, provider, ix);
+      const out: DepositResult = { signature, notes: [note], newRoot };
       result.value = out;
       return out;
     } catch (e) {
@@ -104,7 +87,116 @@ export function useDeposit() {
     }
   }
 
-  return { loading, error, result, deposit };
+  /**
+   * Split deposit: `SPLIT_COUNT` commitments in one transaction.
+   *
+   * @param amountsLamports exactly `SPLIT_COUNT` per-note amounts
+   */
+  async function depositSplit(amountsLamports: bigint[]): Promise<DepositResult | null> {
+    loading.value = true;
+    error.value = null;
+    try {
+      if (amountsLamports.length !== SPLIT_COUNT) {
+        throw new Error(`expected ${SPLIT_COUNT} amounts, got ${amountsLamports.length}`);
+      }
+      const { walletAddr, provider } = requireWallet(wallet);
+
+      // 1. Generate SPLIT_COUNT notes (browser-side noir_js).
+      const notes = await generateSplitNotes(amountsLamports);
+
+      // 2. Fetch current commitments.
+      const { commitments } = await getCommitments();
+      const existingHexes = commitments.map((c) => c.commitment);
+
+      // 3. Preview each intermediate root by appending commitments one at a
+      //    time. The last preview gives the final root.
+      const newRoots: string[] = [];
+      const cumulative = [...existingHexes];
+      for (const n of notes) {
+        cumulative.push(n.commitment);
+        const { root } = await postRootPreview(cumulative);
+        newRoots.push(root);
+      }
+      const finalRoot = newRoots[newRoots.length - 1];
+
+      // 4. Compute total_amount (BigInt).
+      const total = amountsLamports.reduce((a, b) => a + b, 0n);
+
+      // 5. Build the deposit_split instruction.
+      const ix = await getDepositSplitInstructionAsync({
+        depositor: makeNoopSigner(walletAddr),
+        commitments: notes.map((n) => hexToBytes(n.commitment)),
+        newRoots: newRoots.map((r) => hexToBytes(r)),
+        amounts: amountsLamports,
+        totalAmount: total,
+      });
+
+      // 6-7. Send.
+      const signature = await sendInstruction(walletAddr, provider, ix);
+
+      const out: DepositResult = {
+        signature,
+        notes,
+        newRoot: finalRoot,
+        intermediateRoots: newRoots,
+      };
+      result.value = out;
+      return out;
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : String(e);
+      return null;
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  return { loading, error, result, deposit, depositSplit };
+}
+
+interface WalletContext {
+  walletAddr: NonNullable<ReturnType<typeof useWalletStore>["addr"]>;
+  provider: NonNullable<ReturnType<typeof useWalletStore>["provider"]>;
+}
+
+function requireWallet(wallet: ReturnType<typeof useWalletStore>): {
+  walletAddr: WalletContext["walletAddr"];
+  provider: WalletContext["provider"] & {
+    signAndSendTransaction: NonNullable<WalletContext["provider"]["signAndSendTransaction"]>;
+  };
+} {
+  const walletAddr = wallet.addr;
+  const provider = wallet.provider;
+  if (!walletAddr || !provider) {
+    throw new Error("wallet not connected");
+  }
+  if (!provider.signAndSendTransaction) {
+    throw new Error("wallet does not support signAndSendTransaction");
+  }
+  return { walletAddr, provider: provider as never };
+}
+
+async function sendInstruction(
+  walletAddr: WalletContext["walletAddr"],
+  provider: WalletContext["provider"],
+  ix: Parameters<typeof appendTransactionMessageInstruction>[0],
+): Promise<string> {
+  const rpc = createSolanaRpc(RPC_URL);
+  const { value: latestBlockhash } = await rpc.getLatestBlockhash().send();
+
+  const message = appendTransactionMessageInstruction(
+    ix,
+    setTransactionMessageLifetimeUsingBlockhash(
+      latestBlockhash,
+      setTransactionMessageFeePayer(walletAddr, createTransactionMessage({ version: 0 })),
+    ),
+  );
+
+  const compiled = compileTransaction(message);
+  const wireBase64 = getBase64EncodedWireTransaction(compiled);
+
+  const { signature } = await provider.signAndSendTransaction!(wireBase64);
+  void confirmSignature(rpc, signature);
+  return signature;
 }
 
 async function confirmSignature(

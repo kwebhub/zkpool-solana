@@ -2,16 +2,50 @@
 .deposit-form
   h2 Deposit SOL
 
-  .field
-    label(for="amount") Amount (SOL)
-    input#amount(
-      v-model="amountSol"
-      type="text"
-      placeholder="0.01"
-      :disabled="deposit.loading.value"
+  .mode
+    label
+      input(
+        type="radio"
+        value="single"
+        v-model="mode"
+        :disabled="deposit.loading.value"
+      )
+      |  Single note
+    label
+      input(
+        type="radio"
+        value="split"
+        v-model="mode"
+        :disabled="deposit.loading.value"
+      )
+      |  Split into {{ splitCount }} notes
+
+  template(v-if="mode === 'single'")
+    .field
+      label(for="amount") Amount (SOL)
+      input#amount(
+        v-model="amountSol"
+        type="text"
+        placeholder="0.01"
+        :disabled="deposit.loading.value"
+      )
+      p.hint Minimum: {{ minSol }} SOL
+
+  template(v-else)
+    .field(
+      v-for="(amt, i) in splitAmountsSol"
+      :key="i"
     )
+      label(:for="'split-' + i") Split {{ i + 1 }} (SOL)
+      input(
+        :id="'split-' + i"
+        v-model="splitAmountsSol[i]"
+        type="text"
+        :placeholder="splitPlaceholders[i]"
+        :disabled="deposit.loading.value"
+      )
     p.hint
-      | Minimum: {{ minSol }} SOL
+      | Total: {{ totalSol }} SOL. Each split must be ≥ {{ minSol }} SOL.
 
   button.primary(
     :disabled="!canDeposit"
@@ -31,27 +65,33 @@
           target="_blank"
           rel="noopener"
         ) {{ shortSig }}
-      dt Commitment
-      dd.mono {{ deposit.result.value.note.commitment }}
-      dt New root
+      dt Final root
       dd.mono {{ deposit.result.value.newRoot }}
 
     .note
-      h4 ⚠️ Save this note
+      h4 ⚠️ Save {{ notePlural }}
       p
         | The following secrets are required to withdraw later.
-        strong  Loss of this note means loss of funds.
-      dl
-        dt nullifier
-        dd.mono {{ deposit.result.value.note.nullifier }}
-        dt secret
-        dd.mono {{ deposit.result.value.note.secret }}
-        dt note_secret
-        dd.mono {{ deposit.result.value.note.noteSecret }}
-        dt amount (hex)
-        dd.mono {{ deposit.result.value.note.amount }}
+        strong  Loss of any note means loss of those funds.
 
-      button.secondary(@click="copyNote") Copy note as JSON
+      .note-entry(
+        v-for="(note, i) in deposit.result.value.notes"
+        :key="i"
+      )
+        h5 Note {{ i + 1 }} of {{ deposit.result.value.notes.length }}
+        dl
+          dt nullifier
+          dd.mono {{ note.nullifier }}
+          dt secret
+          dd.mono {{ note.secret }}
+          dt note_secret
+          dd.mono {{ note.noteSecret }}
+          dt amount (hex)
+          dd.mono {{ note.amount }}
+          dt note_index
+          dd.mono {{ note.noteIndex }}
+
+      button.secondary(@click="copyNotes") Copy all notes as JSON
       p.copied(v-if="copied") Copied!
 </template>
 
@@ -59,23 +99,52 @@
 import { computed, ref } from "vue";
 import { useDeposit } from "../composables/useDeposit";
 import { useWalletStore } from "../stores/wallet";
-import { LAMPORTS_PER_SOL, MIN_DEPOSIT_AMOUNT } from "../constants";
+import { LAMPORTS_PER_SOL, MIN_DEPOSIT_AMOUNT, SPLIT_COUNT } from "../constants";
 
 const wallet = useWalletStore();
 const deposit = useDeposit();
 
+type Mode = "single" | "split";
+const mode = ref<Mode>("single");
+
 const amountSol = ref("0.01");
+const splitAmountsSol = ref<string[]>(["0.5", "0.3", "0.2"]);
 const copied = ref(false);
 
+const splitCount = SPLIT_COUNT;
+const splitPlaceholders = ["0.5", "0.3", "0.2"];
+
 const minSol = computed(() => (Number(MIN_DEPOSIT_AMOUNT) / Number(LAMPORTS_PER_SOL)).toString());
+
+const totalSol = computed(() => {
+  const total = splitAmountsSol.value.reduce((acc, s) => {
+    const n = Number(s);
+    return acc + (Number.isFinite(n) && n > 0 ? n : 0);
+  }, 0);
+  return total.toString();
+});
+
+const notePlural = computed(() => (mode.value === "split" ? `${splitCount} notes` : "this note"));
 
 const canDeposit = computed(() => {
   if (!wallet.connected) return false;
   if (deposit.loading.value) return false;
-  const n = Number(amountSol.value);
-  if (!Number.isFinite(n) || n <= 0) return false;
-  const lamports = BigInt(Math.floor(n * Number(LAMPORTS_PER_SOL)));
-  return lamports >= MIN_DEPOSIT_AMOUNT;
+
+  if (mode.value === "single") {
+    const n = Number(amountSol.value);
+    if (!Number.isFinite(n) || n <= 0) return false;
+    const lamports = BigInt(Math.floor(n * Number(LAMPORTS_PER_SOL)));
+    return lamports >= MIN_DEPOSIT_AMOUNT;
+  }
+
+  // Split: each amount must be >= MIN_DEPOSIT_AMOUNT.
+  for (const s of splitAmountsSol.value) {
+    const n = Number(s);
+    if (!Number.isFinite(n) || n <= 0) return false;
+    const lamports = BigInt(Math.floor(n * Number(LAMPORTS_PER_SOL)));
+    if (lamports < MIN_DEPOSIT_AMOUNT) return false;
+  }
+  return true;
 });
 
 const explorerUrl = computed(() => {
@@ -92,29 +161,40 @@ const shortSig = computed(() => {
 
 async function onDeposit() {
   copied.value = false;
-  const lamports = BigInt(Math.floor(Number(amountSol.value) * Number(LAMPORTS_PER_SOL)));
-  await deposit.deposit(lamports);
+
+  if (mode.value === "single") {
+    const lamports = BigInt(Math.floor(Number(amountSol.value) * Number(LAMPORTS_PER_SOL)));
+    await deposit.deposit(lamports);
+    return;
+  }
+
+  const amounts = splitAmountsSol.value.map((s) =>
+    BigInt(Math.floor(Number(s) * Number(LAMPORTS_PER_SOL))),
+  );
+  await deposit.depositSplit(amounts);
 }
 
-async function copyNote() {
+async function copyNotes() {
   const r = deposit.result.value;
   if (!r) return;
-  const json = JSON.stringify(
-    {
-      nullifier: r.note.nullifier,
-      secret: r.note.secret,
-      note_secret: r.note.noteSecret,
-      amount: r.note.amount,
-      commitment: r.note.commitment,
-      nullifier_hash: r.note.nullifierHash,
-      tx_signature: r.signature,
-      pool_pda: "B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf",
-    },
-    null,
-    2,
-  );
+
+  const notesJson = r.notes.map((n) => ({
+    nullifier: n.nullifier,
+    secret: n.secret,
+    note_secret: n.noteSecret,
+    amount: n.amount,
+    commitment: n.commitment,
+    nullifier_hash: n.nullifierHash,
+    splits: n.splits,
+    note_index: n.noteIndex,
+    tx_signature: r.signature,
+    pool_pda: "B89Yhoecj9AKJEDXT49DfjbTJoqjovmcKgYmqdzQwBYf",
+  }));
+
+  const payload = notesJson.length === 1 ? notesJson[0] : notesJson;
+
   try {
-    await navigator.clipboard.writeText(json);
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
     copied.value = true;
     setTimeout(() => (copied.value = false), 2000);
   } catch {
@@ -129,6 +209,20 @@ async function copyNote() {
 
   h2 {
     margin-top: 0;
+  }
+
+  .mode {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+
+    label {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      cursor: pointer;
+      font-weight: 500;
+    }
   }
 
   .field {
@@ -246,6 +340,19 @@ async function copyNote() {
 
       strong {
         color: #c00;
+      }
+
+      .note-entry {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        background: #fffdf5;
+        border: 1px solid #efe0b0;
+        border-radius: 4px;
+
+        h5 {
+          margin: 0 0 0.5rem 0;
+          color: #806000;
+        }
       }
     }
 
