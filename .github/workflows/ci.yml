@@ -53,16 +53,62 @@ jobs:
 
   # ----------------------------------------------------------
   # LiteSVM integration tests
+  #
+  # Requires two .so files:
+  #   - zk_pool.so          — built here via `anchor build`.
+  #   - withdrawal.so       — the Sunspot verifier. Building the real
+  #                            verifier needs nargo + sunspot + the
+  #                            gnark crate; too heavy for CI. The
+  #                            tests only exercise validation + CPI
+  #                            reach, never a real proof, so a minimal
+  #                            mock verifier .so is sufficient.
+  #                            Real proof verification is E2E on devnet
+  #                            (Stage 15.9), not CI.
   # ----------------------------------------------------------
   litesvm:
     name: LiteSVM tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
+
+      - name: Install Rust (SBF toolchain)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.89.0"
+
+      - name: Install Solana CLI
+        run: |
+          curl -sSfL "https://release.anza.xyz/stable/install" | sh
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      - name: Install Anchor
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.31.1 avm --locked
+          echo "$HOME/.avm/bin" >> "$GITHUB_PATH"
+          "$HOME/.avm/bin/avm" install 1.1.2
+          "$HOME/.avm/bin/avm" use 1.1.2
+
+      - name: Build zk_pool.so
+        working-directory: onchain
+        run: anchor build --no-idl
+
+      - name: Build mock verifier .so
+        working-directory: onchain
+        run: |
+          mkdir -p ../circuits/withdrawal/target
+          cargo build-sbf \
+            --manifest-path tests/mock-verifier/Cargo.toml \
+            --sbf-out-dir ../circuits/withdrawal/target
+          # The mock binary is emitted as `mock_verifier.so`; the tests
+          # look for `withdrawal.so`. Rename.
+          mv ../circuits/withdrawal/target/mock_verifier.so \
+             ../circuits/withdrawal/target/withdrawal.so
+
+      - name: Install Rust (LiteSVM toolchain)
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.98.1"
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -71,6 +117,7 @@ jobs:
             ~/.cargo/git
             tests/target
           key: ${{ runner.os }}-tests-${{ hashFiles('tests/Cargo.lock') }}
+
       - name: cargo test
         working-directory: tests
         run: cargo test
@@ -127,6 +174,10 @@ jobs:
 
   # ----------------------------------------------------------
   # Merkle service — tests
+  #
+  # Requires the compiled ACIRs (hash2.json, hashes.json, withdrawal.json)
+  # under services/merkle/circuits/. These are gitignored build artifacts,
+  # so we install nargo and compile the circuits here.
   # ----------------------------------------------------------
   merkle:
     name: Merkle service
@@ -148,13 +199,6 @@ jobs:
         working-directory: services/merkle
         run: pnpm install --frozen-lockfile
 
-      # The Merkle service tests require the compiled ACIRs
-      # (hash2.json, hashes.json, withdrawal.json) under
-      # services/merkle/circuits/. These are gitignored build artifacts,
-      # so CI must build them from the Noir sources before running tests.
-      #
-      # We install nargo via noirup (the same installer used in the local
-      # Docker environment) and compile the three circuits.
       - name: Install nargo
         run: |
           curl -L https://raw.githubusercontent.com/noir-lang/noirup/refs/heads/main/install | bash
