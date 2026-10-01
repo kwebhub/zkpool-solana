@@ -175,7 +175,42 @@ solana balance 3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP --url devnet
 
 До withdraw: `1.001 SOL`. После withdraw: `1.011 SOL`. Разница `0.01 SOL` — ровно сумма вывода.
 
----
+### 5.4. Split-депозит через UI (0.5 + 0.3 + 0.2)
+
+- Split deposit tx: `22eEBTUsW2gjZ3pU4JVqM9hJyn9YETLtRRYgVZjoKHirzNYh2LHTyjnSFcT4qBGUN9XxyMDTiJ6fSuUozENt3qkc`.
+- Final root: `1eea0b726d54ece4738f1e89ce0f6c691ca8d6f02a00842a5577a303362b3e20`.
+- Три ноты:
+  - Note 1: `note_index = 0`, `amount = 0.5 SOL`, `nullifier_hash = 07a87eed4472…`.
+  - Note 2: `note_index = 1`, `amount = 0.3 SOL`, `nullifier_hash = 0da7261d0deb…`.
+  - Note 3: `note_index = 2`, `amount = 0.2 SOL`, `nullifier_hash = 1f277be2871c…`.
+
+### 5.5. Три split-вывода через UI
+
+Все три ноты выведены на `3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP`.
+
+- Note 1 (0.5 SOL): tx `3fhhjWvzN…oVhB3vf7`.
+- Note 2 (0.3 SOL): tx `2PEAPHTD…xryjyGdX`.
+- Note 3 (0.2 SOL): tx `5cwkk8kF…aj4bbzyE`.
+
+Root на момент всех трёх выводов: `1eea0b726d54ece4738f1e89ce0f6c691ca8d6f02a00842a5577a303362b3e20`.
+
+### 5.6. Баланс после split-цикла
+
+```
+$ solana balance 3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP --url devnet
+2.011 SOL
+```
+
+До split-цикла: `1.011 SOL`. После трёх выводов: `2.011 SOL`. Разница `1.0 SOL` — ровно сумма split-депозита (0.5 + 0.3 + 0.2).
+
+### 5.7. Double-spend через UI
+
+Повторный withdraw Note 1 (уже выведенной) был отклонён **до подписи**:
+
+- Phantom: `This transaction reverted during simulation. Funds may be lost if submitted.`
+- UI: `Unexpected error`.
+
+Это ожидаемое поведение — on-chain `init` на `NullifierRecord` PDA не даёт создать аккаунт повторно.
 
 ## 6. Что не изменено
 
@@ -233,13 +268,18 @@ solana balance 3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP --url devnet
 **Checkpoint:** `.checkpoints/fix-phantom-wallet/`.
 
 ---
-
 ## 9. Что дальше
 
-- Split-депозит (3 ноты) → 3 вывода **через UI**. Проверка, что padding
-  не мешает нормальному split-пути.
-- Проверить Solflare и Backpack: тот же ли формат `signAndSendTransaction`?
-  Если да — упростить код. Если нет — оставить как есть с комментарием.
+Split-депозит (3 ноты) → 3 вывода через UI **проверены** (см. §5.4–5.7).
+Padding length-1 вектора до `[amount, 0, 0]` **не мешает** нормальному split-пути.
+
+Осталось:
+
+- **Solflare и Backpack** — проверить, тот же ли формат `signAndSendTransaction`
+  они ожидают. Если да — упростить код и убрать комментарий про Phantom-specific.
+  Если нет — оставить как есть и добавить `wallet.name` в ветвление.
+- **Dynamic `import()` для `@noir-lang/noir_js`.** Сейчас WASM 3.84 MB
+  попадает в initial bundle (см. §8.12 PROJECT_CONTEXT). Отложено с Stage 15.8.
 
 См. также:
 - `docs/notes/15-split-deposit.md` — Stage 15, дизайн split-депозита.
