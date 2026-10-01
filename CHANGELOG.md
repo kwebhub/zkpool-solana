@@ -13,6 +13,112 @@ Nothing yet.
 
 ---
 
+## [0.2.0] — 2026-10-01
+
+Second tagged release. **Split deposit — breaking change.** Notes created by v0.1.0 are **not** compatible with the v0.2.0 circuit and cannot be withdrawn. Demo / educational build. See [DEMO-NOTICE.md](docs/DEMO-NOTICE.md) and [threat-model.md](docs/threat-model.md).
+
+### Added — Split deposit (Stage 15)
+
+Split a single deposit into three unequal commitments in one transaction. Breaks the on-chain amount correlation between deposit and withdrawal. See [`docs/notes/15-split-deposit.md`](docs/notes/15-split-deposit.md).
+
+- **Circuit** (`circuits/withdrawal/`):
+  - New public input `total_amount` (aggregate deposit amount). Public inputs: 5 → 6.
+  - New private inputs `splits[3]` (split vector) and `note_index` (u32). Private inputs: 5 → 7.
+  - New constraints:
+    - **C4** — `splits[0] + splits[1] + splits[2] == total_amount`.
+    - **C5** — `splits[note_index] == amount`.
+  - `SPLIT_COUNT = 3` (const-generic, same pattern as `TREE_DEPTH`).
+  - Public witness: 172 → 204 bytes. Groth16 proof: 324 → 388 bytes (Sunspot 1.0.0 toolchain change).
+  - New ACIR hash: `a49bc877135ae75713d2ab7cbe39a69151a606c328f48fe8163c0629787d3262`.
+- **Spec** (`circuits/withdrawal/spec.json`):
+  - `circuit.split_count = 3`, `circuit.nr_public_inputs = 6`.
+  - `witness_layout.total_bytes = 204`.
+  - `validate-spec` extended to **17 rules** (`rule_split_count`, `rule_private_inputs_lengths` added).
+- **Anchor `zk_pool` program:**
+  - New instruction **`deposit_split`** — creates 3 commitments, emits 3 `DepositEvent`s, one final root stored, `total_deposits += 1`, `next_leaf_index += 3`. Args struct: `DepositSplitArgs { commitments, new_roots, amounts, total_amount }`.
+  - `withdraw` gains a `total_amount: u64` argument.
+  - Constants: `NR_PUBLIC_INPUTS = 6`, `PUBLIC_INPUTS_BYTES = 204`, `PROOF_LEN = 388`, `SPLIT_COUNT = 3`.
+  - New errors: `SplitSumMismatch`, `NotEnoughRoom`.
+- **Verifier** upgraded in place (same Program ID `5t51iu6a…`). New `.so` 197 056 B.
+- **Backend:**
+  - `WithdrawRequest` gains `total_amount`, `splits[3]`, `note_index`.
+  - Validation: `splits.len() == 3`, `note_index < 3`.
+  - `WithdrawResponse` doc updated (388 B proof, 204 B public witness).
+  - Indexer already handles N `DepositEvent`s per transaction — no code change required.
+- **Prover:**
+  - `WitnessInputs` gains `total_amount`, `splits`, `note_index`.
+  - `to_toml()` writes all 13 fields in the order produced by `test_witness.nr`.
+- **Frontend:**
+  - `SPLIT_COUNT = 3` in `constants.ts`.
+  - `WithdrawRequest` and `WithdrawResult` updated.
+  - `parseNote.ts` reads `splits` and `note_index`.
+  - `buildWitness.ts` computes `total_amount = Σ splits[i]`.
+  - `useWithdraw.ts`: `PROOF_LEN = 388`, `total_amount` passed to the instruction.
+  - `generateNote.ts`: new `generateSplitNotes(amounts)` for 3 notes.
+  - `useDeposit.ts`: new `depositSplit(amounts)` with 3 cumulative root previews.
+  - `DepositForm.vue`: split mode with 3 amount inputs; displays 3 notes for saving.
+  - Codama client regenerated (new instruction `depositSplit`, new arg `totalAmount` on `withdraw`).
+- **Scripts:**
+  - New `scripts/e2e-deposit-split/` — Rust CLI for a full split-deposit cycle.
+  - `scripts/e2e-withdraw/` updated for the new note format and 388-byte proof.
+- **Tests:** LiteSVM suite extended with 5 split tests (`tests/src/test_deposit_split.rs`). Total `tests/`: **20**.
+- **Devnet E2E verified:** 1 SOL → 3 notes (0.5 + 0.3 + 0.2) → 3 withdrawals to the same recipient → double-spend attempt rejected.
+
+### Changed
+
+- **Groth16 proof length** — 324 → 388 bytes. Driven by the Sunspot 1.0.0 rebuild against the new toolchain (`solana-program 3.0.0`, `solana-bn254 3.1.2`). Verified by `sunspot verify`.
+- **Verifier `.so` size** — 87 312 → 197 056 bytes. The increase is greater than the constraint delta (+58); attributed to the new toolchain's bundle composition.
+- **Verifier CU cost** — ~182 000 → ~382 000 CU. `ComputeBudgetInstruction::SetComputeUnitLimit(1_400_000)` now required in `scripts/e2e-withdraw/` and `web/src/composables/useWithdraw.ts`. 400 000 was insufficient.
+- **Devnet verifier upgrade** was performed **in place** (Program ID `5t51iu6a…` unchanged) via `solana program deploy --program-id <existing>`. Recorded in Stage 15.4. See §4.1 of `docs/notes/15-split-deposit.md` for the `sunspot deploy` keypair-overwrite pitfall.
+- **`WithdrawEvent`** unchanged — the indexer already parses one event per log line.
+
+### Security
+
+- **`sunspot deploy` overwrites the program keypair.**
+  - Symptom: running `sunspot deploy` unconditionally replaces `withdrawal-keypair.json`, changing the Program ID.
+  - Cause: `sunspot deploy` always `os.Rename`s the freshly built `verifier_bin-keypair.json` on top of the target.
+  - Fix: back up the original keypair **before** deploy, restore it **after**, verify with `solana-keygen pubkey`. Documented in `docs/notes/15-split-deposit.md` §15.4.
+
+### Fixed
+
+- **Noir `Field` comparison.** `assert((note_index as Field) < (SPLIT_COUNT as Field))` failed with `Fields cannot be compared`. Fixed by comparing as `u32` directly.
+- **Prover/backend stale binaries.** `cargo build --release` + restart is required after every wire-format change. Documented in `docs/PROJECT_CONTEXT.md` §8.11.
+- **Backend 400 on `/api/withdraw`** masked a prover 500. Diagnosed by tailing **both** logs.
+
+### Known limitations
+
+In addition to the v0.1.0 limitations (see below), Stage 15 introduces:
+
+- **Path 2 split deposit** adds two new public/private inputs but does **not** change the trusted setup assumptions. No MPC ceremony.
+- **Intermediate roots** are not stored in `PoolState.roots` — only the final root is. A user can only withdraw a split note against the final root. By design (documented in `docs/notes/15-split-deposit.md` §15.5).
+- **`splits` leak = split privacy lost.** If the witness leaks (A6), the on-chain privacy gain is nullified.
+
+Documented in [`docs/threat-model.md`](docs/threat-model.md):
+
+- **A1** — `deposit` does not verify `new_root` on-chain.
+- **A5** — Phishing frontend is out of scope.
+- **A6** — The prover sees the full witness; for production, proving must run client-side.
+- **A9** — Commitment forgery is self-harm only.
+- **A10** — `ROOT_HISTORY_SIZE = 10` allows root eviction by spam-deposits.
+- **Trusted setup** for Groth16 — no MPC ceremony.
+- **Single-keypair** upgrade authority.
+
+### Breaking change — v0.1.0 notes are not withdrawable
+
+The circuit changed shape (6 public inputs, new C4/C5 constraints). Any note generated against the v0.1.0 circuit will be rejected by the v0.2.0 verifier. This is intentional — see `docs/notes/15-split-deposit.md` §4.3.
+
+The two real deposits made on devnet during Stage 10 remain in the Merkle tree with their old roots (leaf 0, leaf 1). They cannot be withdrawn under v0.2.0.
+
+### Statistics
+
+- **~144 tests** across all layers (circuits 41, on-chain 39, LiteSVM 20, backend 5, merkle 23, prover 16).
+- **4 workflows** in CI/CD.
+- **5 containers** in `docker compose up`.
+- **4 deployed programs/PDAs** on devnet (verifier, zk_pool, pool, vault) — Program IDs unchanged since v0.1.0.
+- **1 full split-deposit E2E** cycle verified on devnet (deposit + 3 withdrawals + double-spend rejection).
+
+---
+
 ## [0.1.0] — 2026-09-29
 
 First tagged release. **Demo / educational build.** See [DEMO-NOTICE.md](docs/DEMO-NOTICE.md) and [threat-model.md](docs/threat-model.md).
@@ -148,7 +254,8 @@ Stage-by-stage, with checkpoints:
 - Stage 11: infrastructure (Makefile, Prometheus, Grafana).
 - Stage 12: CI/CD.
 - Stage 13: security.
-- Stage 14: finalization.
+- Stage 14: finalization (release `v0.1.0`).
+- Stage 15: split deposit (release `v0.2.0`).
 
 Every stage has:
 - A checkpoint in `.checkpoints/NN-*/` with SHA-256 of artifacts.
@@ -157,5 +264,6 @@ Every stage has:
 
 ---
 
-[Unreleased]: https://github.com/kwebhub/zkpool-solana/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kwebhub/zkpool-solana/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.0
 [0.1.0]: https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0
