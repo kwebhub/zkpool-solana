@@ -18,7 +18,7 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.9** (E2E split deposit → 3 withdrawals, verified on devnet).
+Last completed stage: **Stage 15.9** (E2E split deposit → 3 withdrawals, verified on devnet) + **unplanned fix 16** (Phantom compatibility + legacy single-note withdrawal).
 Next task: **Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0**.
 
 1. **Read section 0 completely**.
@@ -945,6 +945,26 @@ POST /prove
   - Cause: transient server-side error on GitHub's ref update. No commit is lost locally; the feature branch is already pushed.
   - Fix: run `git push` again immediately. Second attempt succeeded on Stage 15.8.
 
+- **Phantom expects an object, not a base64 string, in `signAndSendTransaction`.**
+  - Symptom: `TypeError: Cannot use 'in' operator to search for 'version' in AQAAAA…` on Deposit or Withdraw.
+  - Cause: Phantom's `chrome-extension://bfnaelmomeimhlpmgjnjophhpkkoljpa/solana.js` does `'version' in input.message` — it expects `{ serialize, message: { version: 0 } }`.
+  - Fix: `await provider.signAndSendTransaction({ serialize: () => bytes, message: { version: 0 } } as never)`.
+  - Applied in `web/src/composables/useDeposit.ts` and `web/src/composables/useWithdraw.ts`.
+  - Lesson: stack trace with `chrome-extension://…/solana.js` is the only reliable signal that the error is Phantom's, not ours.
+
+- **Circuit's `[Field; SPLIT_COUNT]` breaks legacy single-commitment notes.**
+  - Symptom: `splits must have 3 elements, got 1` — from `parseNote.ts`, `api_types.rs`, `witness.rs`, or the Noir type checker.
+  - Cause: Stage 15 changed the circuit to `splits: [Field; 3]`. Legacy single-notes carry `splits: [amount]` (length 1).
+  - Fix: treat length-1 vector as a degenerate split — pad to `[amount, 0, 0]` client-side, `note_index = 0`, `total_amount = amount`. Both C4 and C5 hold. Backend and prover accept 1 or `SPLIT_COUNT`.
+  - Applied in `web/src/withdraw/buildWitness.ts`, `web/src/withdraw/parseNote.ts`, `services/backend/src/api_types.rs`, `services/prover/src/witness.rs`.
+  - **No circuit / verifier / on-chain change required.**
+
+- **Stale prover binary after `witness.rs` change.**
+  - Symptom: `splits must have 3 elements, got 1` even after fixing `witness.rs`.
+  - Cause: `cargo build --release` was run, but the old binary was still bound to 4002.
+  - Diagnose: `pgrep -a zkpool-prover; stat -c "%y" services/prover/src/witness.rs` — if the binary mtime is older than source, rebuild.
+  - Fix: `kill $(pgrep zkpool-prover); cargo build --release; nohup ./target/release/zkpool-prover > /tmp/prover.log 2>&1 &`.
+
 ### 8.13. Git / tooling
 
 - **Editor "replace fully" applied to the wrong file.**
@@ -1180,8 +1200,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-10-01 (Stage 15 in progress — 15.1 through 15.9 done)
+**Last updated:** 2026-10-01
 **Last completed stage:** Stage 15.9 (E2E split deposit → 3 withdrawals, verified on devnet).
+**Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal (commit `1aa9ffe`). See `docs/notes/16-phantom-compat.md`.
 **Next stage:** Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0.
 
 **Stage 15.9 — on-chain results:**
@@ -1287,6 +1308,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.7 — Backend + prover: split-deposit witness fields. ✅ Commit `7936d3a`.
 - 15.8 — Frontend: split deposit UI + Codama regeneration. ✅ Commit `b7a8561`.
 - 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals (3 confirmed, double-spend rejected). ✅ Commit `8c2a1f6`.
+- **fix 16** — Phantom compatibility + legacy single-note withdrawal (unplanned, out-of-band). ✅ Commit `1aa9ffe`.
 - 15.10 — Final checkpoint + CHANGELOG → v0.2.0. **← next**
 
 ---
