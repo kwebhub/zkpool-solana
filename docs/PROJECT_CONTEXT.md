@@ -40,7 +40,10 @@ Next task: **Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals**.
   - Update `docs/PROJECT_CONTEXT.md` (this file).
   - Add or update `docs/notes/NN-name.md` (Russian).
   - Commit and push.
-7. **Never guess.** If ambiguous — use best practices. Any non-obvious action required to complete a stage must be:
+7. All commits go to the **feature branch first**, then the pull request.
+  - Merge to main only if all workflows are successful.
+  - **Exception** — docs-only commits, no code, and no workflow trigger for a docs change goes via --ff-only without a PR.
+8. **Never guess.** If ambiguous — use best practices. Any non-obvious action required to complete a stage must be:
   - Recorded in `PROJECT_CONTEXT.md`, section 8 (Known pitfalls).
   - Included in `docs/notes/NN-name.md` as a **lesson** with symptom, cause, fix.
   - Examples:
@@ -48,10 +51,10 @@ Next task: **Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals**.
     - Adding packages to `workspace.exclude`.
     - Running `cargo fetch` in a sub-crate.
     - Any unusual CLI flag or env var.
-8. **CRITICAL:** `docs/notes/*.md` is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio.
-9. **Section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
-10. **Give files in full for new files - one file per message; insertion point + block for existing.**
-11. **Test in small steps.** 20 lines, not 200. When working with a **new** library (LiteSVM, Anchor macros, sqlx, axum), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches, then expand. **How to check exact API:** read crate sources at `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
+9. **CRITICAL:** `docs/notes/*.md` is raw material for guides, tutorials, and articles on **Medium** and **Mirror.xyz**, and part of the GitHub portfolio.
+10. **Section 8 (Known pitfalls)** — it's the fastest way to avoid re-learning our mistakes.
+11. **Give files in full for new files - one file per message; insertion point + block for existing.**
+12. **Test in small steps.** 20 lines, not 200. When working with a **new** library (LiteSVM, Anchor macros, sqlx, axum), **do not** write a large file in one shot. Write **20 lines**, compile, verify the API matches, then expand. **How to check exact API:** read crate sources at `~/.cargo/registry/src/index.crates.io-*/<crate>-<version>/src/`. Look at `pub use` / `pub fn` / `pub struct` lines.
 
 ---
 
