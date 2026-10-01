@@ -18,8 +18,8 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.7** (backend + prover: split-deposit witness fields).
-Next task: **Stage 15.8 — Frontend: split UI**.
+Last completed stage: **Stage 15.8** (frontend: split deposit UI).
+Next task: **Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals**.
 
 1. **Read section 0 completely**.
 2. **Chat communication:** English, except if user ask Russian.
@@ -559,8 +559,8 @@ POST /prove
 | 15.5 | Anchor — `deposit_split`, `encode_public_inputs` +32 | `a66bee2` |
 | 15.6 | LiteSVM — adversarial for split | `131b2ac` |
 | 15.7 | Backend + prover — split-deposit witness fields | `7936d3a` |
-| 15.8 | Frontend — split UI | ← next |
-| 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | |
+| 15.8 | Frontend — split UI | `b7a8561` |
+| 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | ← next |
 | 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | |
 
 ### ✅ Docs (2026-09-22 — 2026-09-25)
@@ -900,6 +900,28 @@ POST /prove
   - Cause: `AccountSignerMeta` needs `signer` field, not just `{address, role}`.
   - Fix: `makeNoopSigner(address)` — a type-safe stub whose `signTransactions` throws. Actual signing goes through `provider.signAndSendTransaction(base64)`.
 
+- **Codama-generated `*InstructionDataArgs` are flattened into the async input, not wrapped in `args`.**
+  - Symptom: `error TS2353: Object literal may only specify known properties, and 'args' does not exist in type 'DepositSplitAsyncInput<...>'`.
+  - Cause: Codama 1.11's `renderers-js` spreads the instruction-data fields directly onto the async input type; there is no `args` wrapper.
+  - Fix: pass `commitments`, `newRoots`, `amounts`, `totalAmount` as top-level fields to `getDepositSplitInstructionAsync({ ... })`.
+  - To confirm the exact shape, `grep -n "DepositSplitAsyncInput\|commitments\|totalAmount" web/src/generated/zk_pool/src/generated/instructions/depositSplit.ts`.
+
+- **`@solana/kit` does not export `setTransactionMessageFeeLifetimeUsingBlockhash`.**
+  - Symptom: `error TS2724: '"@solana/kit"' has no exported member named 'setTransactionMessageFeeLifetimeUsingBlockhash'. Did you mean 'setTransactionMessageLifetimeUsingBlockhash'?`
+  - Cause: autocomplete typo — there is no fee-lifetime variant.
+  - Fix: use `setTransactionMessageLifetimeUsingBlockhash` and `setTransactionMessageFeePayer` separately.
+
+- **`pnpm build` bundles the two WASM binaries (acvm_js, noirc_abi_wasm) unconditionally.**
+  - Fact: 3.84 MB of WASM in `dist/assets/`, plus ~184 KB of JS.
+  - Cause: `@noir-lang/noir_js` is statically imported by `noir/poseidon.ts` and `noir/hashes.ts`, which are imported by `deposit/generateNote.ts` and `withdraw/buildWitness.ts`, which are imported by the composables, which are imported by `App.vue`.
+  - Impact: initial page load carries ~3.84 MB of WASM even before the user opens any form.
+  - Deferred fix: dynamic `import()` inside `poseidon2Hash`/`computeHashes`, so WASM loads only when a proof-relevant action starts. Not in scope for Stage 15.8.
+
+- **`git push` after `git merge --ff-only` may fail with `remote: fatal error in commit_refs`.**
+  - Symptom: `! [remote rejected] main -> main (failure)` — remote refused the push, local merge succeeded.
+  - Cause: transient server-side error on GitHub's ref update. No commit is lost locally; the feature branch is already pushed.
+  - Fix: run `git push` again immediately. Second attempt succeeded on Stage 15.8.
+
 ### 8.13. Git / tooling
 
 - **Editor "replace fully" applied to the wrong file.**
@@ -1129,9 +1151,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-09-30 (Stage 15 in progress — 15.1 through 15.7 done)
-**Last completed stage:** Stage 15.7 (backend + prover: split-deposit witness fields).
-**Next stage:** Stage 15.8 — Frontend: split UI.
+**Last updated:** 2026-10-01 (Stage 15 in progress — 15.1 through 15.8 done)
+**Last completed stage:** Stage 15.8 (frontend: split deposit UI).
+**Next stage:** Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals.
 
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
@@ -1151,7 +1173,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.7 done)
+  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.8 done)
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
@@ -1226,7 +1248,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.5 — Anchor: `deposit_split`, constants updated, upgraded in place. ✅ Commit `a66bee2`.
 - 15.6 — LiteSVM tests for `deposit_split` (5 tests, 20 total). ✅ Commit `131b2ac`.
 - 15.7 — Backend + prover: split-deposit witness fields. ✅ Commit `7936d3a`.
-- 15.8 — Frontend: split UI. **← next**
+- 15.8 — Frontend: split deposit UI + Codama regeneration. ✅ Commit `b7a8561`.
+- 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals. **← next**
 
 ---
 

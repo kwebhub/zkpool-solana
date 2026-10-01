@@ -699,4 +699,60 @@ if err := os.Rename(originalKeypair, keypairPath); err != nil {
 
 **Урок:** при изменении схемы circuit'а счёт новых полей в witness'е определяется не "что нужно для проверки конкретного constraint'а", а **полным набором параметров `main()`**. `nargo execute` требует все. `test_witness.nr` — источник истины для этого набора.
 
-**← next: 15.8 — Frontend: split UI.**
+### 15.8 — Frontend: split UI
+
+**Дата:** 2026-10-01. **Commit:** `b7a8561`. **Checkpoint:** `.checkpoints/15.8-web/`.
+
+**Изменения по файлам:**
+
+| Файл | Что |
+|---|---|
+| `web/src/constants.ts` | + `SPLIT_COUNT = 3` |
+| `web/src/api/types.ts` | `WithdrawRequest` +3 поля (`total_amount`, `splits`, `note_index`); комментарии про 388 B / 204 B |
+| `web/src/withdraw/parseNote.ts` | `ParsedNote` + `splits: string[]` + `noteIndex: number`; валидация длины `splits` (= `SPLIT_COUNT`) и `note_index ∈ [0, SPLIT_COUNT)` |
+| `web/src/withdraw/buildWitness.ts` | witness + `totalAmount`, `splits`, `noteIndex`; `total_amount` = Σ `splits[i]` (BigInt); передача в `postWithdraw` |
+| `web/src/composables/useWithdraw.ts` | `PROOF_LEN` 324 → 388; передача `totalAmount` в `getWithdrawInstructionAsync` |
+| `web/src/deposit/generateNote.ts` | + `generateSplitNotes(amounts)` — генерация `SPLIT_COUNT` нот; `DepositNote` + `splits` + `noteIndex`; `generateNote` сохранён для совместимости |
+| `web/src/composables/useDeposit.ts` | + `depositSplit(amounts)` — preview промежуточных roots, сборка `DepositSplitArgs`, вызов `getDepositSplitInstructionAsync`; рефакторинг `sendInstruction` в общий хелпер |
+| `web/src/components/DepositForm.vue` | + переключатель single/split, N полей сумм, отображение нескольких нот, копирование всех нот как JSON-массив |
+| `web/src/generated/zk_pool/` | регенерация Codama-клиента: `depositSplit.ts` + `totalAmount` в `withdraw.ts` + новые коды ошибок |
+
+**Ключевое открытие №1: `getDepositSplitInstructionAsync` не использует `args`-обёртку.**
+
+Codama 1.11 кладёт поля `DepositSplitInstructionDataArgs` (commitments, newRoots, amounts, totalAmount) **напрямую** в `DepositSplitAsyncInput`, а не под ключ `args`. Ошибка:
+
+```
+error TS2353: Object literal may only specify known properties, and 'args'
+does not exist in type 'DepositSplitAsyncInput<...>'.
+```
+
+Фикс: передавать `commitments`, `newRoots`, `amounts`, `totalAmount` как top-level поля. Источник — grep по `web/src/generated/zk_pool/src/generated/instructions/depositSplit.ts`.
+
+**Ключевое открытие №2: `setTransactionMessageFeeLifetimeUsingBlockhash` не существует.**
+
+Опечатка при написании импорта. Пакет `@solana/kit` экспортирует `setTransactionMessageLifetimeUsingBlockhash` и `setTransactionMessageFeePayer` отдельно. Фикс — убрать несуществующий символ из импорта.
+
+**Открытие №3: `pnpm build` безусловно упаковывает WASM (3.84 MB).**
+
+```
+dist/assets/acvm_js_bg-hM8J3cqa.wasm    3,047.92 kB
+dist/assets/noirc_abi_wasm_bg-DX-Hyssd.wasm   788.51 kB
+dist/assets/index-B-L5Zye2.js              183.78 kB
+```
+
+Причина: `@noir-lang/noir_js` статически импортируется в `noir/poseidon.ts` и `noir/hashes.ts`; те — в `deposit/generateNote.ts` и `withdraw/buildWitness.ts`; те — в composables; те — в `App.vue`. WASM попадает в initial bundle.
+
+Отложенный фикс (не в scope 15.8): динамический `import()` в `poseidon2Hash`/`computeHashes`, чтобы WASM грузился только при первом реальном действии с proof.
+
+**Открытие №4: `git push` после `git merge --ff-only` может упасть с `remote: fatal error in commit_refs`.**
+
+Симптом: `! [remote rejected] main -> main (failure)` — локальный merge прошёл, push отклонён remote. Это транзиентная ошибка на стороне GitHub, не проблема с правами или protection rules. Фикс: повторить `git push` — со второй попытки проходит.
+
+**Результат:**
+- `pnpm typecheck` — чисто.
+- `pnpm build` — успешно, 115 модулей, 1.09 s.
+- Bundle: 183.78 KB JS (gzip 64.06 KB), 5.75 KB CSS, 3.84 MB WASM.
+
+Артефакты чекпоинта: 8 файлов, зафиксированы в `manifest.txt`.
+
+**← next: 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals.**
