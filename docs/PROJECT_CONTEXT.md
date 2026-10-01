@@ -18,8 +18,8 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.8** (frontend: split deposit UI).
-Next task: **Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals**.
+Last completed stage: **Stage 15.9** (E2E split deposit → 3 withdrawals, verified on devnet).
+Next task: **Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0**.
 
 1. **Read section 0 completely**.
 2. **Chat communication:** English, except if user ask Russian.
@@ -570,8 +570,8 @@ POST /prove
 | 15.6 | LiteSVM — adversarial for split | `131b2ac` |
 | 15.7 | Backend + prover — split-deposit witness fields | `7936d3a` |
 | 15.8 | Frontend — split UI | `b7a8561` |
-| 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | ← next |
-| 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | |
+| 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | `8c2a1f6` |
+| 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | ← next |
 
 ### ✅ Docs (2026-09-22 — 2026-09-25)
 
@@ -882,6 +882,19 @@ POST /prove
   - Impact: concurrent requests clobber each other.
   - Fix: serialize with an async mutex in `prover.rs`.
 
+- **Verifier CU cost grew after Stage 15.4.** The new circuit (6 public inputs, 5 constraints) makes the Groth16 verifier consume **~382 000 CU**, up from ~182 000 in v0.1.0.
+  - Symptom: `exceeded CUs meter at BPF instruction`, `ProgramFailedToComplete` in `withdraw`.
+  - Cause: `SetComputeUnitLimit` in `e2e-withdraw/src/main.rs` and `web/src/composables/useWithdraw.ts` (Stage 10) used `400_000`, sized for the old verifier. The Stage 15.4 verifier needs ~382k just for the CPI, plus ~18k for the surrounding instruction.
+  - Fix: bump to `1_400_000`. Applies to `scripts/e2e-withdraw/src/main.rs` (Stage 15.9) and `web/src/composables/useWithdraw.ts` when the frontend gets a matching fix.
+  - Lesson: `PROOF_LEN`, `NR_PUBLIC_INPUTS`, **and** `ComputeBudget` limits are coupled to the circuit. Every circuit change must re-check the CU budget on devnet.
+
+- **Prover binary is stale after a source change unless `cargo build --release` runs AND the process is restarted.**
+  - Symptom: source has `note_index` in `witness.rs`, but HTTP `POST /prove` still returns `Failed to deserialize... missing field 'note_index'` (or `total_amount`).
+  - Cause: `pkill -f zkpool-prover` was executed, but the old binary was still bound to port 4002 (started earlier from a different shell, orphaned).
+  - Diagnose: `pgrep -a zkpool-prover` → shows PID; `ls -la /proc/<PID>/exe` → path to the running binary; compare mtime with source.
+  - Fix: kill **all** matching PIDs, `cargo clean` + `cargo build --release`, start the new binary, verify with `curl /health` **and** a `POST /prove {}` to see the deserializer's expected fields.
+  - Lesson: `strings target/release/zkpool-prover | grep -c <field>` proves the **file** has the field; `ls -la /proc/<PID>/exe` proves which file is **running**. These are independent checks.
+
 ### 8.12. Frontend (Vue 3 + TS)
 
 - **`@noir-lang/noir_js` does not implicitly reduce values modulo BN254.**
@@ -964,6 +977,12 @@ POST /prove
   - Symptom: workflow failed without logs; annotation says "recent account payments have failed or spending limit needs to be increased".
   - Cause: private repo, exhausted Actions minutes.
   - Fix: make the repository public — public repos get unlimited Actions minutes.
+
+- **`git push` rejected after `git merge --ff-only` when remote `main` had new commits from a PR.**
+  - Symptom: `! [rejected] main -> main (fetch first)`, hint `Updates were rejected because the remote contains work that you do not have locally`.
+  - Cause: another PR (Stage 15.9) landed on `origin/main` while our local branch was ahead by a docs-only commit.
+  - Fix: commit the local change, `git pull --rebase origin main`, `git push`. Rebase replayed our docs commit on top of the merged PR.
+  - Lesson: with the PR-based flow (§0 rule 7), `origin/main` can move between a local merge and a push. Always `git pull --rebase` before pushing to `main`.
 
 ### 8.14. How to find exact signatures for the installed crate version
 
@@ -1161,9 +1180,17 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-10-01 (Stage 15 in progress — 15.1 through 15.8 done)
-**Last completed stage:** Stage 15.8 (frontend: split deposit UI).
-**Next stage:** Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals.
+**Last updated:** 2026-10-01 (Stage 15 in progress — 15.1 through 15.9 done)
+**Last completed stage:** Stage 15.9 (E2E split deposit → 3 withdrawals, verified on devnet).
+**Next stage:** Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0.
+
+**Stage 15.9 — on-chain results:**
+- Deposit split tx: `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`
+- Withdraw note 0 (0.5 SOL): `5EegK3FXPttNGypB9Ve6RCbjtuMYSnvCwrb4ozb5MK6jsaDj6VKvyH8eb8XxtYav9tDhVYKbiRE6LPCHGLVuEsgZ`
+- Withdraw note 1 (0.3 SOL): `3KdWSWWYaN62WvG7xdcdKLmkoCfLvoE5p8zNa9B8BrZ7swhfwvfUo3dtJkksobNAeHudrs5q7wdqstDNMHsfAApT`
+- Withdraw note 2 (0.2 SOL): `2PStboyuYhhHJqhBnHDevj8isc9betwi5JodhjtwZqcc7fDcckdn55vCQGM5gM49cSJCSRkDVp2YwodfKYPD9dR9`
+- Double-spend attempt on note 0: rejected by `init` (NullifierRecord PDA already exists).
+- Compute budget for `withdraw`: verifier consumes ~382k CU (Stage 15.4 grew from ~182k). `SetComputeUnitLimit(1_400_000)` needed; 400 000 was insufficient.
 
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
@@ -1183,7 +1210,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.8 done)
+  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.9 done)
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
@@ -1259,7 +1286,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.6 — LiteSVM tests for `deposit_split` (5 tests, 20 total). ✅ Commit `131b2ac`.
 - 15.7 — Backend + prover: split-deposit witness fields. ✅ Commit `7936d3a`.
 - 15.8 — Frontend: split deposit UI + Codama regeneration. ✅ Commit `b7a8561`.
-- 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals. **← next**
+- 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals (3 confirmed, double-spend rejected). ✅ Commit `8c2a1f6`.
+- 15.10 — Final checkpoint + CHANGELOG → v0.2.0. **← next**
 
 ---
 
