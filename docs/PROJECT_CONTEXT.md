@@ -504,7 +504,13 @@ POST /prove
 **7 CI jobs:** validate-spec, onchain, litesvm, backend, prover, merkle, web.
 **Templates:** PR, issue (bug/feature), dependabot (7 cargo + 2 npm + 1 gh-actions).
 
-**Known gaps:** `merkle` job is placeholder (no nargo); `security` is report-only (`|| true`); `cargo-deny` needs `deny.toml`.
+**Known gaps:** `security` audit jobs are report-only (`|| true`); `security.yml` `cargo-deny` uses root `deny.toml` run from `services/backend`.
+
+**Stage 12 follow-up (2026-10-01):** the `merkle` and `litesvm` CI jobs were fixed:
+- `merkle` — now installs `nargo` via `noirup`, compiles `poseidon`/`hash2`/`hashes`/`withdrawal`, and copies the ACIRs into `services/merkle/circuits/` before running tests.
+- `litesvm` — now builds `zk_pool.so` via `anchor build` (Anchor CLI from the release binary, not `avm`), builds a **mock verifier** `.so` under `onchain/tests/mock-verifier/` (a 20-line program returning `Ok(())`), and renames it to `withdrawal.so` so the tests find it at the expected path.
+- `tests/src/helpers.rs` — `.so` paths are now resolved relative to `CARGO_MANIFEST_DIR` with `ZK_POOL_SO` / `VERIFIER_SO` env overrides, instead of hardcoded `/home/ubuntu/...` paths.
+- `security.yml` `cargo-deny` — now runs from `services/backend` with `--config ../../deny.toml` (cargo-deny requires a `Cargo.toml` in the working directory).
 
 ### ✅ Stage 13. Security (2026-09-29)
 
