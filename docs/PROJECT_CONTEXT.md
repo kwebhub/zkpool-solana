@@ -42,6 +42,7 @@ Next task: **Stage 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals**.
   - Commit and push.
 7. All commits go to the **feature branch first**, then the pull request.
   - Merge to main only if all workflows are successful.
+  - Write text to populate the query pool template.
   - **Exception** — docs-only commits, no code, and no workflow trigger for a docs change goes via --ff-only without a PR.
 8. **Never guess.** If ambiguous — use best practices. Any non-obvious action required to complete a stage must be:
   - Recorded in `PROJECT_CONTEXT.md`, section 8 (Known pitfalls).
