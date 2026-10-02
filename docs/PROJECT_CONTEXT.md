@@ -14,12 +14,14 @@
 ---
 
 ## 0. Rules for the assistant (READ FIRST)
+
 This is the **single normative section** of this file. Everything else describes the project. If in doubt — this section wins.
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15** (split deposit: 15.1 → 15.10, all sub-stages done) + **fix 16** (Phantom compatibility + legacy single-note withdrawal).
-Next task: **Stage 16** — see `docs/notes/16-phantom-compat.md` §9 (Solflare / Backpack support, dynamic `import()` for `noir_js`).
+This project is **complete**. Last stage: **16** (16.1 — lazy noir_js; 16.2 — Solflare connect, withdraw unsupported).
+Latest release: **v0.2.1** (2026-10-02).
+No further stages are planned. For background, see `docs/notes/16-phantom-compat.md` and `docs/notes/17-wasm-lazy-load.md`.
 
 1. **Read section 0 completely**.
 2. **Chat communication:** English, except if user ask Russian.
@@ -1229,13 +1231,14 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 ## 12. Current state
 
 **Last updated:** 2026-10-02
-**Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E → final checkpoint).
+**Status:** Complete.
+**Last completed stage:** Stage 16 — 16.1 (lazy `noir_js`), 16.2 (Solflare connect; withdraw unsupported).
 **Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal. See `docs/notes/16-phantom-compat.md`.
-**Release:** `v0.2.0` (2026-10-01) on tag `0cca5b6`; CHANGELOG extended through fix 16 by `a13083d`.
+**Latest release:** `v0.2.1` (2026-10-02). Previous: `v0.2.0` (2026-10-01), `v0.1.0` (2026-09-29).
 
-**Stage 16 — in progress:**
+**Stage 16 — closed:**
 - **16.1** — dynamic `import()` for `@noir-lang/noir_js` (WASM deferred until first proof action). ✅ Commit `c415960`.
-- **16.2** — Solflare / Backpack support. Solflare **not supported** (requires web3.js-compatible `Transaction` instance; our `@solana/kit`-wire object fails inside Solflare with `JsonRpcError: Internal error`). Wallet connect works, deposit works (wire format accepted), but withdraw fails at sign. Backpack untested. See `docs/notes/16-phantom-compat.md` §9. Deferred.
+- **16.2** — Solflare connect works, deposit works, **withdraw unsupported** (requires web3.js-compatible `Transaction`). Backpack untested. See `docs/notes/16-phantom-compat.md` §9. Closed as known limitation.
 
 **Stage 15.9 — on-chain results:**
 - Deposit split tx: `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`
@@ -1244,6 +1247,13 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - Withdraw note 2 (0.2 SOL): `2PStboyuYhhHJqhBnHDevj8isc9betwi5JodhjtwZqcc7fDcckdn55vCQGM5gM49cSJCSRkDVp2YwodfKYPD9dR9`
 - Double-spend attempt on note 0: rejected by `init` (NullifierRecord PDA already exists).
 - Compute budget for `withdraw`: verifier consumes ~382k CU (Stage 15.4 grew from ~182k). `SetComputeUnitLimit(1_400_000)` needed; 400 000 was insufficient.
+
+**Stage 16 — UI results:**
+- Lazy `noir_js`: WASM (`acvm_js_bg.wasm` 3048 KB, `noirc_abi_wasm_bg.wasm` 789 KB) requested only on first Deposit/Withdraw click. Confirmed via DevTools Network.
+- Phantom single deposit → withdraw: 0.01 SOL, recipient `1.001 → 1.011`.
+- Phantom split deposit (0.5+0.3+0.2) → 3 withdrawals: recipient `1.011 → 2.011`.
+- Double-spend rejected by Phantom simulation.
+- Solflare: connect + deposit work. Withdraw fails at sign (`JsonRpcError: Internal error`). Backpack untested.
 
 **Stages list:**
   - Stage 0 — Repository skeleton ✅
@@ -1264,8 +1274,12 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
   - Stage 15 — Split deposit ✅
+  - Stage 16 — Lazy noir_js + Solflare connect ✅ (v0.2.1)
 
-**Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
+**Releases:**
+- [v0.2.1](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.1) (2026-10-02) — 6 assets. Stage 16 (lazy `noir_js`, Solflare connect). Same `zk_pool.so` and verifier as v0.2.0.
+- [v0.2.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.0) (2026-10-01) — 6 assets. Split deposit (Stage 15) + fix 16.
+- [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`, 6 assets.
 
 **Wallet:** `5iM6nzaCqegVG3j4CSf19zmU3tmcs9KP51djaBXnAKGc` (~3.4 SOL, devnet).
 **Deployed programs on devnet:**
@@ -1278,7 +1292,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `PoolState`: 384 bytes, authority = wallet, all counters zero.
 - Init tx: `2EHRSsJeSUcFrhkn4rJWznihMjQqjqd1Cfh4pWrTFC2TcnEEiKfjq6e6AeBvNixxGQcBYnQZnB2Y3TPGFQ98zSeC`
 
-**Tests:** 41 (circuits) + 37 (on-chain unit) + 15 (LiteSVM incl. adversarial) + 5 (backend unit) + 23 (merkle) + 17+1 (prover) = **139+**.
+**Tests:** 41 (circuits) + 37 (on-chain unit) + 20 (LiteSVM incl. adversarial + split) + 5 (backend unit) + 23 (merkle) + 17+1 (prover) = **144+**.
 
 **Circuit ACIRs:**
 - `hash2.json` — `27c1937b46ea693a627400a8040fbce816e2bfd7c8ef07ae40df00e1f13b37c6`
@@ -1315,12 +1329,14 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - `03-sunspot.md` — 996 lines
 - `04-anchor.md` — ~1014 lines
 - `05-backend.md` — ~1200 lines
+- `16-phantom-compat.md` — ~9.3 KB
+- `17-wasm-lazy-load.md` — ~9.3 KB
 
 **Design (locked in Stage 15.1, see `docs/notes/15-split-deposit.md`):**
 - **Path 2** — the withdrawal circuit **changes**, not just the deposit side. New public input `total_amount` (aggregated deposit amount). New private inputs `splits[3]` and `note_index`. New constraints C4 (`Σ splits[i] == total_amount`) and C5 (`splits[note_index] == amount`).
 - **N = 3, fixed.** Const-generic, same pattern as `TREE_DEPTH`.
 - **Verifier upgrade in place.** Program ID `5t51iu6apRxgLbt91eVZ6YYzHsnmBCVnLGqJtqdfMFWJ` does **not** change. Only the `.so` is replaced.
-- **Breaking change.** Notes from v0.1.0 (2 real deposits on devnet) are incompatible with the new circuit. Version will bump to **v0.2.0**.
+- **Breaking change.** Notes from v0.1.0 (2 real deposits on devnet) are incompatible with the new circuit. Version bumped to **v0.2.0**.
 
 **Why Path 2 and not Path 1:** Path 1 (deposit-side only) leaves the amount link intact at the transaction level and — critically — allows a malicious depositor to claim a smaller `total_amount` than the actual sum of the notes, enabling direct theft from the vault. C4 closes that hole.
 
@@ -1342,6 +1358,8 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals (3 confirmed, double-spend rejected). ✅ Commit `8c2a1f6`.
 - **fix 16** — Phantom compatibility + legacy single-note withdrawal (unplanned, out-of-band). ✅ Commit `1aa9ffe`.
 - 15.10 — Final checkpoint + CHANGELOG → v0.2.0. ✅ Commit `a13083d`.
+- 16.1 — Lazy `noir_js`. ✅ Commit `c415960`.
+- 16.2 — Solflare connect support. ✅ Commit `5633cff`.
 
 ---
 
