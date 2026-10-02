@@ -99,6 +99,8 @@ In addition to the v0.1.0 limitations (see below), Stage 15 introduces:
 - **Path 2 split deposit** adds two new public/private inputs but does **not** change the trusted setup assumptions. No MPC ceremony.
 - **Intermediate roots** are not stored in `PoolState.roots` — only the final root is. A user can only withdraw a split note against the final root. By design (documented in `docs/notes/15-split-deposit.md` §15.5).
 - **`splits` leak = split privacy lost.** If the witness leaks (A6), the on-chain privacy gain is nullified.
+- **Phantom wallet format.** `signAndSendTransaction` requires `{ serialize, message: { version: 0 } }`, not a base64 string. Verified with Phantom only; Solflare and Backpack are untested (see `docs/notes/16-phantom-compat.md` §9).
+- **`@noir-lang/noir_js` WASM is 3.84 MB in the initial bundle.** Static import chain reaches `App.vue`. Deferred dynamic-import optimization (see `docs/PROJECT_CONTEXT.md` §8.12).
 
 Documented in [`docs/threat-model.md`](docs/threat-model.md):
 
