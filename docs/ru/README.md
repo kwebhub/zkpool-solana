@@ -8,6 +8,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 
 > ⚠️ **Демонстрационный / образовательный проект.** Не аудирован, не для production. См. [`docs/DEMO-NOTICE.md`](../DEMO-NOTICE.md) и [`docs/threat-model.md`](../threat-model.md).
+> [English version](../../README.md)
 
 ---
 
@@ -26,6 +27,8 @@
 
 **Технология:** Groth16 (BN254), пруф генерируется через [Sunspot](https://github.com/reilabs/sunspot), проверяется программой [gnark-solana](https://github.com/Lightprotocol/gnark-solana), задеплоенной на Solana.
 
+**Stage 15** добавляет **split deposit** — один депозит разбивается на N = 3 неравных commitment'а в одной транзакции. Это разрывает связь по сумме между депозитом и выводом. См. [`docs/notes/15-split-deposit.md`](../notes/15-split-deposit.md).
+
 ---
 
 ## Архитектура
@@ -33,8 +36,8 @@
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │ FRONTEND (Vue 3 + TS) — :5173                                    │
-│ • Подключение кошелька (Phantom/Solflare)                        │
-│ • Генерация note (noir_js в браузере)                            │
+│ • Подключение кошелька (Phantom; Solflare — только connect)      │
+│ • Генерация note (noir_js в браузере, lazy-loaded)               │
 │ • Депозит / Вывод                                                 │
 └──────────────────────────────────────────────────────────────────┘
               ↓ HTTP                    ↑ HTTP
@@ -136,7 +139,25 @@ make exec-c CMD='cd /home/ubuntu/scripts/e2e-deposit && ./target/release/e2e-dep
 make exec-c CMD='cd /home/ubuntu/scripts/e2e-withdraw && ./target/release/e2e-withdraw /tmp/note.json <RECIPIENT>'
 ```
 
-Подробный разбор с реальными подписями транзакций — в [`docs/notes/10-e2e.md`](../notes/10-e2e.md).
+Для **split-депозита** (Stage 15):
+
+```bash
+make exec-c CMD='cd /home/ubuntu/scripts/e2e-deposit-split && ./target/release/e2e-deposit-split'
+```
+
+Подробный разбор с реальными подписями транзакций — в [`docs/notes/10-e2e.md`](../notes/10-e2e.md) и [`docs/notes/15-split-deposit.md`](../notes/15-split-deposit.md).
+
+---
+
+## Браузерные кошельки
+
+| Кошелёк | Connect | Депозит | Вывод |
+|---|---|---|---|
+| **Phantom** | ✅ | ✅ | ✅ |
+| **Solflare** | ✅ | ✅ | ⚠️ не поддерживается (см. ниже) |
+| **Backpack** | не проверялся | не проверялся | не проверялся |
+
+**Вывод через Solflare не поддерживается.** `signAndSendTransaction` в Solflare ожидает инстанс `Transaction`/`VersionedTransaction` из `@solana/web3.js@1.x`, а не `@solana/kit`-wire объект. Диалог подписи открывается, но падает на Approve с `JsonRpcError: Internal error`. См. [`docs/notes/16-phantom-compat.md`](../notes/16-phantom-compat.md) §9.
 
 ---
 
@@ -172,13 +193,19 @@ zkpool-solana/
 |---|---|---|
 | Схемы | 41 | `nargo test` в каждом circuit'е |
 | On-chain unit | 37 | `make exec-c CMD='cd /home/ubuntu/onchain && cargo test -p zk_pool --lib'` |
-| LiteSVM | 15 | `make exec-c CMD='cd /home/ubuntu/tests && cargo test'` |
+| LiteSVM | 20 | `make exec-c CMD='cd /home/ubuntu/tests && cargo test'` |
 | Backend unit | 5 | `make exec-c CMD='cd /home/ubuntu/services/backend && cargo test --lib'` |
 | Merkle service | 23 | `make exec-c CMD='cd /home/ubuntu/services/merkle && pnpm test'` |
 | Prover | 17+1 | `make exec-c CMD='cd /home/ubuntu/services/prover && cargo test --lib'` |
 | Web | typecheck | `make exec-c CMD='cd /home/ubuntu/web && pnpm typecheck'` |
 
-**Итого: 139+ тестов.**
+**Итого: 144+ тестов.**
+
+---
+
+## Бандл
+
+С Stage 16.1 `@noir-lang/noir_js` **загружается лениво** через dynamic `import()`. ~3.84 MB WASM (`acvm_js_bg.wasm` + `noirc_abi_wasm_bg.wasm`) больше не входят в initial bundle — скачиваются только при первом открытии Deposit или Withdraw. См. [`docs/notes/17-wasm-lazy-load.md`](../notes/17-wasm-lazy-load.md).
 
 ---
 
@@ -196,6 +223,8 @@ Threat model — [`docs/threat-model.md`](../threat-model.md).
 - `new_root` не проверяется on-chain.
 - Backend видит все commitments и nullifiers.
 - Notes сохраняются пользователем (нет восстановления).
+- Вывод через Solflare не поддерживается (см. выше).
+- Backpack не проверялся.
 
 Нашли уязвимость? См. [`SECURITY.md`](../../SECURITY.md).
 
@@ -207,6 +236,14 @@ Threat model — [`docs/threat-model.md`](../threat-model.md).
 - **[threat-model.md](../threat-model.md)** — анализ безопасности.
 - **[DEMO-NOTICE.md](../DEMO-NOTICE.md)** — что это за проект и чем не является.
 - **[docs/notes/](../notes/)** — технические заметки по каждому этапу.
+
+---
+
+## Релизы
+
+- **[v0.2.1](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.1)** (2026-10-02) — Stage 16: lazy `noir_js`, Solflare connect.
+- **[v0.2.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.0)** (2026-10-01) — Stage 15: split deposit (breaking change относительно v0.1.0).
+- **[v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0)** (2026-09-29) — первый релиз.
 
 ---
 

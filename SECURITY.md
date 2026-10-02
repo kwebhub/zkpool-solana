@@ -7,7 +7,8 @@ This project is a **demo / educational build**. Only the latest commit on `main`
 | Version | Supported |
 |---------|-----------|
 | `main`  | ✅ |
-| `< 0.1.0` | ❌ |
+| `0.2.x` | latest patch only |
+| `< 0.2.0` | ❌ |
 
 ---
 
@@ -30,6 +31,8 @@ This project is a **demo / educational build**. Only the latest commit on `main`
 - **Trusted setup for Groth16** — no MPC ceremony.
 - **Single-keypair upgrade authority.**
 - **Backend sees commitments + nullifiers** — no privacy from the operator.
+- **Solflare withdraw is unsupported** — Solflare's `signAndSendTransaction` requires a `@solana/web3.js@1.x` `Transaction` instance; our `@solana/kit`-wire object fails with `JsonRpcError: Internal error`. See `docs/notes/16-phantom-compat.md` §9.
+- **Backpack wallet is untested.**
 
 If you have a report that is **not** in this list, we want to know.
 
@@ -96,6 +99,7 @@ Not accepted as vulnerabilities:
 - **Denial of service via legitimate high load** — rate limits exist; bypassing them may be in scope if trivial.
 - **Anything listed under "accepted limitations" above** — open a discussion, not a security report.
 - **Broken links, typos, cosmetic issues.**
+- **Solflare withdraw failure** — documented, accepted, architectural (not a security issue).
 
 ---
 
@@ -112,6 +116,7 @@ Not accepted as vulnerabilities:
 
 - **Threat model** — [`docs/threat-model.md`](docs/threat-model.md).
 - **Adversarial tests** — [`tests/src/test_adversarial.rs`](tests/src/test_adversarial.rs).
+- **Split-deposit tests** — [`tests/src/test_deposit_split.rs`](tests/src/test_deposit_split.rs).
 - **Backend input validation** — every endpoint validates shape, length, encoding.
 - **On-chain constraints** — Anchor account validation, PDA seeds, `require_keys_eq!`.
 
