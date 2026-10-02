@@ -268,19 +268,11 @@ $ solana balance 3LChuQNFEYz8kTVrVPuAsbeyZxNpt8HKTsUGcRHnRgjP --url devnet
 **Checkpoint:** `.checkpoints/fix-phantom-wallet/`.
 
 ---
+
 ## 9. Что дальше
 
 Split-депозит (3 ноты) → 3 вывода через UI **проверены** (см. §5.4–5.7).
 Padding length-1 вектора до `[amount, 0, 0]` **не мешает** нормальному split-пути.
 
-Осталось:
-
-- **Solflare и Backpack** — проверить, тот же ли формат `signAndSendTransaction`
-  они ожидают. Если да — упростить код и убрать комментарий про Phantom-specific.
-  Если нет — оставить как есть и добавить `wallet.name` в ветвление.
-- **Dynamic `import()` для `@noir-lang/noir_js`.** Сейчас WASM 3.84 MB
-  попадает в initial bundle (см. §8.12 PROJECT_CONTEXT). Отложено с Stage 15.8.
-
-См. также:
-- `docs/notes/15-split-deposit.md` — Stage 15, дизайн split-депозита.
-- `docs/PROJECT_CONTEXT.md` §8 — Known pitfalls.
+- **Solflare** — `signAndSendTransaction` **не принимает** самодельный объект `{ serialize, message: { version: 0 } }`. Внутри Solflare он проходит проверку на инстанс `Transaction`/`VersionedTransaction` из `@solana/web3.js@1.x`. Наш объект недостаточно «транзакция». Симптом: `JsonRpcError: Internal error at chrome-extension://bhhhlbepdkbapadjdnnojkbgioiodbic/inpage.js`. Окно подписи Solflare **открывается** (devnet blockhash проходит проверку сети), но при нажатии «Одобрить» возвращается `Internal error` до отправки в RPC. В истории Solflare записи о попытке нет. **Поддерживается только Phantom.** Поддержка Solflare потребует web3.js-совместимого инстанса `Transaction`, а не `@solana/kit`-wire. Отложено.
+- **Backpack** — не проверялся.

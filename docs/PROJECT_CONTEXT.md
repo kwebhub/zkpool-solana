@@ -1232,9 +1232,10 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 **Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E → final checkpoint).
 **Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal. See `docs/notes/16-phantom-compat.md`.
 **Release:** `v0.2.0` (2026-10-01) on tag `0cca5b6`; CHANGELOG extended through fix 16 by `a13083d`.
+
 **Stage 16 — in progress:**
-- **16.1** — dynamic `import()` for `@noir-lang/noir_js` (WASM deferred until first proof action). ✅ Uncommitted, see `web/src/noir/poseidon.ts`, `web/src/noir/hashes.ts`, `web/vite.config.ts`.
-- **16.2** — Solflare / Backpack support. Not started.
+- **16.1** — dynamic `import()` for `@noir-lang/noir_js` (WASM deferred until first proof action). ✅ Commit `c415960`.
+- **16.2** — Solflare / Backpack support. Solflare **not supported** (requires web3.js-compatible `Transaction` instance; our `@solana/kit`-wire object fails inside Solflare with `JsonRpcError: Internal error`). Wallet connect works, deposit works (wire format accepted), but withdraw fails at sign. Backpack untested. See `docs/notes/16-phantom-compat.md` §9. Deferred.
 
 **Stage 15.9 — on-chain results:**
 - Deposit split tx: `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`

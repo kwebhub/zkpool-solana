@@ -6,6 +6,28 @@ import { address, type Address } from "@solana/kit";
 import { detectWallets } from "../wallet/detect";
 import type { DetectedWallet, WalletProvider } from "../wallet/types";
 
+/**
+ * Extract a base58 public key from a wallet provider after `connect()`.
+ *
+ * Wallets differ:
+ *  - Phantom: `connect()` resolves to `{ publicKey }`, and `provider.publicKey`
+ *    is also set.
+ *  - Solflare: `connect()` resolves to `true`, and the public key is on
+ *    `provider.publicKey` afterwards.
+ *  - Backpack: behaves like Phantom (untested).
+ *
+ * The safest path is: after `connect()` resolves, read `provider.publicKey`.
+ */
+function readPublicKey(provider: WalletProvider): string {
+  const pk = provider.publicKey;
+  if (!pk) {
+    throw new Error("wallet did not return a public key after connect()");
+  }
+  if (typeof pk === "string") return pk;
+  if (typeof pk.toBase58 === "function") return pk.toBase58();
+  throw new Error("wallet returned an unexpected publicKey shape");
+}
+
 export const useWalletStore = defineStore("wallet", () => {
   const available = ref<DetectedWallet[]>(detectWallets());
   const provider = shallowRef<WalletProvider | null>(null);
@@ -24,8 +46,8 @@ export const useWalletStore = defineStore("wallet", () => {
     error.value = null;
     connecting.value = true;
     try {
-      const resp = await wallet.provider.connect();
-      const pk = resp.publicKey.toBase58();
+      await wallet.provider.connect();
+      const pk = readPublicKey(wallet.provider);
       provider.value = wallet.provider;
       walletName.value = wallet.name;
       addr.value = address(pk);
@@ -54,8 +76,8 @@ export const useWalletStore = defineStore("wallet", () => {
     refreshAvailable();
     for (const w of available.value) {
       try {
-        const resp = await w.provider.connect({ onlyIfTrusted: true });
-        const pk = resp.publicKey.toBase58();
+        await w.provider.connect({ onlyIfTrusted: true });
+        const pk = readPublicKey(w.provider);
         provider.value = w.provider;
         walletName.value = w.name;
         addr.value = address(pk);

@@ -4,12 +4,19 @@ import type { Address } from "@solana/kit";
 
 /** Wallet provider injected into `window` by Phantom/Solflare/etc. */
 export interface WalletProvider {
-  /** Public key (base58 string). Present after `connect()`. */
-  publicKey: { toBase58(): string } | null;
+  /**
+   * Public key (base58 string or object with `toBase58`). Present after
+   * `connect()`. Phantom and Solflare use different shapes.
+   */
+  publicKey: { toBase58(): string } | string | null;
   /** True if the user has already approved this dapp. */
   isConnected: boolean;
-  /** Request connection; returns the public key on success. */
-  connect(options?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toBase58(): string } }>;
+  /**
+   * Request connection. Phantom resolves to `{ publicKey }`; Solflare
+   * resolves to `true` and stores the key on `provider.publicKey`.
+   * Callers must read `provider.publicKey` after `connect()` resolves.
+   */
+  connect(options?: { onlyIfTrusted?: boolean }): Promise<unknown>;
   /** Disconnect. */
   disconnect(): Promise<void>;
   /** Sign one or more transactions (binary). */
