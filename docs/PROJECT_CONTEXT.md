@@ -1228,7 +1228,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 ## 12. Current state
 
 **Last updated:** 2026-10-02
-**Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E).
+**Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E → final checkpoint).
 **Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal. See `docs/notes/16-phantom-compat.md`.
 **Release:** `v0.2.0` (2026-10-01) on tag `0cca5b6`; CHANGELOG extended through fix 16 by `a13083d`.
 **Next task:** Stage 16 — see `docs/notes/16-phantom-compat.md` §9 (Solflare / Backpack, dynamic `import()` for `noir_js`).
@@ -1259,7 +1259,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
   - Stage 12 — Engineering processes (CI/CD, templates) ✅
   - Stage 13 — Security (threat model, expanded tests) ✅
   - Stage 14 — Finalization ✅ (release v0.1.0)
-  - **Stage 15 — Split deposit ← in progress** (15.1 through 15.9 done)
+  - Stage 15 — Split deposit ✅
 
 **Release:** [v0.1.0](https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0) (2026-09-29) — tag on `48302ed`. 6 assets.
 
@@ -1337,7 +1337,7 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 - 15.8 — Frontend: split deposit UI + Codama regeneration. ✅ Commit `b7a8561`.
 - 15.9 — E2E: 1 SOL → 3 notes → 3 withdrawals (3 confirmed, double-spend rejected). ✅ Commit `8c2a1f6`.
 - **fix 16** — Phantom compatibility + legacy single-note withdrawal (unplanned, out-of-band). ✅ Commit `1aa9ffe`.
-- 15.10 — Final checkpoint + CHANGELOG → v0.2.0. **← next**
+- 15.10 — Final checkpoint + CHANGELOG → v0.2.0. ✅ Commit `a13083d`.
 
 ---
 
