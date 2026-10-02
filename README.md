@@ -252,7 +252,7 @@ Built on top of [Solana Foundation Bootcamp 2026 — "05-private-transfers"](htt
 
 Prior work:
 - [`kwebhub/private-transfer`](https://github.com/kwebhub/private-transfer) — v1.
-- `kwebhub/solana-zk-pool` — v2 (abandoned; bug in public-inputs layout).
+- [`kwebhub/solana-zk-pool`](https://github.com/kwebhub/solana-zk-pool) — v2 (abandoned; bug in public-inputs layout).
 
 v3 is a from-scratch rebuild with strict layer contracts and byte-level validation.
 
