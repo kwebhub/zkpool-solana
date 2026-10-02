@@ -961,11 +961,12 @@ POST /prove
   - Cause: autocomplete typo — there is no fee-lifetime variant.
   - Fix: use `setTransactionMessageLifetimeUsingBlockhash` and `setTransactionMessageFeePayer` separately.
 
-- **`pnpm build` bundles the two WASM binaries (acvm_js, noirc_abi_wasm) unconditionally.**
-  - Fact: 3.84 MB of WASM in `dist/assets/`, plus ~184 KB of JS.
-  - Cause: `@noir-lang/noir_js` is statically imported by `noir/poseidon.ts` and `noir/hashes.ts`, which are imported by `deposit/generateNote.ts` and `withdraw/buildWitness.ts`, which are imported by the composables, which are imported by `App.vue`.
-  - Impact: initial page load carries ~3.84 MB of WASM even before the user opens any form.
-  - Deferred fix: dynamic `import()` inside `poseidon2Hash`/`computeHashes`, so WASM loads only when a proof-relevant action starts. Not in scope for Stage 15.8.
+- **`pnpm build` bundles the two WASM binaries (acvm_js, noirc_abi_wasm) unconditionally.** — **FIXED in Stage 16.1.**
+  - Was: 3.84 MB of WASM in `dist/assets/`, loaded on first page load.
+  - Cause: `@noir-lang/noir_js` was statically imported by `noir/poseidon.ts` and `noir/hashes.ts`.
+  - Fix: dynamic `import("@noir-lang/noir_js")` inside `loadHash2()` / `loadHashes()`. WASM now downloads only on the first proof-relevant action (click Deposit or Withdraw).
+  - Verified: Network tab shows `acvm_js_bg.wasm` (`200`, 3048 KB) and `noirc_abi_wasm_bg.wasm` (`200`, 789 KB) requested **only** when the user clicks Deposit.
+  - `vite-plugin-top-level-await` was removed from `vite.config.ts` — Vite handles TLA in the emitted chunk natively.
 
 - **`git push` after `git merge --ff-only` may fail with `remote: fatal error in commit_refs`.**
   - Symptom: `! [remote rejected] main -> main (failure)` — remote refused the push, local merge succeeded.
@@ -1231,7 +1232,9 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 **Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E → final checkpoint).
 **Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal. See `docs/notes/16-phantom-compat.md`.
 **Release:** `v0.2.0` (2026-10-01) on tag `0cca5b6`; CHANGELOG extended through fix 16 by `a13083d`.
-**Next task:** Stage 16 — see `docs/notes/16-phantom-compat.md` §9 (Solflare / Backpack, dynamic `import()` for `noir_js`).
+**Stage 16 — in progress:**
+- **16.1** — dynamic `import()` for `@noir-lang/noir_js` (WASM deferred until first proof action). ✅ Uncommitted, see `web/src/noir/poseidon.ts`, `web/src/noir/hashes.ts`, `web/vite.config.ts`.
+- **16.2** — Solflare / Backpack support. Not started.
 
 **Stage 15.9 — on-chain results:**
 - Deposit split tx: `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`

@@ -8,19 +8,26 @@
 //! Convention: bare hex (no `0x`) at the boundary, matching the backend,
 //! the Merkle service, and the prover. Internally `0x` is added for
 //! `noir_js` and stripped from the result.
+//!
+//! Stage 16.1: `@noir-lang/noir_js` is loaded via dynamic `import()` so
+//! that its ~3.84 MB WASM (acvm_js + noirc_abi_wasm) is only pulled in
+//! when a proof-relevant action starts — not on initial page load.
 
-import { Noir } from "@noir-lang/noir_js";
+import type { Noir } from "@noir-lang/noir_js";
 
 let cachedNoir: Noir | null = null;
 
 async function loadHash2(): Promise<Noir> {
   if (cachedNoir) return cachedNoir;
-  const resp = await fetch("/circuits/hash2.json");
+  const [noirMod, resp] = await Promise.all([
+    import("@noir-lang/noir_js"),
+    fetch("/circuits/hash2.json"),
+  ]);
   if (!resp.ok) {
     throw new Error(`failed to load hash2.json: HTTP ${resp.status}`);
   }
   const circuit = await resp.json();
-  cachedNoir = new Noir(circuit);
+  cachedNoir = new noirMod.Noir(circuit);
   return cachedNoir;
 }
 
