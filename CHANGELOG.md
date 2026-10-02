@@ -9,15 +9,29 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-Nothing yet.
+### Added — Stage 16
 
-### Fixed — since v0.2.0
+- **16.1 — Lazy-load `@noir-lang/noir_js`.** `web/src/noir/poseidon.ts` and `web/src/noir/hashes.ts` now use `import("@noir-lang/noir_js")` inside `loadHash2()` / `loadHashes()`. The ~3.84 MB WASM (acvm_js + noirc_abi_wasm) is no longer part of the initial bundle; it downloads on the first proof-relevant action. `vite-plugin-top-level-await` removed from `web/vite.config.ts` — Vite handles TLA in the emitted chunk natively. See `docs/notes/17-wasm-lazy-load.md`.
+- **16.2 — Solflare wallet connect.** `web/src/stores/wallet.ts` now reads `provider.publicKey` after `connect()` resolves, supporting both Phantom (`{ publicKey }`) and Solflare (`true`). `web/src/wallet/types.ts` updated accordingly.
 
-- **fix 16 — Phantom-compatible `signAndSendTransaction`.** See entry under `[0.2.0]`.
-- **fix 16 — legacy single-notes in a Stage 15 circuit.** See entry under `[0.2.0]`.
+### Changed — Stage 16
+
+- **`dist/assets/` split into two JS chunks** (main + lazy chunk containing `noir_js`). WASM assets are emitted but requested on demand.
+
+### Known limitations — Stage 16
+
+- **Solflare withdraw is not supported.** `provider.signAndSendTransaction({ serialize, message: { version: 0 } })` opens the Solflare signing dialog (devnet blockhash passes the network check) but fails at the Approve step with `JsonRpcError: Internal error at chrome-extension://bhhhlbepdkbapadjdnnojkbgioiodbic/inpage.js`. Solflare expects a `Transaction`/`VersionedTransaction` instance from `@solana/web3.js@1.x`, not a `@solana/kit`-wire object. **Only Phantom is supported for withdrawal.** Deposit works with both.
+- **Backpack untested.**
 
 ---
 
+## [0.2.1] — 2026-10-02
+
+Patch release on top of `v0.2.0`. Adds Stage 16.1 (lazy-load `noir_js`) and 16.2 (Solflare wallet connect). No breaking changes relative to `v0.2.0`. See `[Unreleased]` above for the full description of Stage 16 — the entries are identical and this tag is intended for a future release-cut.
+
+**Assets (this release):** same set as `v0.2.0` — `zk_pool.so`, `zk_pool.json`, `zkpool-backend`, `zkpool-prover`, `zkpool-web.tar.gz`, `SHA256SUMS`.
+
+---
 ## [0.2.0] — 2026-10-01
 
 Second tagged release. **Split deposit — breaking change.** Notes created by v0.1.0 are **not** compatible with the v0.2.0 circuit and cannot be withdrawn. Demo / educational build. See [DEMO-NOTICE.md](docs/DEMO-NOTICE.md) and [threat-model.md](docs/threat-model.md).
@@ -273,6 +287,7 @@ Every stage has:
 
 ---
 
-[Unreleased]: https://github.com/kwebhub/zkpool-solana/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/kwebhub/zkpool-solana/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.1
 [0.2.0]: https://github.com/kwebhub/zkpool-solana/releases/tag/v0.2.0
 [0.1.0]: https://github.com/kwebhub/zkpool-solana/releases/tag/v0.1.0
