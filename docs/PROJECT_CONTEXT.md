@@ -18,8 +18,8 @@ This is the **single normative section** of this file. Everything else describes
 
 **If you are starting a new chat:**
 
-Last completed stage: **Stage 15.9** (E2E split deposit → 3 withdrawals, verified on devnet) + **unplanned fix 16** (Phantom compatibility + legacy single-note withdrawal).
-Next task: **Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0**.
+Last completed stage: **Stage 15** (split deposit: 15.1 → 15.10, all sub-stages done) + **fix 16** (Phantom compatibility + legacy single-note withdrawal).
+Next task: **Stage 16** — see `docs/notes/16-phantom-compat.md` §9 (Solflare / Backpack support, dynamic `import()` for `noir_js`).
 
 1. **Read section 0 completely**.
 2. **Chat communication:** English, except if user ask Russian.
@@ -558,7 +558,7 @@ POST /prove
 
 **Dependabot triage:** 29 PRs closed (2026-09-29) — all version bumps. Project is on pinned-version release; bumps deferred to a future upgrade cycle.
 
-### 🚧 Stage 15. Split deposit (2026-09-30 — in progress)
+### ✅ Stage 15. Split deposit (2026-09-30 — 2026-10-02)
 
 | # | Sub-stage | Commit |
 |---|---|---|
@@ -571,7 +571,8 @@ POST /prove
 | 15.7 | Backend + prover — split-deposit witness fields | `7936d3a` |
 | 15.8 | Frontend — split UI | `b7a8561` |
 | 15.9 | E2E — 1 SOL → 3 notes → 3 withdrawals | `8c2a1f6` |
-| 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | ← next |
+| 15.10 | Final checkpoint + CHANGELOG → v0.2.0 | `a13083d` |
+
 
 ### ✅ Fix 16. Phantom compatibility + legacy single-note withdrawal (2026-10-01)
 
@@ -1226,10 +1227,11 @@ sunspot verify target/withdrawal.vk target/withdrawal.proof target/withdrawal.pw
 
 ## 12. Current state
 
-**Last updated:** 2026-10-01
-**Last completed stage:** Stage 15.9 (E2E split deposit → 3 withdrawals, verified on devnet).
-**Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal (commit `1aa9ffe`). See `docs/notes/16-phantom-compat.md`.
-**Next stage:** Stage 15.10 — Final checkpoint + CHANGELOG → v0.2.0.
+**Last updated:** 2026-10-02
+**Last completed stage:** Stage 15 — Split deposit (design → circuit → verifier → on-chain → services → E2E).
+**Last completed fix:** 16 — Phantom compatibility + legacy single-note withdrawal. See `docs/notes/16-phantom-compat.md`.
+**Release:** `v0.2.0` (2026-10-01) on tag `0cca5b6`; CHANGELOG extended through fix 16 by `a13083d`.
+**Next task:** Stage 16 — see `docs/notes/16-phantom-compat.md` §9 (Solflare / Backpack, dynamic `import()` for `noir_js`).
 
 **Stage 15.9 — on-chain results:**
 - Deposit split tx: `3VuXUxpX2SppL29hZYaXspJeVqQKJ4FqwLNZq8GJroza2CoKDHGA122ajL5hBFTdpwRk9BcWLyy7qzGcxMF9DSbh`
