@@ -14,7 +14,7 @@
     "@noir-lang/noir_js": "1.0.0-rc.2",
     "@solana/addresses": "^8.3.0",
     "@solana/kit": "^8.3.0",
-    "@solana/program-client-core": "^8.3.0",
+    "@solana/program-client-core": "^8.4.0",
     "pinia": "^2.2.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"
