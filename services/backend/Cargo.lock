@@ -2687,7 +2687,6 @@ dependencies = [
  "pin-project-lite",
  "tower-layer",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -2705,6 +2704,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
+ "tracing",
  "url",
 ]
 
@@ -3369,7 +3369,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.21",
  "tokio",
- "tower-http 0.5.2",
+ "tower-http 0.6.11",
  "tracing",
  "tracing-subscriber",
  "uuid",
